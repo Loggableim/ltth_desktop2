@@ -82,7 +82,6 @@ ltth_desktop2/
 ├── docs_archive/                 # Archived implementation summaries
 ├── migration-guides/             # Framework migration guides
 ├── screenshots/                  # Visual documentation
-├── viewer-profiles/              # Viewer XP system docs
 │
 ├── main.js                       # Electron main process
 ├── package.json                  # Electron app dependencies
