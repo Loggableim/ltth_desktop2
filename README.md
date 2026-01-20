@@ -65,9 +65,11 @@ Dieses Tool wird von mir als Solo-Entwickler zusammen mit Claude AI entwickelt. 
 
 ## 📚 Dokumentation
 
+**📖 [Vollständiger Dokumentations-Index](DOCUMENTATION_INDEX.md)** - Übersicht aller Dokumentationen
+
 **Vollständige Wiki-Dokumentation:** [`app/wiki/`](app/wiki/)
 
-### Schnellzugriff
+### Schnellzugriff für Nutzer
 
 - **[Wiki-Index](app/wiki/Wiki-Index.md)** - Vollständige Übersicht aller Dokumentationsseiten
 - **[Getting Started](app/wiki/Getting-Started.md)** - 5-Minuten-Schnelleinstieg
@@ -76,7 +78,17 @@ Dieses Tool wird von mir als Solo-Entwickler zusammen mit Claude AI entwickelt. 
 - **[Advanced Features](app/wiki/Advanced-Features.md)** - WebGPU, GCCE, Performance
 - **[FAQ & Troubleshooting](app/wiki/FAQ-&-Troubleshooting.md)** - Probleme lösen
 
-### Für Entwickler
+### Für Entwickler (English)
+
+- **[LLM Start Here](infos/llm_start_here.md)** - Comprehensive technical guide (START HERE!)
+- **[Contributing Guide](infos/CONTRIBUTING.md)** - Contribution guidelines
+- **[Architecture](infos/ARCHITECTURE.md)** - System architecture
+- **[Plugin Development](infos/PLUGIN_DEVELOPMENT.md)** - Create plugins
+- **[Development Setup](infos/DEVELOPMENT.md)** - Development environment
+- **[Testing Guide](infos/TESTING.md)** - Testing strategies
+- **[Security Guide](infos/SECURITY.md)** - Security best practices
+
+### Für Entwickler (Deutsch)
 
 - **[Entwickler-Leitfaden](app/wiki/Entwickler-Leitfaden.md)** - Coding-Standards
 - **[Plugin-Dokumentation](app/wiki/Plugin-Dokumentation.md)** - Plugin-Entwicklung
