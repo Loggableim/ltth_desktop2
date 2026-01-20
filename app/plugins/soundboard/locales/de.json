@@ -30,7 +30,14 @@
       "manual": "Nur manuell",
       "automatic": "Automatisch bei Events",
       "master_volume": "Master-Lautstärke",
-      "save": "Einstellungen speichern"
+      "save": "Einstellungen speichern",
+      "audio_target": "Audio-Wiedergabe-Ziel",
+      "audio_target_dashboard": "Nur Dashboard",
+      "audio_target_obs": "Nur OBS Overlay",
+      "audio_target_both": "Beides (Dashboard + OBS)",
+      "audio_target_help_dashboard": "Audio wird direkt im Browser abgespielt (empfohlen wenn OBS-Audio nicht funktioniert)",
+      "audio_target_help_obs": "Audio wird im OBS Browser-Source abgespielt",
+      "audio_target_help_both": "Audio wird an beiden Orten abgespielt"
     },
     "categories": {
       "all": "Alle Sounds",

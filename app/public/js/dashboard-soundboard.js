@@ -56,8 +56,21 @@ let currentPlayMode = 'overlap';     // Default to overlap mode ('overlap', 'que
 // ========== SOCKET EVENTS ==========
 socket.on('soundboard:play', (data) => {
     console.log('📡 [Soundboard Frontend] Received soundboard:play event:', data);
-    playDashboardSoundboard(data);
-    logAudioEvent('play', `Playing sound: ${data.label}`, data, true);
+    
+    // Check the audio target setting
+    // audioTarget can be: 'dashboard', 'obs_overlay', or 'both'
+    // For dashboard, we play if target is 'dashboard' or 'both'
+    // Preview sounds (eventType: 'preview' or 'test') always play in dashboard
+    const audioTarget = data.audioTarget || 'both';
+    const isPreviewOrTest = data.eventType === 'preview' || data.eventType === 'test';
+    
+    if (isPreviewOrTest || audioTarget === 'dashboard' || audioTarget === 'both') {
+        playDashboardSoundboard(data);
+        logAudioEvent('play', `Playing sound: ${data.label} (target: ${audioTarget})`, data, true);
+    } else {
+        console.log(`⏭️ [Soundboard Frontend] Skipping playback - audio target is '${audioTarget}', not dashboard`);
+        logAudioEvent('info', `Skipped sound: ${data.label} (target: ${audioTarget}, plays in OBS overlay)`, data, true);
+    }
 });
 
 socket.on('soundboard:preview', (payload) => {
@@ -338,6 +351,14 @@ async function loadSoundboardSettings() {
         const soundboardEnabled = document.getElementById('soundboard-enabled');
         if (soundboardEnabled) soundboardEnabled.checked = settings.soundboard_enabled === 'true';
         
+        // Audio playback target setting
+        const audioTarget = document.getElementById('soundboard-audio-target');
+        if (audioTarget) {
+            audioTarget.value = settings.soundboard_audio_target || 'both';
+            console.log('🎵 [Soundboard] Audio target set to:', audioTarget.value);
+            logAudioEvent('info', `Audio target: ${audioTarget.value}`, null);
+        }
+        
         // Handle backwards compatibility: 'sequential' -> 'queue-all'
         let playModeValue = settings.soundboard_play_mode || 'overlap';
         if (playModeValue === 'sequential') {
@@ -453,6 +474,7 @@ function loadEventSoundSettings(settings, eventType) {
 
 async function saveSoundboardSettings() {
     const soundboardEnabled = document.getElementById('soundboard-enabled');
+    const audioTarget = document.getElementById('soundboard-audio-target');
     const playMode = document.getElementById('soundboard-play-mode');
     const maxQueue = document.getElementById('soundboard-max-queue');
     
@@ -489,6 +511,7 @@ async function saveSoundboardSettings() {
     
     const data = {
         soundboard_enabled: soundboardEnabled ? (soundboardEnabled.checked ? 'true' : 'false') : 'false',
+        soundboard_audio_target: audioTarget?.value || 'both',
         soundboard_play_mode: playMode?.value || 'overlap',
         soundboard_max_queue_length: maxQueue?.value || '10',
         
