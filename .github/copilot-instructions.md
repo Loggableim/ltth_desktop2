@@ -16,7 +16,11 @@ Professional TikTok LIVE streaming tool with overlays, alerts, TTS, automation, 
 Before making any changes, always consult these files:
 - `/infos/llm_start_here.md` - Comprehensive technical guide (READ THIS FIRST!)
 - `/infos/CONTRIBUTING.md` - Contribution guidelines and coding standards
-- `/ARCHITECTURE_SPEC.md` - Electron desktop app architecture
+- `/infos/ARCHITECTURE.md` - System architecture overview
+- `/infos/DEVELOPMENT.md` - Development setup and workflows
+- `/infos/PLUGIN_DEVELOPMENT.md` - Plugin development guide
+- `/infos/TESTING.md` - Testing guidelines
+- `/infos/SECURITY.md` - Security best practices
 - `/.github/copilot-setup-steps.yml` - Setup and project structure guide
 
 ## 💻 Code Style & Standards
