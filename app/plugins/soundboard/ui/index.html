@@ -652,6 +652,19 @@
                         </label>
                     </div>
                     <div class="form-group">
+                        <label>Audio Playback Target</label>
+                        <select id="soundboard-audio-target" class="form-select">
+                            <option value="dashboard">Dashboard Only</option>
+                            <option value="obs_overlay">OBS Overlay Only</option>
+                            <option value="both" selected>Both (Dashboard + OBS Overlay)</option>
+                        </select>
+                        <small style="color: var(--color-text-secondary); font-size: 0.8rem; margin-top: 4px; display: block;">
+                            <strong>Dashboard:</strong> Audio plays directly in your browser (recommended if OBS audio not working).<br>
+                            <strong>OBS Overlay:</strong> Audio plays in the OBS browser source.<br>
+                            <strong>Both:</strong> Audio plays in both locations.
+                        </small>
+                    </div>
+                    <div class="form-group">
                         <label>Play Mode</label>
                         <select id="soundboard-play-mode" class="form-select">
                             <option value="overlap">Overlap (play immediately)</option>

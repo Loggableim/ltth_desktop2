@@ -364,16 +364,21 @@ class SoundboardManager extends EventEmitter {
      * Emit sound to overlay via Socket.io
      */
     emitSound(soundData) {
+        // Get the audio playback target from settings (dashboard, obs_overlay, or both)
+        // Default to 'both' for backwards compatibility
+        const audioTarget = this.db.getSetting('soundboard_audio_target') || 'both';
+        
         const payload = {
             url: soundData.url,
             volume: soundData.volume,
             label: soundData.label,
             giftId: soundData.giftId,
             eventType: soundData.eventType,
-            timestamp: soundData.timestamp
+            timestamp: soundData.timestamp,
+            audioTarget: audioTarget
         };
         
-        console.log(`📡 [Soundboard] Emitting 'soundboard:play' event:`, payload);
+        console.log(`📡 [Soundboard] Emitting 'soundboard:play' event (target: ${audioTarget}):`, payload);
         
         this.io.emit('soundboard:play', payload);
         

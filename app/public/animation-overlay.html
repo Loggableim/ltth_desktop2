@@ -151,9 +151,20 @@
 
         // Listen for soundboard audio events (plays audio alongside animations)
         socket.on('soundboard:play', (data) => {
-            updateDebug(`Soundboard audio: ${data.label} (volume: ${data.volume})`);
+            updateDebug(`Soundboard audio: ${data.label} (volume: ${data.volume}, target: ${data.audioTarget || 'both'})`);
             console.log('Soundboard audio received:', data);
-            playSoundboardAudio(data);
+            
+            // Check the audio target setting
+            // audioTarget can be: 'dashboard', 'obs_overlay', or 'both'
+            // For OBS overlay, we play if target is 'obs_overlay' or 'both'
+            const audioTarget = data.audioTarget || 'both';
+            
+            if (audioTarget === 'obs_overlay' || audioTarget === 'both') {
+                playSoundboardAudio(data);
+            } else {
+                console.log(`⏭️ [OBS Overlay] Skipping audio playback - target is '${audioTarget}', not obs_overlay`);
+                updateDebug(`Skipped audio: ${data.label} (plays in dashboard)`);
+            }
         });
 
         function queueAnimation(data) {
