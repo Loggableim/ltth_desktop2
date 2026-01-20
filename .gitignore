@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+app/node_modules/
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Build artifacts (Go executables in build-src)
+# Ignore all exe files in build-src (these are build outputs)
+build-src/*.exe
+
+# Environment
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+
+# User data
+app/user_data/
+app/data/
+
+# Logs and runtime files
+app/logs/
+app/plugins/plugins_state.json
+
+# Database files
+*.db
+*.sqlite
+*.db-journal
+
+# Test artifacts
+app/test_user_configs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# NSIS Installer Build
+build-src/assets/node/
+build-src/installer/*.exe
+LTTH-Setup-*.exe
+test-quiz-timing.js

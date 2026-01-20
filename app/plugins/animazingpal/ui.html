@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AnimazingPal - Animaze Integration</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .status-connected { background-color: #22c55e; }
+    .status-disconnected { background-color: #ef4444; }
+    .status-connecting { background-color: #eab308; animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .card {
+      background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
+      border: 1px solid #3f3f5a;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      color: white;
+    }
+    .btn-primary { background: #6366f1; color: white; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-secondary { background: #4b5563; color: white; }
+    .btn-secondary:hover { background: #374151; }
+    .input {
+      background: #1e1e2e;
+      border: 1px solid #3f3f5a;
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: white;
+      width: 100%;
+    }
+    .input:focus { outline: none; border-color: #6366f1; }
+    .select {
+      background: #1e1e2e;
+      border: 1px solid #3f3f5a;
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: white;
+      width: 100%;
+    }
+    .grid-item {
+      background: #2a2a3e;
+      border: 1px solid #3f3f5a;
+      border-radius: 8px;
+      padding: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: white;
+      pointer-events: auto;
+    }
+    .grid-item:hover { background: #3a3a4e; border-color: #6366f1; }
+    .tab { 
+      padding: 12px 24px; 
+      cursor: pointer; 
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      color: #9ca3af;
+    }
+    .tab:hover { background: #2a2a3e; }
+    .tab.active { border-bottom-color: #6366f1; color: #6366f1; }
+    label, p, span, div {
+      color: inherit;
+    }
+    /* Ensure all text elements have proper contrast */
+    body * {
+      color: inherit;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div class="container mx-auto p-6 max-w-6xl">
+    <!-- Header -->
+    <div class="card flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="text-3xl">🎭</div>
+        <div>
+          <h1 class="text-2xl font-bold">AnimazingPal</h1>
+          <p class="text-gray-400">Animaze VTuber Avatar Integration</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Nicht verbunden</span>
+        </div>
+        <button class="btn btn-primary" id="connectBtn">Verbinden</button>
+        <button class="btn btn-secondary" data-action="refresh">🔄 Aktualisieren</button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex border-b border-gray-700 mb-4">
+      <div class="tab active" data-tab="overview">Übersicht</div>
+      <div class="tab" data-tab="emotes">Emotes & Aktionen</div>
+      <div class="tab" data-tab="gifts">Gift Mappings</div>
+      <div class="tab" data-tab="events">Event Aktionen</div>
+      <div class="tab" data-tab="chatpal">ChatPal</div>
+      <div class="tab" data-tab="personalities">Persönlichkeiten</div>
+      <div class="tab" data-tab="memories">Erinnerungen</div>
+      <div class="tab" data-tab="settings">Einstellungen</div>
+    </div>
+
+    <!-- Tab Content: Overview -->
+    <div id="tab-overview" class="tab-content">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Connection Info -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">🔌 Verbindung</h2>
+          <div class="space-y-3">
+            <div class="flex justify-between">
+              <span class="text-gray-400">Status:</span>
+              <span id="connectionStatus">Nicht verbunden</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-400">Host:</span>
+              <span id="connectionHost">127.0.0.1:9000</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-400">Avatare:</span>
+              <span id="avatarCount">0</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-400">Emotes:</span>
+              <span id="emoteCount">0</span>
+            </div>
+          </div>
+          <button class="btn btn-primary w-full mt-4" data-action="test-connection">🧪 Verbindung testen</button>
+        </div>
+
+        <!-- Current Avatar -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">👤 Aktueller Avatar</h2>
+          <div id="currentAvatarInfo" class="text-gray-400">
+            Keine Avatar-Informationen verfügbar
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card col-span-1 md:col-span-2">
+          <h2 class="text-xl font-bold mb-4">⚡ Schnellaktionen</h2>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <button class="grid-item text-center" data-action="calibrate">
+              <div class="text-2xl mb-2">🎯</div>
+              <div>Tracker kalibrieren</div>
+            </button>
+            <button class="grid-item text-center" data-action="broadcast-start">
+              <div class="text-2xl mb-2">📹</div>
+              <div>Broadcast starten</div>
+            </button>
+            <button class="grid-item text-center" data-action="broadcast-stop">
+              <div class="text-2xl mb-2">⏹️</div>
+              <div>Broadcast stoppen</div>
+            </button>
+            <button class="grid-item text-center" data-action="refresh">
+              <div class="text-2xl mb-2">🔄</div>
+              <div>Daten aktualisieren</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Emotes & Actions -->
+    <div id="tab-emotes" class="tab-content hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Emotes -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">😀 Emotes</h2>
+          <div id="emotesList" class="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
+            <p class="text-gray-400 col-span-2">Keine Emotes verfügbar</p>
+          </div>
+        </div>
+
+        <!-- Special Actions -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">⭐ Spezialaktionen</h2>
+          <div id="specialActionsList" class="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
+            <p class="text-gray-400 col-span-2">Keine Spezialaktionen verfügbar</p>
+          </div>
+        </div>
+
+        <!-- Poses -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">🧘 Posen</h2>
+          <div id="posesList" class="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
+            <p class="text-gray-400 col-span-2">Keine Posen verfügbar</p>
+          </div>
+        </div>
+
+        <!-- Idle Animations -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">💤 Idle Animationen</h2>
+          <div id="idlesList" class="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
+            <p class="text-gray-400 col-span-2">Keine Idle Animationen verfügbar</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Gift Mappings -->
+    <div id="tab-gifts" class="tab-content hidden">
+      <div class="card">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-xl font-bold">🎁 Gift Mappings</h2>
+          <button class="btn btn-success" data-action="add-gift-mapping">+ Mapping hinzufügen</button>
+        </div>
+        <p class="text-gray-400 mb-4">Verknüpfe TikTok Geschenke mit Animaze Aktionen</p>
+        <div id="giftMappingsList" class="space-y-3">
+          <p class="text-gray-400">Keine Gift Mappings konfiguriert</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Event Actions -->
+    <div id="tab-events" class="tab-content hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Follow Event -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">👋 Follow Event</h2>
+          <div class="space-y-3">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="followEnabled">
+              <span>Aktiviert</span>
+            </label>
+            <div>
+              <label class="text-gray-400 text-sm">Aktionstyp</label>
+              <select class="select" id="followActionType">
+                <option value="">Keine Aktion</option>
+                <option value="emote">Emote</option>
+                <option value="specialAction">Spezialaktion</option>
+                <option value="pose">Pose</option>
+                <option value="idle">Idle Animation</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">Aktion</label>
+              <select class="select" id="followActionValue">
+                <option value="">Auswählen...</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">ChatPal Nachricht (optional)</label>
+              <input type="text" class="input" id="followChatMessage" placeholder="{username} folgt jetzt!">
+            </div>
+          </div>
+        </div>
+
+        <!-- Share Event -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">📤 Share Event</h2>
+          <div class="space-y-3">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="shareEnabled">
+              <span>Aktiviert</span>
+            </label>
+            <div>
+              <label class="text-gray-400 text-sm">Aktionstyp</label>
+              <select class="select" id="shareActionType">
+                <option value="">Keine Aktion</option>
+                <option value="emote">Emote</option>
+                <option value="specialAction">Spezialaktion</option>
+                <option value="pose">Pose</option>
+                <option value="idle">Idle Animation</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">Aktion</label>
+              <select class="select" id="shareActionValue">
+                <option value="">Auswählen...</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">ChatPal Nachricht (optional)</label>
+              <input type="text" class="input" id="shareChatMessage" placeholder="Danke fürs Teilen, {username}!">
+            </div>
+          </div>
+        </div>
+
+        <!-- Subscribe Event -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">⭐ Subscribe Event</h2>
+          <div class="space-y-3">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="subscribeEnabled">
+              <span>Aktiviert</span>
+            </label>
+            <div>
+              <label class="text-gray-400 text-sm">Aktionstyp</label>
+              <select class="select" id="subscribeActionType">
+                <option value="">Keine Aktion</option>
+                <option value="emote">Emote</option>
+                <option value="specialAction">Spezialaktion</option>
+                <option value="pose">Pose</option>
+                <option value="idle">Idle Animation</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">Aktion</label>
+              <select class="select" id="subscribeActionValue">
+                <option value="">Auswählen...</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">ChatPal Nachricht (optional)</label>
+              <input type="text" class="input" id="subscribeChatMessage" placeholder="Vielen Dank für das Abo, {username}!">
+            </div>
+          </div>
+        </div>
+
+        <!-- Like Event -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">❤️ Like Event</h2>
+          <div class="space-y-3">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="likeEnabled">
+              <span>Aktiviert</span>
+            </label>
+            <div>
+              <label class="text-gray-400 text-sm">Threshold (min. Likes)</label>
+              <input type="number" class="input" id="likeThreshold" value="10" min="1">
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">Aktionstyp</label>
+              <select class="select" id="likeActionType">
+                <option value="">Keine Aktion</option>
+                <option value="emote">Emote</option>
+                <option value="specialAction">Spezialaktion</option>
+                <option value="pose">Pose</option>
+                <option value="idle">Idle Animation</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">Aktion</label>
+              <select class="select" id="likeActionValue">
+                <option value="">Auswählen...</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: ChatPal -->
+    <div id="tab-chatpal" class="tab-content hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Chat Settings -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">💬 Chat zu Avatar</h2>
+          <div class="space-y-3">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="chatEnabled">
+              <span>TikTok Chat an ChatPal weiterleiten</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="chatUseEcho">
+              <span>Nur TTS (keine KI-Antwort)</span>
+            </label>
+            <div>
+              <label class="text-gray-400 text-sm">Prefix</label>
+              <input type="text" class="input" id="chatPrefix" placeholder="[TikTok]">
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">Max. Zeichenlänge</label>
+              <input type="number" class="input" id="chatMaxLength" value="200" min="50" max="500">
+            </div>
+          </div>
+        </div>
+
+        <!-- Manual ChatPal -->
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">🗣️ ChatPal Nachricht senden</h2>
+          <div class="space-y-3">
+            <div>
+              <label class="text-gray-400 text-sm">Nachricht</label>
+              <textarea class="input" id="chatpalMessage" rows="3" placeholder="Schreibe eine Nachricht an ChatPal..."></textarea>
+            </div>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="chatpalUseEcho">
+              <span>Nur TTS (Echo-Modus)</span>
+            </label>
+            <button class="btn btn-primary w-full" data-action="send-chatpal">📤 Senden</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Personalities -->
+    <div id="tab-personalities" class="tab-content hidden">
+      <div class="card">
+        <h2 class="text-xl font-bold mb-4">🎭 Persönlichkeiten & Einstellungen</h2>
+        
+        <!-- Personality Selection -->
+        <div class="mb-6">
+          <label class="text-gray-400 text-sm">Aktive Persönlichkeit</label>
+          <select id="activePersonality" class="select">
+            <option value="">Keine ausgewählt</option>
+            <option value="friendly_streamer">Freundlicher Streamer</option>
+            <option value="gaming_pro">Gaming Pro</option>
+            <option value="entertainer">Entertainer</option>
+            <option value="chill_vibes">Chill Vibes</option>
+            <option value="anime_fan">Anime Fan</option>
+          </select>
+        </div>
+
+        <!-- Memory Customization -->
+        <h3 class="text-lg font-bold mt-6 mb-4">💭 Erinnerungs-Einstellungen</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="text-gray-400 text-sm">Max. Kontext-Erinnerungen</label>
+            <input type="number" id="maxContextMemories" class="input" value="10" min="1" max="50">
+            <p class="text-xs text-gray-500 mt-1">Anzahl der Erinnerungen, die in Chat-Antworten einbezogen werden</p>
+          </div>
+          <div>
+            <label class="text-gray-400 text-sm">Wichtigkeitsschwelle</label>
+            <input type="number" id="memoryImportanceThreshold" class="input" value="0.3" step="0.1" min="0" max="1">
+            <p class="text-xs text-gray-500 mt-1">Minimale Wichtigkeit für Erinnerungen (0.0 - 1.0)</p>
+          </div>
+          <div>
+            <label class="text-gray-400 text-sm">Archivierung nach (Tagen)</label>
+            <input type="number" id="archiveAfterDays" class="input" value="7" min="1" max="365">
+            <p class="text-xs text-gray-500 mt-1">Alte Erinnerungen werden nach dieser Zeit archiviert</p>
+          </div>
+          <div>
+            <label class="text-gray-400 text-sm">Bereinigung nach (Tagen)</label>
+            <input type="number" id="pruneAfterDays" class="input" value="30" min="7" max="365">
+            <p class="text-xs text-gray-500 mt-1">Unwichtige Erinnerungen werden nach dieser Zeit gelöscht</p>
+          </div>
+        </div>
+
+        <!-- Auto-Response Settings -->
+        <h3 class="text-lg font-bold mt-6 mb-4">🤖 Auto-Response Einstellungen</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="autoRespondChat">
+            <span>Auf Chat-Nachrichten reagieren</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="autoRespondGifts" checked>
+            <span>Geschenke bedanken</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="autoRespondFollows" checked>
+            <span>Neue Follower begrüßen</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="autoRespondShares">
+            <span>Shares bedanken</span>
+          </label>
+          <div>
+            <label class="text-gray-400 text-sm">Chat-Antwort Wahrscheinlichkeit</label>
+            <input type="number" id="chatResponseProbability" class="input" value="0.3" step="0.1" min="0" max="1">
+            <p class="text-xs text-gray-500 mt-1">0.3 = 30% der Chat-Nachrichten werden beantwortet</p>
+          </div>
+          <div>
+            <label class="text-gray-400 text-sm">Max. Antworten pro Minute</label>
+            <input type="number" id="maxResponsesPerMinute" class="input" value="10" min="1" max="60">
+            <p class="text-xs text-gray-500 mt-1">Rate Limiting für KI-Antworten</p>
+          </div>
+        </div>
+
+        <button class="btn btn-primary mt-6" id="savePersonalityBtn">💾 Einstellungen speichern</button>
+      </div>
+    </div>
+
+    <!-- Tab Content: Memories -->
+    <div id="tab-memories" class="tab-content hidden">
+      <div class="card">
+        <h2 class="text-xl font-bold mb-4">🔍 Erinnerungs-Datenbank</h2>
+        
+        <!-- Search Controls -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <input type="text" placeholder="Suche nach Benutzer oder Erinnerung..." class="input" id="memorySearchInput">
+          <select class="select" id="memoryFilterUser">
+            <option value="">Alle Benutzer</option>
+          </select>
+          <select class="select" id="memoryFilterImportance">
+            <option value="">Alle Wichtigkeiten</option>
+            <option value="0.7">Sehr wichtig (≥0.7)</option>
+            <option value="0.5">Wichtig (≥0.5)</option>
+            <option value="0.3">Normal (≥0.3)</option>
+          </select>
+        </div>
+        
+        <div class="flex gap-3 mb-5">
+          <button class="btn btn-primary" id="memorySearchBtn">🔎 Suchen</button>
+          <button class="btn btn-secondary" id="memoryReloadBtn">🔄 Alle laden</button>
+          <button class="btn btn-danger" id="memoryArchiveBtn">📦 Alte archivieren</button>
+        </div>
+
+        <!-- Memory Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
+          <div class="card bg-gray-800">
+            <div class="text-sm text-gray-400">Gesamt</div>
+            <div class="text-2xl font-bold" id="memoryStatsTotal">-</div>
+          </div>
+          <div class="card bg-gray-800">
+            <div class="text-sm text-gray-400">Benutzer</div>
+            <div class="text-2xl font-bold" id="memoryStatsUsers">-</div>
+          </div>
+          <div class="card bg-gray-800">
+            <div class="text-sm text-gray-400">Ø Wichtigkeit</div>
+            <div class="text-2xl font-bold" id="memoryStatsAvgImportance">-</div>
+          </div>
+          <div class="card bg-gray-800">
+            <div class="text-sm text-gray-400">Archive</div>
+            <div class="text-2xl font-bold" id="memoryStatsArchives">-</div>
+          </div>
+        </div>
+        
+        <!-- Results -->
+        <div id="memoryResults" class="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto">
+          <p class="text-gray-400">Keine Erinnerungen verfügbar. Klicke auf "Alle laden" um Erinnerungen anzuzeigen.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Settings -->
+    <div id="tab-settings" class="tab-content hidden">
+      <div class="card">
+        <h2 class="text-xl font-bold mb-4">⚙️ Verbindungseinstellungen</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="text-gray-400 text-sm">Host</label>
+            <input type="text" class="input" id="settingsHost" value="127.0.0.1">
+          </div>
+          <div>
+            <label class="text-gray-400 text-sm">Port</label>
+            <input type="number" class="input" id="settingsPort" value="9000">
+          </div>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="settingsAutoConnect" checked>
+            <span>Automatisch verbinden</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="settingsReconnect" checked>
+            <span>Automatisch neu verbinden</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="settingsVerbose">
+            <span>Ausführliches Logging</span>
+          </label>
+        </div>
+        <button class="btn btn-primary mt-4" data-action="save-settings">💾 Einstellungen speichern</button>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 border border-gray-700 rounded-lg p-4 shadow-lg hidden">
+      <p id="toastMessage"></p>
+    </div>
+  </div>
+
+  <script src="/plugins/animazingpal/ui.js"></script>
+</body>
+</html>

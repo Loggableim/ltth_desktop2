@@ -1,0 +1,106 @@
+{
+  "game_engine": {
+    "title": "LTTH Game Engine - Admin Panel",
+    "tabs": {
+      "connect4": "Connect4",
+      "chess": "Schach",
+      "plinko": "Plinko",
+      "wheel": "Glücksrad",
+      "triggers": "Trigger",
+      "xp_rewards": "XP-Belohnungen",
+      "media": "Medien",
+      "active_game": "Aktives Spiel",
+      "stats": "Statistiken"
+    },
+    "connect4": {
+      "title": "Connect4-Einstellungen",
+      "board_design": "Spielbrett-Design",
+      "board_color": "Spielbrett-Farbe",
+      "player1_color": "Spieler 1 Farbe",
+      "player2_color": "Spieler 2 Farbe",
+      "text_color": "Textfarbe",
+      "font_family": "Schriftart",
+      "show_coordinates": "Koordinaten anzeigen",
+      "animation_speed": "Animations-Geschwindigkeit (ms)",
+      "streamer_role": "Streamer-Rolle",
+      "role_player1": "Spieler 1 (Rot)",
+      "role_player2": "Spieler 2 (Gelb)",
+      "challenge_flow": "Challenge-Flow-Einstellungen",
+      "show_challenge_screen": "Challenge-Bildschirm anzeigen",
+      "challenge_timeout": "Challenge-Timeout (Sekunden)",
+      "leaderboard": "Leaderboard-Einstellungen",
+      "leaderboard_enabled": "Leaderboard nach Spiel anzeigen",
+      "leaderboard_display_time": "Anzeigezeit pro Leaderboard (Sekunden)",
+      "leaderboard_types": "Anzuzeigende Leaderboards",
+      "leaderboard_daily": "Täglich",
+      "leaderboard_season": "Saison",
+      "leaderboard_lifetime": "Allzeit",
+      "leaderboard_elo": "ELO",
+      "save_config": "Konfiguration speichern",
+      "config_saved": "Konfiguration erfolgreich gespeichert!"
+    },
+    "chess": {
+      "title": "Schach-Einstellungen",
+      "board_design": "Spielbrett-Design",
+      "board_theme": "Brett-Theme",
+      "theme_dark": "Dunkel",
+      "theme_light": "Hell",
+      "theme_wood": "Holz",
+      "save_config": "Konfiguration speichern",
+      "config_saved": "Konfiguration erfolgreich gespeichert!"
+    },
+    "plinko": {
+      "title": "Plinko-Einstellungen",
+      "slot_editor": "Slot-Editor",
+      "add_slot": "Slot hinzufügen",
+      "multiplier": "Multiplikator",
+      "color": "Farbe",
+      "physics": "Physik-Einstellungen",
+      "gravity": "Schwerkraft",
+      "save_config": "Konfiguration speichern",
+      "config_saved": "Konfiguration erfolgreich gespeichert!"
+    },
+    "wheel": {
+      "title": "Glücksrad-Einstellungen",
+      "wheels": "Glücksräder",
+      "add_wheel": "Neues Glücksrad hinzufügen",
+      "wheel_name": "Glücksrad-Name",
+      "save_config": "Konfiguration speichern",
+      "config_saved": "Konfiguration erfolgreich gespeichert!"
+    },
+    "triggers": {
+      "title": "Spiel-Trigger",
+      "description": "Konfiguriere, wie Spiele über Geschenke oder Chat-Befehle ausgelöst werden",
+      "game_type": "Spieltyp",
+      "trigger_type": "Trigger-Typ",
+      "gift": "Geschenk",
+      "command": "Befehl",
+      "trigger_value": "Trigger-Wert",
+      "add_trigger": "Trigger hinzufügen",
+      "remove_trigger": "Entfernen",
+      "no_triggers": "Keine Trigger konfiguriert"
+    },
+    "xp_rewards": {
+      "title": "XP-Belohnungen",
+      "description": "Konfiguriere XP-Belohnungen für Spielergebnisse",
+      "game_type": "Spieltyp",
+      "win": "Sieg",
+      "loss": "Niederlage",
+      "draw": "Unentschieden",
+      "participation": "Teilnahme",
+      "save_rewards": "Belohnungen speichern",
+      "rewards_saved": "XP-Belohnungen erfolgreich gespeichert!"
+    },
+    "common": {
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "delete": "Löschen",
+      "edit": "Bearbeiten",
+      "add": "Hinzufügen",
+      "remove": "Entfernen",
+      "loading": "Laden...",
+      "error": "Fehler",
+      "success": "Erfolg"
+    }
+  }
+}

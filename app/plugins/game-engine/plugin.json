@@ -1,0 +1,24 @@
+{
+  "id": "game-engine",
+  "name": "LTTH Game Engine",
+  "version": "1.2.0",
+  "description": "Interactive game engine for TikTok LIVE streams with viewer participation via chat commands and gifts. Includes Connect4, Chess, Plinko, and Glücksrad (Wheel of Fortune)!",
+  "author": "Pup Cid",
+  "entry": "main.js",
+  "enabled": false,
+  "type": "overlay",
+  "devStatus": "stable",
+  "permissions": [
+    "socket.io",
+    "routes",
+    "tiktok-events",
+    "database",
+    "gcce-integration"
+  ],
+  "descriptions": {
+    "en": "Interactive game engine for TikTok LIVE streams. Play games like Connect4, Chess, Plinko, and Wheel of Fortune with viewers using chat commands and gifts. Features customizable overlays, compact HUD, XP rewards, win streaks, sound effects, prize tracking, and extensible game framework.",
+    "de": "Interaktive Spielmaschine für TikTok LIVE Streams. Spiele wie Vier Gewinnt, Schach, Plinko und Glücksrad mit Zuschauern über Chat-Befehle und Geschenke. Bietet anpassbare Overlays, kompaktes HUD, XP-Belohnungen, Siegesserien, Sound-Effekte, Gewinnverfolgung und erweiterbares Spiel-Framework.",
+    "es": "Motor de juegos interactivo para transmisiones en vivo de TikTok. Juega juegos como Connect4, Ajedrez, Plinko y Ruleta de la Fortuna con espectadores usando comandos de chat y regalos. Incluye overlays personalizables, HUD compacto, recompensas de XP, rachas de victorias, efectos de sonido, seguimiento de premios y framework de juegos extensible.",
+    "fr": "Moteur de jeux interactif pour les diffusions en direct TikTok. Jouez à des jeux comme Connect4, Échecs, Plinko et Roue de la Fortune avec les spectateurs en utilisant des commandes de chat et des cadeaux. Comprend des overlays personnalisables, HUD compact, des récompenses XP, des séries de victoires, des effets sonores, suivi des prix et un framework de jeux extensible."
+  }
+}

@@ -1,0 +1,741 @@
+/**
+ * Plinko Game Logic
+ * 
+ * Physics-based Plinko game where viewers bet XP for a chance to win multipliers.
+ * Balls drop through pegs and land in slots with different multipliers.
+ */
+
+// Constants
+const CLEANUP_INTERVAL_MS = 30000; // 30 seconds
+const MAX_BALL_AGE_MS = 120000; // 2 minutes
+const MIN_FLIGHT_TIME_MS = 1000; // Minimum time a ball must be in flight (anti-cheat)
+
+// OpenShock safety limits
+const OPENSHOCK_MIN_DURATION_MS = 300;
+const OPENSHOCK_MAX_DURATION_MS = 5000;
+const OPENSHOCK_MIN_INTENSITY = 1;
+const OPENSHOCK_MAX_INTENSITY = 100;
+
+class PlinkoGame {
+  constructor(api, db, logger) {
+    this.api = api;
+    this.db = db;
+    this.logger = logger;
+    this.io = api.getSocketIO();
+    this.wheelGame = null;
+    this.unifiedQueue = null; // Set by main.js
+    
+    // Track active balls in-flight
+    this.activeBalls = new Map(); // ballId -> { username, bet, timestamp }
+    this.batchTrackers = new Map(); // batchId -> { remaining, totalBet, totalWinnings, slots: [] }
+    
+    // Ball ID counter
+    this.ballIdCounter = 0;
+    
+    // Cleanup timer
+    this.cleanupTimer = null;
+
+    // User color cache (per session)
+    this.userColors = new Map();
+
+    // Slot heatmap
+    this.slotHitCounts = [];
+
+    // Cached config to avoid repeated DB reads
+    this.cachedConfig = null;
+  }
+
+  /**
+   * Initialize Plinko game
+   */
+  init() {
+    this.logger.info('🎰 Plinko game initialized');
+  }
+
+  /**
+   * Provide wheel reference so Plinko can respect queue state (legacy)
+   * @deprecated Use setUnifiedQueue instead
+   */
+  setWheelGame(wheelGame) {
+    this.wheelGame = wheelGame;
+  }
+
+  /**
+   * Set unified queue manager
+   */
+  setUnifiedQueue(unifiedQueue) {
+    this.unifiedQueue = unifiedQueue;
+  }
+
+  /**
+   * Get Plinko configuration
+   */
+  getConfig() {
+    if (this.cachedConfig) {
+      return this.cachedConfig;
+    }
+
+    const defaults = {
+      slots: [
+        { multiplier: 10, label: '10x', color: '#FFD700' },
+        { multiplier: 5, label: '5x', color: '#FF6B6B' },
+        { multiplier: 2, label: '2x', color: '#4ECDC4' },
+        { multiplier: 1, label: '1x', color: '#95E1D3' },
+        { multiplier: 0.5, label: '0.5x', color: '#F38181' },
+        { multiplier: 1, label: '1x', color: '#95E1D3' },
+        { multiplier: 2, label: '2x', color: '#4ECDC4' },
+        { multiplier: 5, label: '5x', color: '#FF6B6B' },
+        { multiplier: 10, label: '10x', color: '#FFD700' }
+      ],
+      physicsSettings: {
+        gravity: 2.5, // Increased for better visual physics
+        ballRestitution: 0.6,
+        pegRestitution: 0.8,
+        pegRows: 12,
+        pegSpacing: 60,
+        testModeEnabled: false,
+        maxSimultaneousBalls: 5,
+        rateLimitMs: 800
+      },
+      giftMappings: {}
+    };
+
+    const cfg = this.db.getPlinkoConfig() || defaults;
+    const physicsSettings = { ...defaults.physicsSettings, ...(cfg.physicsSettings || {}) };
+    this.cachedConfig = {
+      slots: cfg.slots || defaults.slots,
+      physicsSettings,
+      giftMappings: cfg.giftMappings || {}
+    };
+
+    if (!this.slotHitCounts.length && this.cachedConfig.slots.length > 0) {
+      this.slotHitCounts = new Array(this.cachedConfig.slots.length).fill(0);
+    }
+
+    return this.cachedConfig;
+  }
+
+  /**
+   * Update Plinko configuration
+   */
+  updateConfig(slots, physicsSettings, giftMappings) {
+    this.db.updatePlinkoConfig(slots, physicsSettings, giftMappings);
+    this.cachedConfig = {
+      slots,
+      physicsSettings,
+      giftMappings: giftMappings || {}
+    };
+    this.slotHitCounts = new Array(slots.length || 0).fill(0);
+    
+    // Emit config update to overlays
+    this.io.emit('plinko:config-updated', {
+      slots,
+      physicsSettings,
+      giftMappings
+    });
+    
+    this.logger.info('✅ Plinko configuration updated');
+  }
+
+  /**
+   * Generate or reuse per-user ball color
+   */
+  getBallColor(username, preferredColor = null) {
+    if (preferredColor) {
+      return preferredColor;
+    }
+    if (this.userColors.has(username)) {
+      return this.userColors.get(username);
+    }
+    // Simple hash-based pastel color
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+      hash = ((hash << 5) - hash) + username.charCodeAt(i);
+      hash |= 0;
+    }
+    const r = (hash & 0xFF0000) >> 16;
+    const g = (hash & 0x00FF00) >> 8;
+    const b = (hash & 0x0000FF);
+    const color = `#${((r & 0x7f) | 0x80).toString(16).padStart(2, '0')}${((g & 0x7f) | 0x80).toString(16).padStart(2, '0')}${((b & 0x7f) | 0x80).toString(16).padStart(2, '0')}`;
+    this.userColors.set(username, color);
+    return color;
+  }
+
+  /**
+   * Check if Plinko should queue (unified queue version)
+   */
+  shouldQueuePlinko() {
+    // If unified queue is available, use it
+    if (this.unifiedQueue) {
+      return this.unifiedQueue.shouldQueue();
+    }
+    
+    // Legacy: check wheel queue directly
+    if (!this.wheelGame || !this.wheelGame.getQueueStatus) {
+      return false;
+    }
+    const status = this.wheelGame.getQueueStatus();
+    return !!(status?.isSpinning || (status?.queueLength || 0) > 0);
+  }
+
+  /**
+   * Process next queued Plinko drop when wheel is free (legacy - deprecated)
+   * @deprecated Use unified queue instead
+   */
+  async processPlinkoQueue() {
+    // This method is kept for backward compatibility but no longer used
+    // with unified queue
+    this.logger.warn('⚠️ processPlinkoQueue() called but unified queue should be used instead');
+  }
+
+  /**
+   * Validate bet amount
+   * @returns {Object} { valid: boolean, error?: string }
+   */
+  async validateBet(username, betAmount) {
+    // Check for negative or zero bet
+    if (betAmount <= 0) {
+      return { valid: false, error: 'Bet amount must be positive' };
+    }
+
+    // Check if bet is an integer
+    if (!Number.isInteger(betAmount)) {
+      return { valid: false, error: 'Bet amount must be a whole number' };
+    }
+
+    // Get viewer XP from viewer-leaderboard plugin
+    try {
+      const viewerLeaderboard = this.api.pluginLoader?.loadedPlugins?.get('viewer-leaderboard');
+      if (!viewerLeaderboard || !viewerLeaderboard.instance) {
+        return { valid: false, error: 'XP system not available' };
+      }
+
+      const profile = viewerLeaderboard.instance.db.getViewerProfile(username);
+      if (!profile) {
+        return { valid: false, error: 'User profile not found. You need to interact with the stream first!' };
+      }
+
+      if (profile.xp < betAmount) {
+        return { 
+          valid: false, 
+          error: `Insufficient XP. You have ${profile.xp} XP but tried to bet ${betAmount} XP` 
+        };
+      }
+
+      return { valid: true, currentXP: profile.xp };
+    } catch (error) {
+      this.logger.error(`Error validating bet: ${error.message}`);
+      return { valid: false, error: 'Failed to validate bet' };
+    }
+  }
+
+  /**
+   * Deduct XP from user
+   */
+  async deductXP(username, amount) {
+    try {
+      const viewerLeaderboard = this.api.pluginLoader?.loadedPlugins?.get('viewer-leaderboard');
+      if (!viewerLeaderboard || !viewerLeaderboard.instance) {
+        throw new Error('XP system not available');
+      }
+
+      // Deduct XP by adding negative amount
+      viewerLeaderboard.instance.db.addXP(username, -amount, 'plinko_bet', {
+        bet: amount,
+        source: 'game-engine-plinko'
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deducting XP: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Award XP to user (winnings)
+   */
+  async awardXP(username, amount, multiplier) {
+    try {
+      const viewerLeaderboard = this.api.pluginLoader?.loadedPlugins?.get('viewer-leaderboard');
+      if (!viewerLeaderboard || !viewerLeaderboard.instance) {
+        throw new Error('XP system not available');
+      }
+
+      viewerLeaderboard.instance.db.addXP(username, amount, 'plinko_win', {
+        winnings: amount,
+        multiplier: multiplier,
+        source: 'game-engine-plinko'
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Error awarding XP: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Spawn a ball (from chat command or gift)
+   * @returns {Object} { success: boolean, ballId?: string, error?: string }
+   */
+  async spawnBall(username, nickname, profilePictureUrl, betAmount, ballType = 'standard', options = {}) {
+    const { skipValidation = false, skipDeduction = false, testMode = false, batchId = null, preferredColor = null } = options;
+    const config = this.getConfig();
+    const isTest = testMode || config.physicsSettings.testModeEnabled;
+
+    if (!skipValidation && !isTest) {
+      const validation = await this.validateBet(username, betAmount);
+      if (!validation.valid) {
+        return { success: false, error: validation.error };
+      }
+    }
+
+    if (!skipDeduction && !isTest) {
+      const deducted = await this.deductXP(username, betAmount);
+      if (!deducted) {
+        return { success: false, error: 'Failed to deduct XP' };
+      }
+    }
+
+    // Generate unique ball ID
+    const ballId = `ball_${Date.now()}_${this.ballIdCounter++}`;
+
+    // Store ball data
+    this.activeBalls.set(ballId, {
+      username,
+      nickname,
+      profilePictureUrl,
+      bet: betAmount,
+      ballType,
+      timestamp: Date.now(),
+      batchId
+    });
+
+    let globalMultiplier = 1.0;
+    
+    if (config.giftMappings && config.giftMappings[ballType]) {
+      globalMultiplier = config.giftMappings[ballType].multiplier || 1.0;
+    }
+
+    const color = this.getBallColor(username, preferredColor);
+
+    // Emit spawn event to overlay
+    this.io.emit('plinko:spawn-ball', {
+      ballId,
+      username,
+      nickname,
+      profilePictureUrl,
+      bet: betAmount,
+      ballType,
+      globalMultiplier,
+      timestamp: Date.now(),
+      color,
+      batchId,
+      testMode: isTest
+    });
+
+    this.logger.info(`🎰 Plinko ball spawned: ${username} bet ${betAmount} XP (ballId: ${ballId}${batchId ? `, batch ${batchId}` : ''})`);
+
+    return { success: true, ballId };
+  }
+
+  /**
+   * Spawn multiple balls at once (shared validation)
+   */
+  async spawnBalls(username, nickname, profilePictureUrl, betAmount, count = 1, options = {}) {
+    const config = this.getConfig();
+    const isTest = options.testMode || config.physicsSettings.testModeEnabled;
+    const limitedCount = Math.max(1, Math.min(count, config.physicsSettings.maxSimultaneousBalls || 5));
+    const totalBet = betAmount * limitedCount;
+
+    // Rate limit to prevent spam
+    const now = Date.now();
+    const rateKey = username;
+    const rateLimitMs = config.physicsSettings.rateLimitMs || 800;
+    if (!isTest) {
+      if (!this.rateLimitMap) this.rateLimitMap = new Map();
+      const last = this.rateLimitMap.get(rateKey) || 0;
+      if (now - last < rateLimitMs) {
+        return { success: false, error: 'Please wait before dropping another ball' };
+      }
+      this.rateLimitMap.set(rateKey, now);
+    }
+
+    if (this.shouldQueuePlinko() && !options.forceStart) {
+      const batchId = options.batchId || `batch_${Date.now()}_${this.ballIdCounter++}`;
+      
+      // Use unified queue if available
+      if (this.unifiedQueue) {
+        const dropData = {
+          username,
+          nickname,
+          profilePictureUrl,
+          betAmount,
+          count: limitedCount,
+          batchId,
+          preferredColor: options.preferredColor || null
+        };
+        
+        this.logger.info(`🎰 Plinko queued via unified queue for ${username} (batch ${batchId})`);
+        const queueResult = this.unifiedQueue.queuePlinko(dropData);
+        return { success: true, queued: true, position: queueResult.position, batchId };
+      } else {
+        // Legacy queue (kept for backward compatibility)
+        this.plinkoQueue.push({
+          username,
+          nickname,
+          profilePictureUrl,
+          betAmount,
+          count: limitedCount,
+          batchId,
+          preferredColor: options.preferredColor || null
+        });
+        this.logger.info(`🎰 Plinko queued for ${username} (batch ${batchId}, position ${this.plinkoQueue.length})`);
+        this.io.emit('plinko:queued', { position: this.plinkoQueue.length, username, batchId });
+        setTimeout(() => this.processPlinkoQueue(), 500);
+        return { success: true, queued: true, position: this.plinkoQueue.length };
+      }
+    }
+
+    // Validate once for total bet
+    if (!isTest) {
+      const validation = await this.validateBet(username, totalBet);
+      if (!validation.valid) {
+        return { success: false, error: validation.error };
+      }
+      const deducted = await this.deductXP(username, totalBet);
+      if (!deducted) {
+        return { success: false, error: 'Failed to deduct XP' };
+      }
+    }
+
+    const batchId = options.batchId || (limitedCount > 1 ? `batch_${Date.now()}_${this.ballIdCounter++}` : null);
+    if (batchId && limitedCount > 1) {
+      this.batchTrackers.set(batchId, {
+        remaining: limitedCount,
+        totalBet,
+        totalWinnings: 0,
+        net: -totalBet,
+        slots: []
+      });
+    }
+
+    const ballIds = [];
+    for (let i = 0; i < limitedCount; i++) {
+      const result = await this.spawnBall(
+        username,
+        nickname,
+        profilePictureUrl,
+        betAmount,
+        'standard',
+        {
+          skipValidation: true,
+          skipDeduction: true,
+          testMode: isTest,
+          batchId,
+          preferredColor: options.preferredColor
+        }
+      );
+      if (result.success && result.ballId) {
+        ballIds.push(result.ballId);
+      }
+    }
+
+    return { success: true, batchId, ballIds, totalBet, count: limitedCount, queued: false };
+  }
+
+  /**
+   * Handle ball landing in a slot
+   */
+  async handleBallLanded(ballId, slotIndex) {
+    const ballData = this.activeBalls.get(ballId);
+    
+    if (!ballData) {
+      this.logger.warn(`Ball ${ballId} not found in active balls`);
+      return { success: false, error: 'Ball not found' };
+    }
+
+    // Get configuration to check test mode
+    const config = this.getConfig();
+    const isTestMode = config.physicsSettings.testModeEnabled;
+
+    // Anti-cheat: Validate flight time (skip in test mode)
+    if (!isTestMode) {
+      const flightTime = Date.now() - ballData.timestamp;
+      if (flightTime < MIN_FLIGHT_TIME_MS) {
+        this.logger.warn(`Ball landed too quickly: ${flightTime}ms (minimum: ${MIN_FLIGHT_TIME_MS}ms) - possible glitch or manipulation`);
+        this.activeBalls.delete(ballId);
+        return { success: false, error: 'Invalid drop time' };
+      }
+    }
+
+    // Validate slot configuration
+    if (!config || !config.slots || slotIndex < 0 || slotIndex >= config.slots.length) {
+      this.logger.error(`Invalid slot index: ${slotIndex}`);
+      this.activeBalls.delete(ballId);
+      return { success: false, error: 'Invalid slot' };
+    }
+
+    // Remove from active balls after all validations pass
+    this.activeBalls.delete(ballId);
+
+    const slot = config.slots[slotIndex];
+    const multiplier = slot.multiplier;
+
+    // Calculate winnings
+    // Note: Math.floor is used to ensure XP is always a whole number (no fractional XP)
+    // This prevents precision issues and matches the XP system's integer-only behavior
+    const profit = Math.floor(ballData.bet * multiplier);
+    const netProfit = profit - ballData.bet;
+
+    // Award XP if won
+    if (profit > 0) {
+      await this.awardXP(ballData.username, profit, multiplier);
+    }
+
+    // Trigger OpenShock reward if configured
+    if (slot.openshockReward && slot.openshockReward.enabled) {
+      await this.triggerOpenshockReward(ballData.username, slot.openshockReward, slotIndex);
+    }
+
+    // Record transaction
+    this.db.recordPlinkoTransaction(
+      ballData.username,
+      ballData.bet,
+      multiplier,
+      netProfit,
+      slotIndex
+    );
+
+    // Heatmap tracking
+    if (!this.slotHitCounts.length) {
+      this.slotHitCounts = new Array(config.slots.length || 0).fill(0);
+    }
+    if (this.slotHitCounts[slotIndex] !== undefined) {
+      this.slotHitCounts[slotIndex] += 1;
+      this.io.emit('plinko:heatmap', { counts: this.slotHitCounts });
+    }
+
+    // Batch aggregation
+    if (ballData.batchId && this.batchTrackers.has(ballData.batchId)) {
+      const tracker = this.batchTrackers.get(ballData.batchId);
+      tracker.remaining -= 1;
+      tracker.totalWinnings += profit;
+      tracker.net += netProfit;
+      tracker.slots.push({ slotIndex, multiplier, winnings: profit, net: netProfit });
+      if (tracker.remaining <= 0) {
+        this.batchTrackers.delete(ballData.batchId);
+        this.io.emit('plinko:batch-complete', {
+          batchId: ballData.batchId,
+          username: ballData.username,
+          totalBet: tracker.totalBet,
+          totalWinnings: tracker.totalWinnings,
+          net: tracker.net,
+          slots: tracker.slots
+        });
+        
+        // Notify unified queue that batch is complete
+        if (this.unifiedQueue) {
+          this.unifiedQueue.completeProcessing();
+        }
+      } else {
+        this.batchTrackers.set(ballData.batchId, tracker);
+      }
+    } else if (!ballData.batchId) {
+      // Single ball drop completed - notify unified queue
+      if (this.unifiedQueue) {
+        setTimeout(() => {
+          this.unifiedQueue.completeProcessing();
+        }, 1000);
+      }
+    }
+
+    // Emit result event
+    this.io.emit('plinko:ball-result', {
+      ballId,
+      username: ballData.username,
+      nickname: ballData.nickname,
+      bet: ballData.bet,
+      slotIndex,
+      multiplier,
+      winnings: profit,
+      netProfit
+    });
+
+    this.logger.info(
+      `🎰 Plinko result: ${ballData.username} bet ${ballData.bet} XP, ` +
+      `landed in slot ${slotIndex} (${multiplier}x), won ${profit} XP (net: ${netProfit >= 0 ? '+' : ''}${netProfit} XP)`
+    );
+
+    // Try processing queued drops after each landing (legacy mode only)
+    if (!this.unifiedQueue) {
+      setTimeout(() => this.processPlinkoQueue(), 400);
+    }
+
+    return {
+      success: true,
+      username: ballData.username,
+      bet: ballData.bet,
+      multiplier,
+      winnings: profit,
+      netProfit
+    };
+  }
+
+  /**
+   * Trigger OpenShock reward for the user
+   */
+  async triggerOpenshockReward(username, reward, slotIndex) {
+    try {
+      // Get OpenShock plugin
+      const openshockPlugin = this.api.pluginLoader?.loadedPlugins?.get('openshock');
+      if (!openshockPlugin || !openshockPlugin.instance) {
+        this.logger.warn('OpenShock plugin not available for reward trigger');
+        return false;
+      }
+
+      const { duration, intensity, type, deviceId } = reward;
+      
+      // Validate reward parameters consistently
+      const isValidParam = (val) => val != null && val !== '';
+      const isValidNumber = (val) => typeof val === 'number' && !isNaN(val);
+      
+      if (!isValidParam(type) || !isValidParam(deviceId) || !isValidNumber(duration) || !isValidNumber(intensity)) {
+        this.logger.warn('Invalid OpenShock reward configuration - missing required fields');
+        return false;
+      }
+
+      // Build command for queue with safety limits
+      const command = {
+        deviceId: deviceId,
+        type: type, // 'Shock', 'Vibrate', or 'Sound'
+        intensity: Math.min(Math.max(OPENSHOCK_MIN_INTENSITY, intensity), OPENSHOCK_MAX_INTENSITY), // Clamp to safety range
+        duration: Math.min(Math.max(OPENSHOCK_MIN_DURATION_MS, duration), OPENSHOCK_MAX_DURATION_MS) // Clamp to safety range
+      };
+
+      // Queue OpenShock command via QueueManager
+      const result = await openshockPlugin.instance.queueManager.enqueue(
+        command,
+        username,
+        'plinko-reward',
+        { 
+          slotIndex: slotIndex, // Pass actual slot index from handleBallLanded
+          reward: reward 
+        },
+        5 // Medium priority
+      );
+
+      if (result.success) {
+        this.logger.info(`⚡ OpenShock ${type} queued for ${username}: ${intensity}% for ${duration}ms (Queue ID: ${result.queueId})`);
+        
+        // Emit event for overlay notification
+        this.io.emit('plinko:openshock-triggered', {
+          username,
+          type,
+          duration,
+          intensity,
+          queuePosition: result.position
+        });
+        
+        return true;
+      } else {
+        this.logger.warn(`Failed to queue OpenShock command: ${result.message}`);
+        return false;
+      }
+    } catch (error) {
+      this.logger.error(`Failed to trigger OpenShock reward: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Get Plinko statistics
+   */
+  getStats() {
+    return this.db.getPlinkoStats();
+  }
+
+  /**
+   * Get user's Plinko history
+   */
+  getUserHistory(username, limit = 10) {
+    return this.db.getPlinkUserStats(username, limit);
+  }
+
+  /**
+   * Get Plinko leaderboard
+   */
+  getLeaderboard(limit = 10) {
+    return this.db.getPlinkoLeaderboard(limit);
+  }
+
+  /**
+   * Clean up old balls (if they get stuck)
+   */
+  cleanupOldBalls(maxAgeMs = MAX_BALL_AGE_MS) {
+    const now = Date.now();
+    const oldBalls = [];
+    
+    for (const [ballId, ballData] of this.activeBalls.entries()) {
+      if (now - ballData.timestamp > maxAgeMs) {
+        oldBalls.push(ballId);
+      }
+    }
+
+    for (const ballId of oldBalls) {
+      const ballData = this.activeBalls.get(ballId);
+      this.logger.warn(`Cleaning up stuck ball ${ballId} for user ${ballData.username}`);
+      
+      // Refund the bet (add it back)
+      this.awardXP(ballData.username, ballData.bet, 1.0);
+      
+      // Notify overlay about the refund
+      this.io.emit('plinko:notification', {
+        message: `Stuck ball refunded for ${ballData.nickname || ballData.username}`,
+        username: ballData.username,
+        nickname: ballData.nickname,
+        amount: ballData.bet,
+        type: 'refund'
+      });
+      
+      // Remove from active balls
+      this.activeBalls.delete(ballId);
+    }
+
+    if (oldBalls.length > 0) {
+      this.logger.info(`🧹 Cleaned up ${oldBalls.length} stuck Plinko balls`);
+    }
+  }
+
+  /**
+   * Start periodic cleanup
+   */
+  startCleanupTimer() {
+    // Run cleanup every 30 seconds
+    this.cleanupTimer = setInterval(() => {
+      this.cleanupOldBalls();
+    }, CLEANUP_INTERVAL_MS);
+  }
+
+  /**
+   * Stop cleanup timer
+   */
+  stopCleanupTimer() {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+  }
+
+  /**
+   * Destroy Plinko game
+   */
+  destroy() {
+    this.stopCleanupTimer();
+    this.activeBalls.clear();
+    this.logger.info('🎰 Plinko game destroyed');
+  }
+}
+
+module.exports = PlinkoGame;

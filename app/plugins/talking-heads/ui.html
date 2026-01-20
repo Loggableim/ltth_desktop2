@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Talking Heads - AI Avatar Animation</title>
+    <link rel="stylesheet" href="/css/tailwind.output.css">
+    <link rel="stylesheet" href="/css/themes.css">
+    <script>
+        // Apply saved theme immediately
+        (function() {
+            const savedTheme = localStorage.getItem('dashboard-theme') || 'night';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
+    <script src="/js/i18n-client.js"></script>
+    <script src="/js/lucide.min.js"></script>
+    <script src="/js/theme-manager.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            background: var(--color-bg-primary);
+            padding: 20px;
+            overflow-y: auto;
+            min-height: 100vh;
+            color: var(--color-text-primary);
+        }
+        
+        .config-section {
+            background: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--color-text-primary);
+            margin-bottom: 6px;
+        }
+        
+        .form-input, .form-select {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--color-bg-tertiary);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            color: var(--color-text-primary);
+            font-size: 0.875rem;
+        }
+        
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--color-accent-primary);
+        }
+        
+        .form-help {
+            font-size: 0.75rem;
+            color: var(--color-text-secondary);
+            margin-top: 4px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .toggle-switch input {
+            position: absolute;
+            opacity: 0;
+        }
+        
+        .toggle-slider {
+            width: 44px;
+            height: 24px;
+            background: var(--color-bg-tertiary);
+            border-radius: 12px;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: var(--color-text-secondary);
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+        
+        .toggle-switch input:checked + .toggle-slider {
+            background: var(--color-accent-primary);
+        }
+        
+        .toggle-switch input:checked + .toggle-slider::before {
+            transform: translateX(20px);
+            background: white;
+        }
+        
+        .toggle-label {
+            margin-left: 12px;
+            font-size: 0.875rem;
+            color: var(--color-text-primary);
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-size: 0.875rem;
+        }
+        
+        .btn-primary {
+            background: var(--color-accent-primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+        
+        .btn-success {
+            background: var(--color-accent-success);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: var(--color-accent-danger);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: var(--color-btn-secondary-bg);
+            color: var(--color-btn-secondary-text);
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--color-accent-success);
+        }
+        
+        .badge-warning {
+            background: rgba(234, 179, 8, 0.1);
+            color: var(--color-accent-warning);
+        }
+        
+        .badge-info {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--color-accent-primary);
+        }
+        
+        .style-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        
+        .style-card {
+            background: var(--color-bg-tertiary);
+            border: 2px solid var(--color-border);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .style-card:hover {
+            border-color: var(--color-accent-primary);
+            background: var(--color-bg-hover);
+        }
+        
+        .style-card.selected {
+            border-color: var(--color-accent-primary);
+            background: var(--color-active-bg);
+        }
+        
+        .style-name {
+            font-weight: 600;
+            color: var(--color-text-primary);
+            font-size: 0.875rem;
+            margin-bottom: 4px;
+        }
+        
+        .style-desc {
+            font-size: 0.75rem;
+            color: var(--color-text-secondary);
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 0.875rem;
+        }
+        
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: var(--color-accent-primary);
+        }
+        
+        .alert-warning {
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            color: var(--color-accent-warning);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: var(--color-bg-tertiary);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--color-accent-primary);
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--color-text-secondary);
+            margin-top: 4px;
+        }
+        
+        .animation-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .animation-item {
+            background: var(--color-bg-tertiary);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .debug-log {
+            background: var(--color-bg-tertiary);
+            color: var(--color-text-primary);
+            padding: 16px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+            line-height: 1.5;
+            border: 1px solid var(--color-border);
+        }
+
+        .log-entry {
+            display: grid;
+            grid-template-columns: 110px 1fr;
+            gap: 8px;
+            padding: 6px 4px;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-meta {
+            color: var(--color-text-secondary);
+            font-size: 0.7rem;
+        }
+
+        .log-level {
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .log-level.info { color: var(--color-accent-primary); }
+        .log-level.warn { color: var(--color-accent-warning); }
+        .log-level.error { color: var(--color-accent-danger); }
+        .log-level.debug { color: var(--color-text-secondary); }
+
+        .avatar-card {
+            background: var(--color-bg-tertiary);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .avatar-sprites-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+
+        .avatar-thumb {
+            width: 100%;
+            aspect-ratio: 1/1;
+            object-fit: contain;
+            background: var(--color-bg-secondary);
+            border-radius: 6px;
+            border: 1px solid var(--color-border);
+            margin-bottom: 8px;
+        }
+
+        .avatar-sprite-mini {
+            width: calc(33.333% - 6px);
+            aspect-ratio: 1/1;
+            object-fit: contain;
+            background: var(--color-bg-secondary);
+            border-radius: 4px;
+            border: 1px solid var(--color-border);
+        }
+
+        .sprite-label {
+            font-size: 0.65rem;
+            color: var(--color-text-secondary);
+            margin-top: 2px;
+        }
+
+        .user-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: var(--color-bg-tertiary);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .user-item:hover {
+            background: var(--color-bg-hover);
+            border-color: var(--color-accent-primary);
+        }
+
+        .user-item.has-avatar {
+            opacity: 0.6;
+        }
+
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: var(--color-bg-secondary);
+            border: 2px solid var(--color-border);
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: var(--color-text-primary);
+            font-size: 0.95rem;
+        }
+
+        .user-stats {
+            font-size: 0.75rem;
+            color: var(--color-text-secondary);
+            margin-top: 2px;
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-assign {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            background: var(--color-accent-primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-assign:hover {
+            background: var(--color-accent-secondary);
+        }
+
+        .btn-assign:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .avatar-status {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: var(--color-accent-primary);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto max-w-7xl">
+        <!-- Header -->
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold mb-2">
+                <i data-lucide="user-circle-2" class="inline-block w-8 h-8 mr-2"></i>
+                <span data-i18n="talking_heads_ui.title">Talking Heads - AI Avatar Animation</span>
+            </h1>
+            <p class="text-sm" style="color: var(--color-text-secondary);" data-i18n="talking_heads_ui.subtitle">
+                Dynamische 2D-Avatare für TikTok-User mit TTS-synchronisierter Animation
+            </p>
+        </div>
+
+        <!-- Status Section -->
+        <div class="config-section">
+            <div class="section-title">
+                <i data-lucide="activity"></i>
+                <span data-i18n="talking_heads_ui.sections.status">Status & Einstellungen</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="enabledSwitch">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label" data-i18n="talking_heads_ui.labels.plugin_enabled">Plugin aktiviert</span>
+                    </label>
+                </div>
+                <div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="debugLoggingSwitch">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label" data-i18n="talking_heads_ui.labels.debug_logging">Debug-Logging</span>
+                    </label>
+                </div>
+                <div>
+                    <span id="apiStatus" class="status-badge badge-info" data-i18n="talking_heads_ui.labels.api_status_checking">Prüfe...</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="form-group">
+                    <label class="form-label" data-i18n="talking_heads_ui.labels.image_provider">Bild-Engine</label>
+                    <select id="imageProvider" class="form-select">
+                        <option value="auto" data-i18n="talking_heads_ui.options.provider_auto">Auto (OpenAI bevorzugt, SiliconFlow als Fallback)</option>
+                        <option value="openai" data-i18n="talking_heads_ui.options.provider_openai">OpenAI (DALL-E 3)</option>
+                        <option value="siliconflow" data-i18n="talking_heads_ui.options.provider_siliconflow">SiliconFlow (FLUX.1)</option>
+                    </select>
+                    <div class="form-help" data-i18n="talking_heads_ui.help.image_provider">Wähle den gewünschten Bildgenerator. Auto versucht zuerst OpenAI (falls API-Key gesetzt).</div>
+                </div>
+            </div>
+            
+            <div id="apiKeyWarning" class="alert alert-warning" style="display: none;" data-i18n-html="true" data-i18n="talking_heads_ui.alerts.api_key_warning">
+                <strong>⚠️ Kein API-Schlüssel konfiguriert!</strong><br>
+                Bitte konfigurieren Sie den passenden Schlüssel für die gewählte Engine:<br>
+                - <strong>OpenAI</strong>: Dashboard → Einstellungen → OpenAI API Configuration<br>
+                - <strong>SiliconFlow</strong>: Dashboard → Einstellungen → TTS API Keys → SiliconFlow API Key<br>
+                <small>Der API-Schlüssel wird zentral verwaltet und mit anderen Plugins geteilt.</small>
+            </div>
+            
+            <div class="alert alert-info" data-i18n-html="true" data-i18n="talking_heads_ui.alerts.image_generation_info">
+                <strong>ℹ️ Bildgenerierung</strong><br>
+                Das Plugin unterstützt <strong>OpenAI (DALL-E 3)</strong> und <strong>SiliconFlow (FLUX.1)</strong>. 
+                Hinterlegen Sie den passenden API-Key in den globalen Settings und wählen Sie hier die gewünschte Engine.
+            </div>
+        </div>
+
+        <!-- Style Selection -->
+        <div class="config-section">
+            <div class="section-title">
+                <i data-lucide="palette"></i>
+                <span data-i18n="talking_heads_ui.sections.style">Avatar-Stil</span>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" data-i18n="talking_heads_ui.labels.select_style">Wählen Sie einen Stil für die Avatar-Generierung</label>
+                <div class="style-grid" id="styleGrid">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Permissions -->
+        <div class="config-section">
+            <div class="section-title">
+                <i data-lucide="shield"></i>
+                <span data-i18n="talking_heads_ui.sections.permissions">Berechtigungen</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label class="form-label" data-i18n="talking_heads_ui.labels.permission_question">Wer erhält Talking Heads?</label>
+                    <select id="rolePermission" class="form-select">
+                        <option value="all" data-i18n="talking_heads_ui.options.permission_all">Alle Zuschauer</option>
+                        <option value="team" data-i18n="talking_heads_ui.options.permission_team">Nur Team-Mitglieder</option>
+                        <option value="subscriber" data-i18n="talking_heads_ui.options.permission_subscriber">Nur Abonnenten/Superfans</option>
+                        <option value="custom_voice" data-i18n="talking_heads_ui.options.permission_custom_voice">Nur User mit TTS-Stimme</option>
+                        <option value="moderator" data-i18n="talking_heads_ui.options.permission_moderator">Nur Moderatoren</option>
+                        <option value="top_gifter" data-i18n="talking_heads_ui.options.permission_top_gifter">Nur Top Gifter</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="minTeamLevelWrapper" style="display: none;">
+                    <label class="form-label" data-i18n="talking_heads_ui.labels.min_team_level">Minimales Team-Level</label>
+                    <input type="number" id="minTeamLevel" class="form-input" min="0" max="6" value="0">
+                    <div class="form-help" data-i18n="talking_heads_ui.help.min_team_level">Level 0-6 (0 = alle Team-Mitglieder)</div>
+                </div>
+            </div>
+            
+            <!-- Permission Test Result -->
+            <div id="permissionTestResult" class="alert" style="display: none; margin-top: 16px;"></div>
+            
+            <div class="flex gap-4 mt-4">
+                <button class="btn btn-secondary" type="button" id="testPermissionsBtn">
+                    <i data-lucide="shield-check" class="inline-block w-4 h-4 mr-2"></i>
+                    Berechtigungen testen
+                </button>
+                <div class="form-help flex items-center">
+                    Testet die aktuellen Berechtigungs-Einstellungen mit verschiedenen User-Typen
+                </div>
+            </div>
+        </div>
+
+        <!-- Animation Settings -->
+        <div class="config-section">
+            <div class="section-title">
+                <i data-lucide="film"></i>
+                <span data-i18n="talking_heads_ui.sections.animation">Animations-Einstellungen</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="form-group">
+                    <label class="form-label" data-i18n="talking_heads_ui.labels.fade_in">Fade-In Dauer (ms)</label>
+                    <input type="number" id="fadeInDuration" class="form-input" min="0" max="2000" step="100" value="300">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" data-i18n="talking_heads_ui.labels.fade_out">Fade-Out Dauer (ms)</label>
+                    <input type="number" id="fadeOutDuration" class="form-input" min="0" max="2000" step="100" value="300">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" data-i18n="talking_heads_ui.labels.blink_interval">Blinzel-Intervall (ms)</label>
+                    <input type="number" id="blinkInterval" class="form-input" min="1000" max="10000" step="500" value="3000">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Spawn Animation</label>
+                    <select id="spawnAnimationMode" class="form-select">
+                        <option value="standard">Standard WebGL Spawn</option>
+                        <option value="custom">Benutzerdefinierte MP4/GIF</option>
+                    </select>
+                    <div class="form-help">Wird automatisch beim ersten Avatar abgespielt.</div>
+                </div>
+                <div class="form-group" id="customSpawnWrapper" style="display: none;">
+                    <label class="form-label">Custom Animation URL (MP4 oder GIF)</label>
+                    <input type="text" id="spawnAnimationUrl" class="form-input" placeholder="https://example.com/spawn.mp4">
+                    <div class="form-help">MP4 kann Audio enthalten, GIF wird stumm abgespielt.</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Spawn Audio Lautstärke</label>
+                    <input type="number" id="spawnAnimationVolume" class="form-input" min="0" max="1" step="0.05" value="0.8">
+                    <div class="form-help">Nur relevant für MP4 mit Audio.</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">OBS HUD URL</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="obsHudUrl" class="form-input" readonly>
+                        <button class="btn btn-secondary" type="button" id="copyObsHudUrlBtn">Copy</button>
+                    </div>
+                    <div class="form-help">1920x1080 HUD mit WebGL Spawn Animation.</div>
+                </div>
+                <div class="form-group">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="obsHudEnabled">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">OBS HUD aktivieren</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="obsEnabled">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" data-i18n="talking_heads_ui.labels.obs_enabled">OBS Integration aktivieren</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Preview TTS -->
+        <div class="config-section">
+            <div class="section-title">
+                <i data-lucide="volume-2"></i>
+                <span>Talking Head & TTS Preview</span>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Vorschau-Text</label>
+                <input type="text" id="previewTtsText" class="form-input" placeholder="Hallo! Das ist ein Talking Heads Test.">
+                <div class="form-help">Spielt die lokale TTS Engine ab und zeigt gleichzeitig das Talking Head im OBS HUD.</div>
+            </div>
+            <div class="flex gap-4">
+                <button class="btn btn-secondary" type="button" id="previewTtsBtn">
+                    <i data-lucide="play-circle" class="inline-block w-4 h-4 mr-2"></i>
+                    Vorschau abspielen
+                </button>
+                <button class="btn btn-secondary" type="button" id="testAnimationBtn">
+                    <i data-lucide="activity" class="inline-block w-4 h-4 mr-2"></i>
+                    Nur Animation testen
+                </button>
+            </div>
+            <div class="form-help text-xs mt-2">
+                <strong>Hinweis:</strong> "Nur Animation testen" zeigt die Mundbewegungen ohne TTS Audio. 
+                Öffnen Sie die Browser-Konsole im OBS HUD für detaillierte Logs.
+            </div>
+        </div>
+
+        <!-- Cache Management -->
+        <div class="config-section">
+            <div class="section-title">
+                <i data-lucide="database"></i>
+                <span data-i18n="talking_heads_ui.sections.cache">Cache-Verwaltung</span>
+            </div>
+            
+            <div class="stats-grid mb-4">
+                <div class="stat-card">
+                    <div class="stat-value" id="cacheCount">0</div>
+                    <div class="stat-label" data-i18n="talking_heads_ui.labels.cached_avatars">Gespeicherte Avatare</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="activeAnimations">0</div>
+                    <div class="stat-label" data-i18n="talking_heads_ui.labels.active_animations">Aktive Animationen</div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="form-group">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="cacheEnabled">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label" data-i18n="talking_heads_ui.labels.cache_enabled">Avatar-Caching aktivieren</span>
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" data-i18n="talking_heads_ui.labels.cache_duration">Cache-Dauer (Tage)</label>
+                    <input type="number" id="cacheDuration" class="form-input" min="1" max="365" value="30">
+                    <div class="form-help" data-i18n="talking_heads_ui.help.cache_duration">Avatare werden nach dieser Zeit gelöscht</div>
+                </div>
+            </div>
+            
+            <div>
+                <button class="btn btn-danger" id="clearCacheBtn">
+                    <i data-lucide="trash-2" class="inline-block w-4 h-4 mr-2"></i>
+                    <span data-i18n="talking_heads_ui.buttons.clear_cache">Gesamten Cache leeren</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- User Assignment -->
+        <div class="config-section">
+            <div class="section-title">
+                <i data-lucide="user-plus"></i>
+                <span>User-Zuweisung für Talking Heads</span>
+            </div>
+            <div class="form-help" style="margin-bottom: 10px;">
+                Wähle einen User aus dem Stream aus und generiere einen Talking Head basierend auf Profilbild und Username.
+                Bei verfügbarem OpenAI API-Key wird das Profilbild automatisch analysiert.
+            </div>
+            
+            <div class="flex gap-4 mb-4">
+                <button class="btn btn-secondary" id="loadUsersBtn">
+                    <i data-lucide="refresh-cw" class="inline-block w-4 h-4 mr-2"></i>
+                    User aus Stream laden
+                </button>
+                <div class="form-help flex items-center">
+                    <span id="userCountLabel">Keine User geladen</span>
+                </div>
+            </div>
+
+            <div id="userListContainer" style="display: none;">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="form-group">
+                        <label class="form-label">User suchen</label>
+                        <input type="text" id="userSearchInput" class="form-input" placeholder="Username eingeben...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">User-Filter</label>
+                        <select id="userFilterSelect" class="form-select">
+                            <option value="active" selected>Nur aktiver Livestream (Standard)</option>
+                            <option value="all">Alle User (global)</option>
+                        </select>
+                        <div class="form-help">Standard: Nur User die aktuell zusehen. Offline User via Suchfeld finden.</div>
+                    </div>
+                </div>
+                
+                <div id="userList" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 6px; padding: 8px;">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Generated Avatars -->
+        <div class="config-section">
+            <div class="section-title">
+                <i data-lucide="users"></i>
+                <span>Generierte Talking Heads</span>
+            </div>
+            <div class="form-help" style="margin-bottom: 10px;">Alle generierten Avatare werden hier angezeigt. Klicke auf einen Avatar, um die Standard-Idle Ansicht zu sehen.</div>
+            <div id="avatarList" class="style-grid avatar-grid">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Active Animations -->
+        <div class="config-section" id="activeAnimationsSection" style="display: none;">
+            <div class="section-title">
+                <i data-lucide="play-circle"></i>
+                <span data-i18n="talking_heads_ui.sections.active_animations">Aktive Animationen</span>
+            </div>
+            <div id="animationList" class="animation-list">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Debug Log -->
+        <div class="config-section" id="debugLogSection" style="display: none;">
+            <div class="section-title">
+                <i data-lucide="terminal"></i>
+                <span data-i18n="talking_heads_ui.sections.debug_log">Debug Log</span>
+            </div>
+            <div class="alert alert-info" data-i18n-html="true" data-i18n="talking_heads_ui.alerts.debug_log">
+                <strong>ℹ️ Debug-Logs anzeigen</strong><br>
+                Debug-Logs werden im Server-Terminal ausgegeben. Öffnen Sie das Terminal/Konsole, in dem der Server läuft, um die Logs zu sehen.<br>
+                <small>Die Logs enthalten detaillierte Informationen über API-Aufrufe, Cache-Zugriffe und Avatar-Generierung.</small>
+            </div>
+            <div class="debug-log" id="debugLogOutput" aria-live="polite"></div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="flex justify-end gap-4 mb-6">
+            <button class="btn btn-primary" id="testApiBtn">
+                <i data-lucide="check-circle" class="inline-block w-4 h-4 mr-2"></i>
+                <span data-i18n="talking_heads_ui.buttons.test_api">API testen</span>
+            </button>
+            <button class="btn btn-secondary" id="testGenerateBtn">
+                <i data-lucide="image" class="inline-block w-4 h-4 mr-2"></i>
+                <span data-i18n="talking_heads_ui.buttons.test_generate">Test-Avatar generieren</span>
+            </button>
+            <button class="btn btn-success" id="saveConfigBtn" disabled>
+                <i data-lucide="save" class="inline-block w-4 h-4 mr-2"></i>
+                <span data-i18n="talking_heads_ui.buttons.save_config">Konfiguration speichern</span>
+            </button>
+        </div>
+    </div>
+
+    <script src="assets/ui.js"></script>
+    <script>
+        // Initialize Lucide icons
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
