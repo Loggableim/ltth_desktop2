@@ -3909,7 +3909,7 @@
             // arg is an element ID, get the element and copy its text content
             const argElement = document.getElementById(arg);
             if (argElement) {
-              copyToClipboard(argElement.textContent);
+              copyToClipboard(argElement.textContent.trim());
             } else {
               // Fallback: if element not found, copy arg as-is
               copyToClipboard(arg);
