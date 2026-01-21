@@ -152,6 +152,9 @@ class GameEnginePlugin {
       this.wheelGame.setUnifiedQueue(this.unifiedQueue);
       this.unifiedQueue.setWheelGame(this.wheelGame);
       
+      // Set game engine reference for Connect4 and Chess
+      this.unifiedQueue.setGameEnginePlugin(this);
+      
       // Keep legacy wheel reference for backward compatibility
       this.plinkoGame.setWheelGame(this.wheelGame);
 
@@ -1868,36 +1871,75 @@ class GameEnginePlugin {
   }
 
   /**
+   * Check if game type should use unified queue
+   * @param {string} gameType - Game type (connect4, chess, plinko, wheel, etc.)
+   * @returns {boolean} True if should use unified queue
+   */
+  shouldUseUnifiedQueue(gameType) {
+    return this.unifiedQueue && (gameType === 'connect4' || gameType === 'chess');
+  }
+
+  /**
    * Handle game start request - queue if game is active, start immediately otherwise
    */
   handleGameStart(gameType, viewerUsername, viewerNickname, triggerType, triggerValue, giftPictureUrl = null) {
-    // Check if ANY game is currently active (not just for this player)
-    if (this.activeSessions.size > 0 || this.pendingChallenges.size > 0) {
-      // Game is active or challenge pending - add to queue
-      const queueEntry = {
-        gameType,
-        viewerUsername,
-        viewerNickname,
-        triggerType,
-        triggerValue,
-        giftPictureUrl,
-        timestamp: Date.now()
-      };
+    // Check if unified queue is available for this game type
+    const useUnifiedQueue = this.shouldUseUnifiedQueue(gameType);
+    
+    if (useUnifiedQueue) {
+      // Use unified queue for Connect4 and Chess
+      const shouldQueue = this.unifiedQueue.shouldQueue() || this.activeSessions.size > 0 || this.pendingChallenges.size > 0;
       
-      this.gameQueue.push(queueEntry);
-      
-      this.logger.info(`Game queued: ${viewerUsername} for ${gameType} (Queue length: ${this.gameQueue.length})`);
-      
-      // Emit queue event
-      this.io.emit('game-engine:game-queued', {
-        position: this.gameQueue.length,
-        gameType,
-        viewerUsername,
-        viewerNickname,
-        message: `Spiel wurde in Warteschlange hinzugefügt. Position: ${this.gameQueue.length}`
-      });
-      
-      return;
+      if (shouldQueue) {
+        // Add to unified queue
+        const gameData = {
+          gameType,
+          viewerUsername,
+          viewerNickname,
+          triggerType,
+          triggerValue,
+          giftPictureUrl
+        };
+        
+        if (gameType === 'connect4') {
+          this.unifiedQueue.queueConnect4(gameData);
+        } else if (gameType === 'chess') {
+          this.unifiedQueue.queueChess(gameData);
+        }
+        
+        this.logger.info(`Game queued in unified queue: ${viewerUsername} for ${gameType}`);
+        return;
+      }
+    } else {
+      // Use old gameQueue for backwards compatibility with other game types
+      // Check if ANY game is currently active (not just for this player)
+      if (this.activeSessions.size > 0 || this.pendingChallenges.size > 0) {
+        // Game is active or challenge pending - add to queue
+        const queueEntry = {
+          gameType,
+          viewerUsername,
+          viewerNickname,
+          triggerType,
+          triggerValue,
+          giftPictureUrl,
+          timestamp: Date.now()
+        };
+        
+        this.gameQueue.push(queueEntry);
+        
+        this.logger.info(`Game queued: ${viewerUsername} for ${gameType} (Queue length: ${this.gameQueue.length})`);
+        
+        // Emit queue event
+        this.io.emit('game-engine:game-queued', {
+          position: this.gameQueue.length,
+          gameType,
+          viewerUsername,
+          viewerNickname,
+          message: `Spiel wurde in Warteschlange hinzugefügt. Position: ${this.gameQueue.length}`
+        });
+        
+        return;
+      }
     }
 
     // Check if player already has an active game
@@ -1927,6 +1969,52 @@ class GameEnginePlugin {
     );
 
     this.logger.info(`Challenge created #${sessionId}: ${viewerUsername} challenges with ${triggerValue}`);
+  }
+
+  /**
+   * Start game from unified queue (called by UnifiedQueueManager)
+   * This bypasses queue checking since the game is already dequeued
+   */
+  async startGameFromQueue(gameType, viewerUsername, viewerNickname, triggerType, triggerValue, giftPictureUrl = null) {
+    try {
+      this.logger.info(`🎮 [GAME ENGINE] Starting ${gameType} from unified queue for ${viewerUsername}`);
+      
+      // Check if player already has an active game
+      const activeSession = this.db.getActiveSessionForPlayer(viewerUsername);
+      if (activeSession) {
+        this.logger.warn(`Player ${viewerUsername} already has an active game, completing queue processing`);
+        if (this.unifiedQueue) {
+          this.unifiedQueue.completeProcessing();
+        }
+        return;
+      }
+
+      // Get configuration
+      const config = this.db.getGameConfig(gameType) || this.defaultConfigs[gameType];
+
+      // If challenge screen is disabled, start game directly
+      if (!config.showChallengeScreen) {
+        this.startGame(gameType, viewerUsername, viewerNickname, triggerType, triggerValue);
+        return;
+      }
+
+      // Create a pending challenge
+      const sessionId = this.createPendingChallenge(
+        gameType, 
+        viewerUsername, 
+        viewerNickname, 
+        triggerValue,
+        giftPictureUrl,
+        config
+      );
+
+      this.logger.info(`Challenge created #${sessionId}: ${viewerUsername} challenges with ${triggerValue}`);
+    } catch (error) {
+      this.logger.error(`Error starting game from queue: ${error.message}`);
+      if (this.unifiedQueue) {
+        this.unifiedQueue.completeProcessing();
+      }
+    }
   }
 
   /**
@@ -2681,10 +2769,19 @@ class GameEnginePlugin {
 
     this.logger.info(`Ended game #${sessionId}: Winner=${winnerUsername || 'none'}, Reason=${reason}`);
     
-    // Process next game in queue after a short delay (allow UI to update)
-    setTimeout(() => {
-      this.processNextQueuedGame();
-    }, 2000);
+    // Check if this is a game that should use unified queue
+    const useUnifiedQueue = this.shouldUseUnifiedQueue(session.game_type);
+    
+    if (useUnifiedQueue) {
+      // Complete processing in unified queue
+      this.logger.debug(`Completing unified queue processing for ${session.game_type} game #${sessionId}`);
+      this.unifiedQueue.completeProcessing();
+    } else {
+      // Process next game in old queue after a short delay (allow UI to update)
+      setTimeout(() => {
+        this.processNextQueuedGame();
+      }, 2000);
+    }
   }
 
   /**
