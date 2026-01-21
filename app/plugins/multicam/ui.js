@@ -147,10 +147,10 @@ function updateConnectionSettings(obsConfig) {
     document.getElementById('obs-password').value = obsConfig.password || DEFAULT_OBS_CONFIG.password;
     
     // Auto-connect settings
-    document.getElementById('obs-connect-on-start').checked = obsConfig.connectOnStart || DEFAULT_OBS_CONFIG.connectOnStart;
-    document.getElementById('obs-connect-delay-ms').value = obsConfig.connectDelayMs !== undefined ? obsConfig.connectDelayMs : DEFAULT_OBS_CONFIG.connectDelayMs;
-    document.getElementById('obs-auto-reconnect-enabled').checked = obsConfig.autoReconnectEnabled !== undefined ? obsConfig.autoReconnectEnabled : DEFAULT_OBS_CONFIG.autoReconnectEnabled;
-    document.getElementById('obs-max-reconnect-minutes').value = obsConfig.maxReconnectMinutes !== undefined ? obsConfig.maxReconnectMinutes : DEFAULT_OBS_CONFIG.maxReconnectMinutes;
+    document.getElementById('obs-connect-on-start').checked = obsConfig.connectOnStart ?? DEFAULT_OBS_CONFIG.connectOnStart;
+    document.getElementById('obs-connect-delay-ms').value = obsConfig.connectDelayMs ?? DEFAULT_OBS_CONFIG.connectDelayMs;
+    document.getElementById('obs-auto-reconnect-enabled').checked = obsConfig.autoReconnectEnabled ?? DEFAULT_OBS_CONFIG.autoReconnectEnabled;
+    document.getElementById('obs-max-reconnect-minutes').value = obsConfig.maxReconnectMinutes ?? DEFAULT_OBS_CONFIG.maxReconnectMinutes;
     
     // Health check settings
     const healthCheck = obsConfig.healthCheck || DEFAULT_OBS_CONFIG.healthCheck;

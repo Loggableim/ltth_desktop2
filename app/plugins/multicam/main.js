@@ -38,7 +38,6 @@ class MultiCamPlugin {
         // Auto-connect and reconnect tracking
         this.connectDelayTimeout = null;
         this.reconnectStartTime = null;
-        this.totalReconnectTimeMs = 0;
 
         // Health check tracking
         this.healthCheckInterval = null;
@@ -221,7 +220,6 @@ class MultiCamPlugin {
             this.connected = true;
             this.reconnectAttempt = 0;
             this.reconnectStartTime = null;
-            this.totalReconnectTimeMs = 0;
 
             // Event-Listener (nur einmal registrieren)
             // Entferne alte Listener vor dem Hinzufügen neuer
@@ -320,7 +318,6 @@ class MultiCamPlugin {
         if (elapsedMs >= maxReconnectMs) {
             this.api.log(`Multi-Cam: Maximum reconnect duration (${this.config.obs.maxReconnectMinutes} minutes) exceeded. Stopping reconnect attempts.`, 'warn');
             this.reconnectStartTime = null;
-            this.totalReconnectTimeMs = 0;
             this.reconnectAttempt = 0;
             return;
         }
@@ -394,7 +391,7 @@ class MultiCamPlugin {
                 await this.obs.call(method);
                 this.api.log('Multi-Cam: Health check passed', 'debug');
             } catch (error) {
-                this.api.log(`Multi-Cam: Health check failed: ${error.message}`, 'warn');
+                this.api.log(`Multi-Cam: Health check failed using method '${method}': ${error.message}`, 'warn');
                 // Trigger disconnect handler to reuse existing backoff flow
                 this.handleDisconnect();
             }
