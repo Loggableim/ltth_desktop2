@@ -138,7 +138,9 @@ class SoundboardManager extends EventEmitter {
         if (!url || typeof url !== 'string') return false;
         const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
         const urlLower = url.toLowerCase();
-        return audioExtensions.some(ext => urlLower.includes(ext));
+        // Remove query parameters for accurate extension detection
+        const urlPath = urlLower.split('?')[0];
+        return audioExtensions.some(ext => urlPath.endsWith(ext));
     }
 
     /**
@@ -382,7 +384,7 @@ class SoundboardManager extends EventEmitter {
             }
         }
 
-        const validEventTypes = ['gift', 'follow', 'subscribe', 'share', 'like', 'test', 'preview'];
+        const validEventTypes = ['gift', 'follow', 'subscribe', 'share', 'like', 'test', 'preview', 'animation'];
         let validEventType = 'unknown';
         if (metadata.eventType && typeof metadata.eventType === 'string') {
             const normalizedType = metadata.eventType.toLowerCase().trim();
