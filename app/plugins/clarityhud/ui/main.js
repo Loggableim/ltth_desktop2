@@ -723,7 +723,6 @@ function renderTabContent(dock, tabId) {
               <label>Max Messages</label>
               <div class="range-group">
                 <div class="range-value">
-                  <label>Max Messages</label>
                   <span id="maxMessages-value">${s.maxMessages || 300}</span>
                 </div>
                 <input type="range" id="maxMessages" min="50" max="500" step="10" value="${s.maxMessages || 300}" data-range-target="maxMessages">
@@ -916,7 +915,6 @@ async function saveSettings() {
       showAvatars: getFieldValue('showAvatars', 'checkbox'),
       showTimestamps: getFieldValue('showTimestamps', 'checkbox'),
       highlightPrimary: getFieldValue('highlightPrimary', 'checkbox'),
-      primaryOpacity: parseFloat(getFieldValue('primaryOpacity')) || 1.2,
       maxMessages: parseInt(getFieldValue('maxMessages')) || 300,
       autoContrast: getFieldValue('autoContrast', 'checkbox'),
       pulseOnNew: getFieldValue('pulseOnNew', 'checkbox')

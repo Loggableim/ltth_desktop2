@@ -375,11 +375,29 @@ function detectSystemPreferences() {
 // ==================== UTILITY FUNCTIONS ====================
 function getContrastColor(bgColor) {
   // Convert hex/rgb to luminance and return black or white for best contrast
-  // Simple implementation - can be enhanced with proper color contrast calculation
+  if (!bgColor || typeof bgColor !== 'string') {
+    return '#FFFFFF';
+  }
+  
+  // Remove # if present
   const color = bgColor.replace('#', '');
-  const r = parseInt(color.substr(0, 2), 16);
-  const g = parseInt(color.substr(2, 2), 16);
-  const b = parseInt(color.substr(4, 2), 16);
+  
+  // Handle 3-character hex colors
+  let r, g, b;
+  if (color.length === 3) {
+    r = parseInt(color[0] + color[0], 16);
+    g = parseInt(color[1] + color[1], 16);
+    b = parseInt(color[2] + color[2], 16);
+  } else if (color.length === 6) {
+    r = parseInt(color.substring(0, 2), 16);
+    g = parseInt(color.substring(2, 4), 16);
+    b = parseInt(color.substring(4, 6), 16);
+  } else {
+    // Invalid format, default to white
+    return '#FFFFFF';
+  }
+  
+  // Calculate luminance
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance > 0.5 ? '#000000' : '#FFFFFF';
 }
