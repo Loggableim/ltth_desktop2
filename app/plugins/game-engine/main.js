@@ -90,7 +90,8 @@ class GameEnginePlugin {
         eloKFactor: 32,
         roundTimerEnabled: false,
         roundTimeLimit: 30, // seconds per move
-        roundWarningTime: 10 // warning at X seconds
+        roundWarningTime: 10, // warning at X seconds
+        chatCommand: 'c4start' // customizable chat command to start Connect4
       },
       chess: {
         boardTheme: 'dark', // dark, light, wood
@@ -1524,6 +1525,14 @@ class GameEnginePlugin {
         const { spinId, segmentIndex, reportedSegmentIndex } = data;
         await this.wheelGame.handleSpinComplete(spinId, segmentIndex, reportedSegmentIndex);
       });
+
+      // Listen for config updates to re-register GCCE commands
+      socket.on('game-engine:config-updated', (data) => {
+        if (data.gameType === 'connect4') {
+          this.logger.info('💬 [GAME ENGINE] Connect4 config updated, re-registering GCCE commands');
+          this.registerGCCECommands();
+        }
+      });
     });
   }
 
@@ -1558,6 +1567,13 @@ class GameEnginePlugin {
 
       const gcce = gccePlugin.instance;
 
+      // Get Connect4 configuration to retrieve custom chat command
+      let connect4Config = this.db.getGameConfig('connect4');
+      if (!connect4Config && this.defaultConfigs.connect4) {
+        connect4Config = this.defaultConfigs.connect4;
+      }
+      const c4ChatCommand = connect4Config?.chatCommand || 'c4start';
+
       // Define game commands
       const commands = [
         {
@@ -1572,9 +1588,9 @@ class GameEnginePlugin {
           handler: async (args, context) => await this.handleConnect4Command(args, context)
         },
         {
-          name: 'c4start',
+          name: c4ChatCommand,
           description: 'Start a new Connect4 game',
-          syntax: '/c4start',
+          syntax: `/${c4ChatCommand}`,
           permission: 'all',
           enabled: true,
           minArgs: 0,
@@ -2158,7 +2174,14 @@ class GameEnginePlugin {
         return; // Let GCCE handle it
       }
       
-      // GCCE fallback: handle /c4 and /c4start commands
+      // Get Connect4 configuration to retrieve custom chat command
+      let connect4Config = this.db.getGameConfig('connect4');
+      if (!connect4Config && this.defaultConfigs.connect4) {
+        connect4Config = this.defaultConfigs.connect4;
+      }
+      const c4ChatCommand = connect4Config?.chatCommand || 'c4start';
+      
+      // GCCE fallback: handle /c4 and custom start command
       const c4Match = message.match(/^\/c4\s+([a-g])$/i);
       if (c4Match) {
         const column = c4Match[1].toUpperCase();
@@ -2166,9 +2189,12 @@ class GameEnginePlugin {
         return;
       }
       
-      const c4StartMatch = message.match(/^\/c4start$/i);
+      // Match the configured chat command dynamically (escape special regex chars for security)
+      const escapedCommand = c4ChatCommand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const c4StartRegex = new RegExp(`^\/${escapedCommand}$`, 'i');
+      const c4StartMatch = message.match(c4StartRegex);
       if (c4StartMatch) {
-        // Handle /c4start - start a new game
+        // Handle custom start command - start a new game
         this.handleConnect4StartCommand([], {
           username: viewerId,
           userId: viewerId,
@@ -2268,10 +2294,17 @@ class GameEnginePlugin {
       const userId = context.userId || context.username;
       const nickname = context.username || context.nickname || userId;
       
+      // Get Connect4 configuration to retrieve custom chat command
+      let connect4Config = this.db.getGameConfig('connect4');
+      if (!connect4Config && this.defaultConfigs.connect4) {
+        connect4Config = this.defaultConfigs.connect4;
+      }
+      const c4ChatCommand = connect4Config?.chatCommand || 'c4start';
+      
       // Check if there's already an active game
       if (this.activeSessions.size > 0 || this.pendingChallenges.size > 0) {
         // Game in progress - add to queue
-        this.handleGameStart('connect4', userId, nickname, 'command', '/c4start');
+        this.handleGameStart('connect4', userId, nickname, 'command', `/${c4ChatCommand}`);
         
         return {
           success: true,
@@ -2292,7 +2325,7 @@ class GameEnginePlugin {
       }
 
       // Start a new game via command (no gift required)
-      this.handleGameStart('connect4', userId, nickname, 'command', '/c4start');
+      this.handleGameStart('connect4', userId, nickname, 'command', `/${c4ChatCommand}`);
       
       return {
         success: true,
