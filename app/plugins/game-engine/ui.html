@@ -902,6 +902,14 @@
           </select>
         </div>
 
+        <h3>Chat Command Einstellungen</h3>
+        
+        <div class="form-group">
+          <label>Chat-Befehl zum Starten:</label>
+          <input type="text" id="c4ChatCommand" value="c4start" placeholder="c4start">
+          <small>Definiere den Chat-Befehl zum Starten eines Connect4-Spiels (ohne / Präfix)</small>
+        </div>
+
         <h3>Challenge Flow Einstellungen</h3>
         
         <div class="form-group">
@@ -2318,6 +2326,7 @@
         showCoordinates: document.getElementById('showCoordinates').checked,
         animationSpeed: parseInt(document.getElementById('animationSpeed').value),
         streamerRole: document.getElementById('streamerRole').value,
+        chatCommand: document.getElementById('c4ChatCommand').value.trim() || 'c4start',
         showChallengeScreen: document.getElementById('showChallengeScreen').checked,
         challengeTimeout: parseInt(document.getElementById('challengeTimeout').value),
         leaderboardEnabled: document.getElementById('leaderboardEnabled').checked,
@@ -2340,6 +2349,9 @@
           
           // Also save round timer config
           await saveRoundTimerConfig();
+          
+          // Trigger GCCE command re-registration by emitting socket event
+          socket.emit('game-engine:config-updated', { gameType: 'connect4' });
         } else {
           showMessage('Fehler beim Speichern', 'error');
         }
@@ -2381,6 +2393,9 @@
         if (config.showCoordinates !== undefined) document.getElementById('showCoordinates').checked = config.showCoordinates;
         if (config.animationSpeed) document.getElementById('animationSpeed').value = config.animationSpeed;
         if (config.streamerRole) document.getElementById('streamerRole').value = config.streamerRole;
+        
+        // Chat command setting
+        if (config.chatCommand) document.getElementById('c4ChatCommand').value = config.chatCommand;
         
         // Challenge flow settings
         if (config.showChallengeScreen !== undefined) document.getElementById('showChallengeScreen').checked = config.showChallengeScreen;
