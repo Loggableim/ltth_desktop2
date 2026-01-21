@@ -242,7 +242,9 @@ class Particle {
         // Handle despawn fade effect
         if (this.isDespawning) {
             const despawnDuration = CONFIG.despawnFadeDuration * 1000; // Convert to ms
-            const elapsed = performance.now() - this.despawnStartTime;
+            // Quick Win #7: Use cached timestamp
+            const now = window.FireworksEngine?.frameTimestamp || performance.now();
+            const elapsed = now - this.despawnStartTime;
             const fadeProgress = Math.min(elapsed / despawnDuration, 1.0);
             
             // Fade out alpha smoothly
@@ -252,6 +254,15 @@ class Particle {
             if (fadeProgress >= 1.0) {
                 this.lifespan = 0;
             }
+        }
+        
+        // Quick Win #2: Skip physics for far offscreen particles
+        const margin = 200;
+        if (this.x < -margin * 2 || this.x > window.innerWidth + margin * 2 ||
+            this.y > window.innerHeight + margin * 2) {
+            // Mark for removal but don't waste CPU on physics
+            this.lifespan = 0;
+            return;
         }
         
         // Apply air resistance (frame-independent)
@@ -285,8 +296,15 @@ class Particle {
             }
         }
         
+        // Quick Win #3: Dynamic trail length based on performance
+        const engine = window.FireworksEngine;
+        const maxTrailLength = !engine ? CONFIG.trailLength :
+                              engine.fps > 50 ? CONFIG.trailLength :
+                              engine.fps > 35 ? Math.floor(CONFIG.trailLength * 0.6) :
+                              Math.floor(CONFIG.trailLength * 0.3);
+
         // Store trail with fading based on age
-        if (this.trail.length > CONFIG.trailLength) {
+        if (this.trail.length > maxTrailLength) {
             this.trail.shift();
         }
         
@@ -319,7 +337,8 @@ class Particle {
     startDespawn() {
         if (!this.isDespawning) {
             this.isDespawning = true;
-            this.despawnStartTime = performance.now();
+            // Quick Win #7: Use cached timestamp
+            this.despawnStartTime = window.FireworksEngine?.frameTimestamp || performance.now();
         }
     }
     
@@ -585,14 +604,16 @@ class Firework {
         const comboMult = 1 + (this.combo - 1) * 0.2;
         
         // Reduce particles for high combos to improve performance
-        // Aggressive combo reduction for better FPS
+        // Quick Win #4: More aggressive combo reduction for better FPS
         let baseParticles = 40 + Math.random() * 60;
         if (this.combo >= 20) {
-            baseParticles *= 0.2; // 80% reduction for combo >= 20
+            baseParticles *= 0.2; // 20% at combo >= 20
+        } else if (this.combo >= 15) {
+            baseParticles *= 0.3; // 30% at combo >= 15 (NEW)
         } else if (this.combo >= 10) {
-            baseParticles *= 0.5; // 50% particles for combo >= 10
+            baseParticles *= 0.4; // 40% at combo >= 10 (was 50%)
         } else if (this.combo >= 5) {
-            baseParticles *= 0.7; // 70% particles for combo >= 5
+            baseParticles *= 0.6; // 60% at combo >= 5 (was 70%)
         }
         
         // Additional FPS-based reduction - reduce particles when FPS is low
@@ -715,13 +736,18 @@ class Firework {
         }
         
         // Update explosion particles
-        for (let i = this.particles.length - 1; i >= 0; i--) {
+        // Quick Win #6: Cache array lengths
+        const particlesLength = this.particles.length;
+        for (let i = particlesLength - 1; i >= 0; i--) {
             const p = this.particles[i];
             p.applyGravity();
             p.update(deltaTime);
             
+            // Quick Win #7: Use cached timestamp for burst checks
+            const now = window.FireworksEngine?.frameTimestamp || performance.now();
+            
             // Check for secondary mini-burst (burst shape)
-            if (p.willBurst && !p.hasBurst && performance.now() - p.burstTime >= p.burstDelay) {
+            if (p.willBurst && !p.hasBurst && now - p.burstTime >= p.burstDelay) {
                 p.hasBurst = true;
                 this.createMiniBurst(p);
                 // Trigger crackling sound callback
@@ -732,7 +758,7 @@ class Firework {
             }
             
             // Check for secondary spiral burst (spiral shape)
-            if (p.willSpiral && !p.hasSpiraled && performance.now() - p.burstTime >= p.spiralDelay) {
+            if (p.willSpiral && !p.hasSpiraled && now - p.burstTime >= p.spiralDelay) {
                 p.hasSpiraled = true;
                 this.createSpiralBurst(p);
                 // Trigger crackling sound callback
@@ -758,7 +784,8 @@ class Firework {
         }
         
         // Update secondary explosions
-        for (let i = this.secondaryExplosions.length - 1; i >= 0; i--) {
+        const secondaryLength = this.secondaryExplosions.length;
+        for (let i = secondaryLength - 1; i >= 0; i--) {
             const p = this.secondaryExplosions[i];
             p.applyGravity();
             p.update(deltaTime);
@@ -1524,6 +1551,7 @@ class FireworksEngine {
         
         this.lastTime = performance.now();
         this.lastRenderTime = performance.now(); // Track last actual render time for FPS limiting
+        this.frameTimestamp = performance.now(); // Quick Win #7: Cached timestamp
         this.frameCount = 0;
         this.fps = 0;
         this.fpsUpdateTime = performance.now();
@@ -2108,6 +2136,9 @@ class FireworksEngine {
 
         const now = performance.now();
         
+        // Quick Win #7: Cache timestamp for this frame
+        this.frameTimestamp = now;
+        
         // FPS Throttling: Calculate target frame time based on targetFps
         const targetFps = this.config.targetFps || CONFIG.targetFps;
         const targetFrameTime = 1000 / targetFps; // ms per frame
@@ -2131,7 +2162,9 @@ class FireworksEngine {
         this.ctx.fillRect(0, 0, this.width, this.height);
 
         // Update and render all fireworks with deltaTime for frame-independent physics
-        for (let i = this.fireworks.length - 1; i >= 0; i--) {
+        // Quick Win #6: Cache array length for performance
+        const fireworksLength = this.fireworks.length;
+        for (let i = fireworksLength - 1; i >= 0; i--) {
             this.fireworks[i].update(deltaTime);
             this.renderFirework(this.fireworks[i]);
             
@@ -2250,13 +2283,13 @@ class FireworksEngine {
         // Adjust CONFIG based on performance mode
         switch (this.performanceMode) {
             case 'minimal':
-                // Extreme reduction for very low FPS
+                // Quick Win #5: Extreme reduction for very low FPS
                 CONFIG.maxParticlesPerExplosion = 50;
-                CONFIG.trailLength = 5;
+                CONFIG.trailLength = 3; // Reduced from 5
                 CONFIG.sparkleChance = 0.05;
                 CONFIG.secondaryExplosionChance = 0;
                 this.config.glowEnabled = false;
-                this.config.trailsEnabled = false;
+                this.config.trailsEnabled = false; // Ensure trails are fully disabled
                 // Limit active fireworks with graceful despawn
                 while (this.fireworks.length > 5) {
                     const fw = this.fireworks[this.fireworks.length - 1];
@@ -2281,12 +2314,12 @@ class FireworksEngine {
                 break;
                 
             case 'reduced':
-                // Moderate reduction for low FPS
+                // Quick Win #5: Moderate reduction for low FPS
                 CONFIG.maxParticlesPerExplosion = 100;
-                CONFIG.trailLength = 10;
+                CONFIG.trailLength = 8; // Reduced from 10
                 CONFIG.sparkleChance = 0.08;
                 CONFIG.secondaryExplosionChance = 0.05;
-                this.config.glowEnabled = true;
+                this.config.glowEnabled = false; // Disable glow in reduced mode (NEW)
                 this.config.trailsEnabled = true;
                 // Limit active fireworks with graceful despawn
                 while (this.fireworks.length > 15) {
