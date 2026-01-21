@@ -1366,10 +1366,10 @@ class GlobalChatCommandEngine {
         // Serve uploaded media files
         this.api.registerRoute('GET', '/api/gcce/hud/media/:filename', async (req, res) => {
             try {
-                const filename = req.params.filename;
+                const filename = path.basename(req.params.filename); // Prevent path traversal
                 
-                // Prevent path traversal
-                if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+                // Additional validation: only allow specific characters
+                if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
                     return res.status(400).json({ success: false, error: 'Invalid filename' });
                 }
 

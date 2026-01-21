@@ -102,7 +102,15 @@ describe('GCCE HUD Rotator - Custom Media', () => {
     // Cleanup test data directory
     const testDataDir = path.join(__dirname, 'test-data');
     if (fs.existsSync(testDataDir)) {
-      fs.rmSync(testDataDir, { recursive: true, force: true });
+      try {
+        // Use recursive rmdir for better Node.js version compatibility
+        fs.rmdirSync(testDataDir, { recursive: true });
+      } catch (error) {
+        // Fallback: try rmSync if available (Node 14.14+)
+        if (fs.rmSync) {
+          fs.rmSync(testDataDir, { recursive: true, force: true });
+        }
+      }
     }
   });
 

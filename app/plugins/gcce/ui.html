@@ -2194,34 +2194,39 @@
             }
 
             // Basic URL validation
+            let parsedUrl;
             try {
-                new URL(url);
+                parsedUrl = new URL(url);
             } catch {
                 showMessage('Invalid URL format', 'error');
                 return;
             }
 
             // Infer media kind from extension
-            const lower = url.toLowerCase();
+            const pathname = parsedUrl.pathname.toLowerCase();
             let mediaKind = 'image';
-            let mimetype = 'image/gif';
+            let mimetype = 'application/octet-stream';
             
-            if (lower.endsWith('.mp4')) {
+            if (pathname.endsWith('.mp4')) {
                 mediaKind = 'video';
                 mimetype = 'video/mp4';
-            } else if (lower.endsWith('.png')) {
+            } else if (pathname.endsWith('.png')) {
                 mimetype = 'image/png';
-            } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+            } else if (pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) {
                 mimetype = 'image/jpeg';
-            } else if (lower.endsWith('.gif')) {
+            } else if (pathname.endsWith('.gif')) {
                 mimetype = 'image/gif';
             }
+
+            // Extract filename from pathname
+            const pathParts = pathname.split('/').filter(p => p);
+            const filename = pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'media';
 
             selectedMedia = {
                 url,
                 mimetype,
                 mediaKind,
-                filename: url.split('/').pop()
+                filename
             };
 
             showMediaPreview(selectedMedia);
