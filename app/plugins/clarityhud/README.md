@@ -4,7 +4,7 @@ Ultra-minimalistic, VR-optimized and accessible HUD overlays for TikTok live str
 
 ## Features
 
-### Two Fixed Overlay URLs
+### Three Fixed Overlay URLs
 
 1. **Chat-Only HUD** (`/overlay/clarity/chat`)
    - Ultra-readable chat panel with very large font
@@ -18,11 +18,30 @@ Ultra-minimalistic, VR-optimized and accessible HUD overlays for TikTok live str
    - Three layout modes: Single Stream, Structured, Adaptive
    - Event deduplication to prevent double display
 
+3. **Multi-Stream HUD** (`/overlay/clarity/multi`) ✨ NEW
+   - Display up to 3 additional TikTok livestream chats alongside your primary stream
+   - Optimized for compact VRChat usage with ~360px card width
+   - Multiple layout modes: Mixed feed or split columns (1-3)
+   - Customizable color schemes per stream (text/background/accent)
+   - Message styles: Stripe (left border), Badge (source label), or Background (colored card)
+   - Density modes: Ultra compact, Compact (default), or Comfortable
+   - Optional avatars and timestamps
+   - Highlight primary stream with opacity boost
+   - Auto-contrast for better readability on colored backgrounds
+   - Pulse animation on new messages (optional)
+   - Virtual scrolling for high performance with 250-500 messages
+
 ### Layout Modes (Full HUD)
 
 - **singleStream**: Unified event feed with all events in one list
 - **structured**: Events grouped in separate blocks with headings
 - **adaptive**: Automatic grouping with dynamic 1-3 column layout
+
+### Multi-Stream HUD Layouts
+
+- **Mixed Feed**: All streams combined in a single scrollable feed with source identification
+- **Split Columns**: Separate columns for each stream (1-3 columns, auto-adjusts based on active streams)
+  - Optional: Primary stream can span 2 columns for emphasis
 
 ### Accessibility Features
 
@@ -54,6 +73,25 @@ Ultra-minimalistic, VR-optimized and accessible HUD overlays for TikTok live str
 - Animation types (fade, slide, pop, zoom, none)
 - Animation speed (slow, medium, fast)
 
+#### Multi-Stream HUD Settings
+- **Streams Configuration**: Configure up to 3 additional TikTok streams
+  - Username input for each stream
+  - Enable/disable individual streams
+  - Custom display name (optional)
+  - Color triplet per stream (text, background, accent)
+- **Layout Options**:
+  - Mixed feed or split columns (1-3)
+  - Primary stream can span 2 columns
+  - Message style: Stripe, Badge, or Background
+  - Density: Ultra compact, Compact (default), or Comfortable
+- **Display Features**:
+  - Show/hide avatars
+  - Show/hide timestamps
+  - Highlight primary stream (opacity boost)
+  - Auto-contrast for readability
+  - Pulse animation on new messages
+  - Max messages (250-500, default 300)
+
 ## Installation
 
 1. The plugin is located in `plugins/clarityhud/`
@@ -68,8 +106,26 @@ Ultra-minimalistic, VR-optimized and accessible HUD overlays for TikTok live str
 2. Use one of the URLs:
    - Chat: `http://localhost:PORT/overlay/clarity/chat`
    - Full: `http://localhost:PORT/overlay/clarity/full`
+   - Multi-Stream: `http://localhost:PORT/overlay/clarity/multi`
 3. Recommended resolution: 1920x1080 or higher for VR
 4. Enable browser source hardware acceleration
+
+### Multi-Stream HUD for VRChat
+
+The Multi-Stream HUD is specifically optimized for VRChat overlays:
+1. Compact card width (~360px) fits well in VR field of view
+2. Large, readable fonts designed for VR headset clarity
+3. High contrast colors with auto-contrast adjustment
+4. Minimal animations to reduce motion sickness
+5. Virtual scrolling ensures smooth performance with hundreds of messages
+
+**Recommended setup for VRChat:**
+- Layout: Mixed feed (single column)
+- Density: Compact (default)
+- Message Style: Stripe (subtle visual separation)
+- Enable: Auto-contrast
+- Disable: Pulse animation, Avatars (for performance)
+- Max Messages: 300
 
 ### Configuring Settings
 
@@ -91,7 +147,7 @@ Use the preset buttons for instant configuration:
 ## API Endpoints
 
 - `GET /api/clarityhud/settings` - Get all settings
-- `GET /api/clarityhud/settings/:dock` - Get settings for specific dock (chat/full)
+- `GET /api/clarityhud/settings/:dock` - Get settings for specific dock (chat/full/multi)
 - `POST /api/clarityhud/settings/:dock` - Update settings for specific dock
 - `GET /api/clarityhud/state/:dock` - Get current event state
 - `POST /api/clarityhud/settings/:dock/reset` - Reset to default settings
@@ -109,6 +165,8 @@ Use the preset buttons for instant configuration:
 - `clarityhud.update.join` - Join event
 - `clarityhud.settings.chat` - Chat settings update
 - `clarityhud.settings.full` - Full settings update
+- `clarityhud.settings.multi` - Multi-stream settings update
+- `clarityhud:multi:chat` - Multi-stream chat event (with sourceId, sourceLabel, colors)
 
 ## Technical Details
 
@@ -119,16 +177,21 @@ clarityhud/
 ├── plugin.json          # Plugin manifest
 ├── main.js              # Plugin entry point
 ├── backend/
-│   └── api.js           # Backend API and event handlers
+│   └── api.js           # Backend API, event handlers, and multi-stream connectors
 ├── overlays/
 │   ├── chat.html        # Chat-only overlay
-│   └── full.html        # Full activity overlay
+│   ├── full.html        # Full activity overlay
+│   └── multi.html       # Multi-stream overlay (NEW)
 ├── ui/
 │   └── main.html        # Dashboard settings UI
 └── lib/
     ├── animations.js     # Animation system
     ├── accessibility.js  # Accessibility manager
-    └── layout-engine.js  # Layout rendering engine
+    ├── layout-engine.js  # Layout rendering engine
+    ├── virtual-scroller.js # Virtual scrolling for performance
+    ├── emoji-parser.js   # Emoji rendering
+    ├── badge-renderer.js # Badge system
+    └── message-parser.js # Message parsing
 ```
 
 ### Performance Optimizations
@@ -139,12 +202,13 @@ clarityhud/
 - GPU-accelerated CSS transforms
 - Dynamic font loading
 - Minimal reflows and repaints
+- Virtual scrolling for multi-stream (handles 250-500 messages efficiently)
 
 ### VR Optimization
 
-- Large default font sizes (48px)
-- High line height (1.6) for readability
-- Clear letter spacing (0.5px)
+- Large default font sizes (48px for chat/full, 28px for multi-stream compact mode)
+- High line height (1.6 for chat, 1.4 for multi-stream) for readability
+- Clear letter spacing (0.5px for chat, 0.3px for multi-stream)
 - Text outlines for contrast
 - High contrast color schemes
 - Large click targets for UI controls
