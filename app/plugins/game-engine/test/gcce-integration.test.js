@@ -239,6 +239,11 @@ describe('Game Engine GCCE Integration', () => {
       // Simulate active game
       plugin.activeSessions.set(1, {});
       
+      // Setup mock database
+      plugin.db = {
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4)
+      };
+      
       plugin.handleGameStart = jest.fn();
       
       const result = await plugin.handleConnect4StartCommand(args, context);

@@ -2293,10 +2293,17 @@ class GameEnginePlugin {
       const userId = context.userId || context.username;
       const nickname = context.username || context.nickname || userId;
       
+      // Get Connect4 configuration to retrieve custom chat command
+      let connect4Config = this.db.getGameConfig('connect4');
+      if (!connect4Config && this.defaultConfigs.connect4) {
+        connect4Config = this.defaultConfigs.connect4;
+      }
+      const c4ChatCommand = connect4Config?.chatCommand || 'c4start';
+      
       // Check if there's already an active game
       if (this.activeSessions.size > 0 || this.pendingChallenges.size > 0) {
         // Game in progress - add to queue
-        this.handleGameStart('connect4', userId, nickname, 'command', '/c4start');
+        this.handleGameStart('connect4', userId, nickname, 'command', `/${c4ChatCommand}`);
         
         return {
           success: true,
@@ -2317,7 +2324,7 @@ class GameEnginePlugin {
       }
 
       // Start a new game via command (no gift required)
-      this.handleGameStart('connect4', userId, nickname, 'command', '/c4start');
+      this.handleGameStart('connect4', userId, nickname, 'command', `/${c4ChatCommand}`);
       
       return {
         success: true,
