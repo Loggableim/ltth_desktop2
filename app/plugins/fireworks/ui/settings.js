@@ -630,6 +630,38 @@ function setupEventListeners() {
             addColorSwatch(color);
         }
     });
+    
+    // Backend selection
+    const renderingBackendSelect = document.getElementById('rendering-backend');
+    const useWorkerToggle = document.getElementById('use-worker-toggle');
+    const applyBackendBtn = document.getElementById('apply-backend-btn');
+    
+    if (renderingBackendSelect) {
+        // Load current backend preference from localStorage
+        const currentBackend = localStorage.getItem('fireworks-backend') || 'auto';
+        renderingBackendSelect.value = currentBackend;
+        
+        renderingBackendSelect.addEventListener('change', function() {
+            updateBackendDisplay(this.value);
+        });
+    }
+    
+    if (useWorkerToggle) {
+        // Load current worker preference from localStorage
+        const useWorker = localStorage.getItem('fireworks-use-worker') !== 'false';
+        updateToggle('use-worker-toggle', useWorker);
+        
+        useWorkerToggle.addEventListener('click', function() {
+            this.classList.toggle('active');
+        });
+    }
+    
+    if (applyBackendBtn) {
+        applyBackendBtn.addEventListener('click', applyBackendSettings);
+    }
+    
+    // Initialize backend display
+    updateBackendDisplay(renderingBackendSelect ? renderingBackendSelect.value : 'auto');
 }
 
 function setupRangeSlider(sliderId, valueId, suffix, callback) {
@@ -1277,3 +1309,64 @@ function loadBenchmarkResults() {
         console.error('Failed to load benchmark results:', e);
     }
 }
+
+// ============================================================================
+// BACKEND SELECTION FUNCTIONS
+// ============================================================================
+
+function updateBackendDisplay(backend) {
+    const backendNames = {
+        'auto': 'Auto-detect',
+        'webgpu': 'WebGPU',
+        'webgl': 'WebGL 2',
+        'canvas2d': 'Canvas 2D'
+    };
+    
+    const performanceGains = {
+        'auto': 'Varies (best available)',
+        'webgpu': '+200-300% vs Canvas 2D',
+        'webgl': '+100-150% vs Canvas 2D',
+        'canvas2d': 'Baseline'
+    };
+    
+    const currentBackendDisplay = document.getElementById('current-backend-display');
+    const performanceGainDisplay = document.getElementById('performance-gain');
+    
+    if (currentBackendDisplay) {
+        currentBackendDisplay.textContent = backendNames[backend] || backend;
+    }
+    
+    if (performanceGainDisplay) {
+        performanceGainDisplay.textContent = performanceGains[backend] || '-';
+    }
+}
+
+function applyBackendSettings() {
+    const renderingBackendSelect = document.getElementById('rendering-backend');
+    const useWorkerToggle = document.getElementById('use-worker-toggle');
+    
+    if (renderingBackendSelect) {
+        const backend = renderingBackendSelect.value;
+        localStorage.setItem('fireworks-backend', backend);
+    }
+    
+    if (useWorkerToggle) {
+        const useWorker = useWorkerToggle.classList.contains('active');
+        localStorage.setItem('fireworks-use-worker', useWorker.toString());
+        
+        const workerStatusDisplay = document.getElementById('worker-status-display');
+        if (workerStatusDisplay) {
+            workerStatusDisplay.textContent = useWorker ? 'Enabled' : 'Disabled';
+        }
+    }
+    
+    showToast('Backend settings saved! Reloading overlay...', 'success');
+    
+    // Reload the overlay window if it's open
+    setTimeout(() => {
+        if (socket) {
+            socket.emit('fireworks:reload-overlay');
+        }
+    }, 500);
+}
+
