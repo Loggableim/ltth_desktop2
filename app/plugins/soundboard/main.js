@@ -131,6 +131,38 @@ class SoundboardManager extends EventEmitter {
     }
 
     /**
+     * Helper method: Check if URL is an audio file
+     * @private
+     */
+    _isAudioFile(url) {
+        if (!url || typeof url !== 'string') return false;
+        const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
+        const urlLower = url.toLowerCase();
+        return audioExtensions.some(ext => urlLower.includes(ext));
+    }
+
+    /**
+     * Helper method: Play audio directly in the main app
+     * @private
+     */
+    async _playAudioInMainApp(audioUrl, volume = 1.0, label = 'Animation Audio') {
+        try {
+            console.log(`🔊 [Soundboard] Playing audio animation in main app: ${audioUrl} (volume: ${volume})`);
+            
+            // Use the existing playSound() method
+            await this.playSound(audioUrl, volume, label, {
+                eventType: 'animation'
+            });
+            
+        } catch (error) {
+            if (this.logger) {
+                this.logger.error(`Audio animation playback error: ${error.message}`);
+            }
+            console.error(`❌ [Soundboard] Audio animation playback failed: ${error.message}`);
+        }
+    }
+
+    /**
      * Play animation for gift event
      */
     playGiftAnimation(giftData, giftSound) {
@@ -145,7 +177,19 @@ class SoundboardManager extends EventEmitter {
         };
 
         console.log(`🎬 Playing gift animation: ${animationData.type} for ${animationData.giftName} (volume: ${animationData.volume})`);
-        this.io.emit('gift:animation', animationData);
+        
+        // Distinguish between audio and visual animations
+        if (giftSound.animationType === 'audio' || this._isAudioFile(giftSound.animationUrl)) {
+            // Audio directly in the main app
+            this._playAudioInMainApp(
+                giftSound.animationUrl, 
+                giftSound.animationVolume || 1.0,
+                `Gift Animation: ${animationData.giftName}`
+            );
+        } else if (giftSound.animationType !== 'none' && giftSound.animationUrl) {
+            // Visual animations (video, gif, image) to OBS overlay
+            this.io.emit('gift:animation', animationData);
+        }
     }
 
     /**
@@ -177,7 +221,19 @@ class SoundboardManager extends EventEmitter {
         };
 
         console.log(`🎬 Playing ${eventType} animation: ${animationData.type} (volume: ${animationData.volume})`);
-        this.io.emit('event:animation', animationData);
+        
+        // Distinguish between audio and visual animations
+        if (animationType === 'audio' || this._isAudioFile(animationUrl)) {
+            // Audio directly in the main app
+            this._playAudioInMainApp(
+                animationUrl,
+                animationVolume,
+                `${eventType.charAt(0).toUpperCase() + eventType.slice(1)} Animation`
+            );
+        } else {
+            // Visual animations (video, gif, image) to OBS overlay
+            this.io.emit('event:animation', animationData);
+        }
     }
 
     /**
