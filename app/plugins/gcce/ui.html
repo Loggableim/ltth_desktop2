@@ -2218,10 +2218,9 @@
                 mimetype = 'image/gif';
             }
 
-            // Extract filename from pathname (strip query params and fragments)
+            // Extract filename from pathname and strip query params/fragments
             const pathParts = pathname.split('/').filter(p => p);
             let filename = pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'media';
-            // Remove query params and fragments
             filename = filename.split('?')[0].split('#')[0];
 
             selectedMedia = {
@@ -2267,7 +2266,8 @@
             // Auto-fill title if empty
             const titleInput = document.getElementById('rotator-title');
             if (!titleInput.value) {
-                titleInput.value = media.filename?.replace(/\.[^.]+$/, '') || 'Custom Media';
+                const baseName = media.filename ? media.filename.replace(/\.[^.]+$/, '') : 'Custom Media';
+                titleInput.value = baseName;
             }
         }
 
