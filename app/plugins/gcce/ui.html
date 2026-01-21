@@ -2218,9 +2218,11 @@
                 mimetype = 'image/gif';
             }
 
-            // Extract filename from pathname
+            // Extract filename from pathname (strip query params and fragments)
             const pathParts = pathname.split('/').filter(p => p);
-            const filename = pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'media';
+            let filename = pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'media';
+            // Remove query params and fragments
+            filename = filename.split('?')[0].split('#')[0];
 
             selectedMedia = {
                 url,

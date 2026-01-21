@@ -103,13 +103,16 @@ describe('GCCE HUD Rotator - Custom Media', () => {
     const testDataDir = path.join(__dirname, 'test-data');
     if (fs.existsSync(testDataDir)) {
       try {
-        // Use recursive rmdir for better Node.js version compatibility
-        fs.rmdirSync(testDataDir, { recursive: true });
-      } catch (error) {
-        // Fallback: try rmSync if available (Node 14.14+)
+        // Try rmSync first (Node 14.14+)
         if (fs.rmSync) {
           fs.rmSync(testDataDir, { recursive: true, force: true });
+        } else {
+          // Fallback to rmdirSync for older Node versions
+          fs.rmdirSync(testDataDir, { recursive: true });
         }
+      } catch (error) {
+        // Silently ignore cleanup errors in tests
+        console.warn('Test cleanup warning:', error.message);
       }
     }
   });

@@ -1368,8 +1368,8 @@ class GlobalChatCommandEngine {
             try {
                 const filename = path.basename(req.params.filename); // Prevent path traversal
                 
-                // Additional validation: only allow specific characters
-                if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
+                // Additional validation: filename must have extension and only safe characters
+                if (!/^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/.test(filename)) {
                     return res.status(400).json({ success: false, error: 'Invalid filename' });
                 }
 
