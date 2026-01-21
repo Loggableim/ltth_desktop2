@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Gift Duplicate Detection** - Fixed bug where first gift was always recognized twice in Live Event Log
+  - Root cause: TikTok sends gift events twice (popup/animation + chat log entry) with identical `createTime` timestamps
+  - Previous implementation generated new timestamps with `new Date().toISOString()`, causing deduplication to fail
+  - **Solution:** Use TikTok's original `createTime` timestamp instead of generating new ones
+  - Changes made in `app/modules/tiktok.js`:
+    - Line 799: Changed `timestamp: new Date().toISOString()` to `timestamp: data.createTime || data.timestamp || new Date().toISOString()`
+    - Line 759: Added debug logging for raw gift data with createTime values
+    - Lines 1717-1722: Updated hash generation to prefer `createTime` over `timestamp`
+  - Added test case in `app/test/gift-deduplication.test.js` for TikTok duplicate events
+  - Fully backward compatible with fallback to `new Date()` when TikTok timestamp is missing
+  - Affects all plugins that use gift events: lastevent-spotlight, clarityhud, goals, gift-milestone, coinbattle
+
 ## [1.2.3] - 2026-01-06
 
 ### Changed
