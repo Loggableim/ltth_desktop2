@@ -2189,8 +2189,9 @@ class GameEnginePlugin {
         return;
       }
       
-      // Match the configured chat command dynamically
-      const c4StartRegex = new RegExp(`^\/${c4ChatCommand}$`, 'i');
+      // Match the configured chat command dynamically (escape special regex chars for security)
+      const escapedCommand = c4ChatCommand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const c4StartRegex = new RegExp(`^\/${escapedCommand}$`, 'i');
       const c4StartMatch = message.match(c4StartRegex);
       if (c4StartMatch) {
         // Handle custom start command - start a new game

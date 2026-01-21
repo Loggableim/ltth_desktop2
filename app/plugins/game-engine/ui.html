@@ -906,8 +906,8 @@
         
         <div class="form-group">
           <label>Chat-Befehl zum Starten:</label>
-          <input type="text" id="c4ChatCommand" value="c4start" placeholder="c4start">
-          <small>Definiere den Chat-Befehl zum Starten eines Connect4-Spiels (ohne / Präfix)</small>
+          <input type="text" id="c4ChatCommand" value="c4start" placeholder="c4start" pattern="^[a-zA-Z0-9_-]+$" title="Nur Buchstaben, Zahlen, Unterstrich und Bindestrich erlaubt">
+          <small>Definiere den Chat-Befehl zum Starten eines Connect4-Spiels (ohne / Präfix). Nur alphanumerische Zeichen, Unterstrich und Bindestrich erlaubt.</small>
         </div>
 
         <h3>Challenge Flow Einstellungen</h3>
@@ -2326,7 +2326,15 @@
         showCoordinates: document.getElementById('showCoordinates').checked,
         animationSpeed: parseInt(document.getElementById('animationSpeed').value),
         streamerRole: document.getElementById('streamerRole').value,
-        chatCommand: document.getElementById('c4ChatCommand').value.trim() || 'c4start',
+        chatCommand: (() => {
+          const cmd = document.getElementById('c4ChatCommand').value.trim();
+          // Validate command: only alphanumeric, underscore, and hyphen
+          if (cmd && !/^[a-zA-Z0-9_-]+$/.test(cmd)) {
+            showMessage('Fehler: Chat-Befehl darf nur Buchstaben, Zahlen, Unterstrich und Bindestrich enthalten', 'error');
+            throw new Error('Invalid chat command');
+          }
+          return cmd || 'c4start';
+        })(),
         showChallengeScreen: document.getElementById('showChallengeScreen').checked,
         challengeTimeout: parseInt(document.getElementById('challengeTimeout').value),
         leaderboardEnabled: document.getElementById('leaderboardEnabled').checked,
