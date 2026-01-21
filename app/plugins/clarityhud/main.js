@@ -60,6 +60,10 @@ class ClarityHUDPlugin {
     // Serve plugin UI
     this.api.registerRoute('GET', '/clarityhud/ui', (req, res) => {
       const uiPath = path.join(__dirname, 'ui', 'main.html');
+      // Set cache control headers to prevent caching
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(uiPath);
     });
 
