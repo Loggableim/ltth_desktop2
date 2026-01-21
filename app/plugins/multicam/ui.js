@@ -154,8 +154,8 @@ function updateConnectionSettings(obsConfig) {
     
     // Health check settings
     const healthCheck = obsConfig.healthCheck || DEFAULT_OBS_CONFIG.healthCheck;
-    document.getElementById('obs-health-check-enabled').checked = healthCheck.enabled || false;
-    document.getElementById('obs-health-check-interval-ms').value = healthCheck.intervalMs || DEFAULT_OBS_CONFIG.healthCheck.intervalMs;
+    document.getElementById('obs-health-check-enabled').checked = healthCheck.enabled ?? false;
+    document.getElementById('obs-health-check-interval-ms').value = healthCheck.intervalMs ?? DEFAULT_OBS_CONFIG.healthCheck.intervalMs;
 }
 
 // Hot Buttons rendern

@@ -205,7 +205,7 @@ class MultiCamPlugin {
             const { host, port, password } = this.config.obs;
 
             // Guard for missing host/port
-            if (!host || !port) {
+            if (!host || port == null || port === '') {
                 const errorMsg = 'OBS host or port not configured';
                 this.api.log(`Multi-Cam: ${errorMsg}`, 'error');
                 return { success: false, error: errorMsg };
