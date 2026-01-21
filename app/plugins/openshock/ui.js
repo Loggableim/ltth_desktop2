@@ -3931,6 +3931,12 @@ function initZappieHellEventListeners() {
             goals = data.goals || [];
             renderGoals();
         });
+
+        socket.on('zappiehell:chains:update', (data) => {
+            eventChains = data.chains || [];
+            renderChains();
+            updateChainSelectors();
+        });
     }
 
     zappieHellInitialized = true;
