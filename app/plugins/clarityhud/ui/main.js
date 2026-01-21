@@ -8,6 +8,7 @@ function init() {
   const origin = window.location.origin;
   document.getElementById('chat-url').textContent = `${origin}/overlay/clarity/chat`;
   document.getElementById('full-url').textContent = `${origin}/overlay/clarity/full`;
+  document.getElementById('multi-url').textContent = `${origin}/overlay/clarity/multi`;
 
   // Initialize Socket.IO for live updates
   socket = io();
@@ -67,7 +68,10 @@ async function testEvent(dock) {
 // Open settings modal
 async function openSettings(dock) {
   currentDock = dock;
-  document.getElementById('modal-title').textContent = dock === 'chat' ? 'Chat HUD' : 'Full Activity HUD';
+  const dockTitle = dock === 'chat' ? 'Chat HUD' : 
+                   dock === 'full' ? 'Full Activity HUD' : 
+                   'Multi-Stream HUD';
+  document.getElementById('modal-title').textContent = dockTitle;
 
   // Load current settings
   try {
@@ -98,22 +102,29 @@ function renderSettingsForm(dock) {
   const tabs = [];
   const contents = [];
 
-  // Common tabs for both
-  tabs.push({ id: 'appearance', label: 'Appearance' });
+  // Multi-stream specific tabs
+  if (dock === 'multi') {
+    tabs.push({ id: 'streams', label: 'Streams' });
+    tabs.push({ id: 'layout', label: 'Layout' });
+    tabs.push({ id: 'appearance', label: 'Appearance' });
+  } else {
+    // Common tabs for chat and full
+    tabs.push({ id: 'appearance', label: 'Appearance' });
 
-  // Dock-specific tabs
-  if (dock === 'full') {
-    tabs.push({ id: 'events', label: 'Events' });
+    // Dock-specific tabs
+    if (dock === 'full') {
+      tabs.push({ id: 'events', label: 'Events' });
+    }
+
+    tabs.push({ id: 'layout', label: 'Layout' });
+
+    if (dock === 'full') {
+      tabs.push({ id: 'animation', label: 'Animation' });
+    }
+
+    tabs.push({ id: 'styling', label: 'Styling' });
+    tabs.push({ id: 'accessibility', label: 'Accessibility' });
   }
-
-  tabs.push({ id: 'layout', label: 'Layout' });
-
-  if (dock === 'full') {
-    tabs.push({ id: 'animation', label: 'Animation' });
-  }
-
-  tabs.push({ id: 'styling', label: 'Styling' });
-  tabs.push({ id: 'accessibility', label: 'Accessibility' });
 
   // Render tabs
   const tabsHtml = tabs.map((tab, index) =>
@@ -161,6 +172,46 @@ function renderTabContent(dock, tabId) {
 
   switch (tabId) {
     case 'appearance':
+      if (dock === 'multi') {
+        return `
+          <div class="settings-group">
+            <h3>Message Style Preview</h3>
+            <div class="preview-styles">
+              <div class="preview-style-item">
+                <div class="preview-message style-stripe" style="--source-accent: #60A5FA;">
+                  <strong>Stripe Style</strong>: Left border in accent color
+                </div>
+              </div>
+              <div class="preview-style-item">
+                <div class="preview-message style-badge">
+                  <span class="source-badge" style="background: #60A5FA;">Stream1</span>
+                  <strong>Badge Style</strong>: Source label badge
+                </div>
+              </div>
+              <div class="preview-style-item">
+                <div class="preview-message style-bg" style="--source-bg: #1E3A8A; --source-text: #00D4FF;">
+                  <strong>Background Style</strong>: Colored background
+                </div>
+              </div>
+            </div>
+            <span class="help-text">Select your preferred message style in the Layout tab</span>
+          </div>
+          <div class="settings-group">
+            <h3>VR Optimization</h3>
+            <p>The Multi-Stream HUD is optimized for VRChat with:</p>
+            <ul style="margin-left: 20px; margin-top: 10px;">
+              <li>Compact layout (~360px wide cards)</li>
+              <li>Large, readable fonts</li>
+              <li>High contrast colors</li>
+              <li>Minimal animations</li>
+              <li>Virtual scrolling for performance</li>
+            </ul>
+            <span class="help-text" style="display: block; margin-top: 10px;">
+              Recommended OBS resolution: 1920x1080 or higher for best VR clarity
+            </span>
+          </div>
+        `;
+      }
       return `
         <div class="settings-group">
           <h3>Font Settings</h3>
@@ -367,6 +418,79 @@ function renderTabContent(dock, tabId) {
       `;
 
     case 'layout':
+      if (dock === 'multi') {
+        return `
+          <div class="settings-group">
+            <h3>Layout Mode</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Layout</label>
+                <select id="layout">
+                  <option value="mixed" ${s.layout === 'mixed' ? 'selected' : ''}>Mixed Feed</option>
+                  <option value="split" ${s.layout === 'split' ? 'selected' : ''}>Split Columns</option>
+                </select>
+                <span class="help-text">Mixed: All streams in one feed. Split: Separate columns per stream</span>
+              </div>
+              <div class="form-group">
+                <label>Columns</label>
+                <select id="columns">
+                  <option value="auto" ${s.columns === 'auto' ? 'selected' : ''}>Auto</option>
+                  <option value="1" ${s.columns === '1' ? 'selected' : ''}>1 Column</option>
+                  <option value="2" ${s.columns === '2' ? 'selected' : ''}>2 Columns</option>
+                  <option value="3" ${s.columns === '3' ? 'selected' : ''}>3 Columns</option>
+                </select>
+                <span class="help-text">Only applies to split layout</span>
+              </div>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="primarySpan2" ${s.primarySpan2 ? 'checked' : ''}>
+              <label for="primarySpan2">Primary stream spans 2 columns</label>
+            </div>
+          </div>
+          <div class="settings-group">
+            <h3>Message Display</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Message Style</label>
+                <select id="messageStyle">
+                  <option value="stripe" ${s.messageStyle === 'stripe' ? 'selected' : ''}>Stripe</option>
+                  <option value="badge" ${s.messageStyle === 'badge' ? 'selected' : ''}>Badge</option>
+                  <option value="bg" ${s.messageStyle === 'bg' ? 'selected' : ''}>Background</option>
+                </select>
+                <span class="help-text">Stripe: Left border. Badge: Source label. BG: Colored background</span>
+              </div>
+              <div class="form-group">
+                <label>Density</label>
+                <select id="density">
+                  <option value="ultra" ${s.density === 'ultra' ? 'selected' : ''}>Ultra Compact</option>
+                  <option value="compact" ${s.density === 'compact' ? 'selected' : ''}>Compact</option>
+                  <option value="comfortable" ${s.density === 'comfortable' ? 'selected' : ''}>Comfortable</option>
+                </select>
+              </div>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="showAvatars" ${s.showAvatars ? 'checked' : ''}>
+              <label for="showAvatars">Show Avatars</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="showTimestamps" ${s.showTimestamps ? 'checked' : ''}>
+              <label for="showTimestamps">Show Timestamps</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="highlightPrimary" ${s.highlightPrimary ? 'checked' : ''}>
+              <label for="highlightPrimary">Highlight Primary Stream</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="autoContrast" ${s.autoContrast ? 'checked' : ''}>
+              <label for="autoContrast">Auto Contrast (better readability)</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="pulseOnNew" ${s.pulseOnNew ? 'checked' : ''}>
+              <label for="pulseOnNew">Pulse animation on new messages</label>
+            </div>
+          </div>
+        `;
+      }
       return `
         <div class="settings-group">
           <h3>Layout Options</h3>
@@ -536,6 +660,83 @@ function renderTabContent(dock, tabId) {
         </div>
       `;
 
+    case 'streams':
+      // Multi-stream specific tab
+      const streams = s.streams || [
+        { enabled: false, username: '', displayName: '', textColor: '#00D4FF', bgColor: '#1E3A8A', accentColor: '#60A5FA' },
+        { enabled: false, username: '', displayName: '', textColor: '#A78BFA', bgColor: '#581C87', accentColor: '#C084FC' },
+        { enabled: false, username: '', displayName: '', textColor: '#FBBF24', bgColor: '#78350F', accentColor: '#FCD34D' }
+      ];
+      return `
+        <div class="settings-group">
+          <h3>Additional TikTok Streams</h3>
+          <span class="help-text">Configure up to 3 additional TikTok streams to display alongside your primary stream</span>
+          ${streams.map((stream, i) => `
+            <div class="stream-config" data-stream-index="${i}">
+              <h4>Stream ${i + 1}</h4>
+              <div class="checkbox-group">
+                <input type="checkbox" id="stream${i}-enabled" ${stream.enabled ? 'checked' : ''}>
+                <label for="stream${i}-enabled">Enable this stream</label>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>TikTok Username</label>
+                  <input type="text" id="stream${i}-username" value="${stream.username || ''}" placeholder="@username">
+                  <span class="help-text">Without the @ symbol</span>
+                </div>
+                <div class="form-group">
+                  <label>Display Name (Optional)</label>
+                  <input type="text" id="stream${i}-displayName" value="${stream.displayName || ''}" placeholder="Stream ${i + 1}">
+                  <span class="help-text">Custom label for this stream</span>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Text Color</label>
+                  <div class="color-input-wrapper">
+                    <input type="color" id="stream${i}-textColor-picker" value="${stream.textColor || '#00D4FF'}">
+                    <input type="text" id="stream${i}-textColor" value="${stream.textColor || '#00D4FF'}">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Background Color</label>
+                  <div class="color-input-wrapper">
+                    <input type="color" id="stream${i}-bgColor-picker" value="${stream.bgColor || '#1E3A8A'}">
+                    <input type="text" id="stream${i}-bgColor" value="${stream.bgColor || '#1E3A8A'}">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Accent Color</label>
+                  <div class="color-input-wrapper">
+                    <input type="color" id="stream${i}-accentColor-picker" value="${stream.accentColor || '#60A5FA'}">
+                    <input type="text" id="stream${i}-accentColor" value="${stream.accentColor || '#60A5FA'}">
+                  </div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="settings-group">
+          <h3>Global Settings</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Max Messages</label>
+              <div class="range-group">
+                <div class="range-value">
+                  <span id="maxMessages-value">${s.maxMessages || 300}</span>
+                </div>
+                <input type="range" id="maxMessages" min="50" max="500" step="10" value="${s.maxMessages || 300}" data-range-target="maxMessages">
+              </div>
+              <span class="help-text">Maximum number of messages to keep in memory</span>
+            </div>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="enabled" ${s.enabled ? 'checked' : ''}>
+            <label for="enabled">Enable Multi-Stream HUD</label>
+          </div>
+        </div>
+      `;
+
     default:
       return '<p>Unknown tab</p>';
   }
@@ -562,6 +763,27 @@ function setupColorPickers() {
       });
     }
   });
+
+  // Multi-stream color pickers
+  for (let i = 0; i < 3; i++) {
+    ['textColor', 'bgColor', 'accentColor'].forEach(colorType => {
+      const picker = document.getElementById(`stream${i}-${colorType}-picker`);
+      const input = document.getElementById(`stream${i}-${colorType}`);
+
+      if (picker && input) {
+        picker.addEventListener('input', (e) => {
+          input.value = e.target.value;
+        });
+
+        input.addEventListener('input', (e) => {
+          const value = e.target.value;
+          if (value.startsWith('#') && value.length === 7) {
+            picker.value = value;
+          }
+        });
+      }
+    });
+  }
 }
 
 // Setup range sliders
@@ -666,50 +888,84 @@ async function saveSettings() {
   saveBtn.disabled = true;
 
   // Collect settings based on dock type
-  const newSettings = {
-    // Appearance
-    fontFamily: getFieldValue('fontFamily'),
-    fontSize: parseInt(getFieldValue('fontSize')),
-    fontColor: getFieldValue('fontColor'),
-    backgroundColor: getFieldValue('backgroundColor'),
-    lineHeight: parseFloat(getFieldValue('lineHeight')),
-    letterSpacing: parseFloat(getFieldValue('letterSpacing')),
+  let newSettings = {};
 
-    // Layout
-    alignLeft: getFieldValue('alignment') === 'left',
-    showTimestamps: getFieldValue('showTimestamps', 'checkbox'),
-    maxLines: parseInt(getFieldValue('maxLines')),
+  if (currentDock === 'multi') {
+    // Multi-stream specific settings
+    const streams = [];
+    for (let i = 0; i < 3; i++) {
+      streams.push({
+        enabled: getFieldValue(`stream${i}-enabled`, 'checkbox'),
+        username: getFieldValue(`stream${i}-username`),
+        displayName: getFieldValue(`stream${i}-displayName`),
+        textColor: getFieldValue(`stream${i}-textColor`),
+        bgColor: getFieldValue(`stream${i}-bgColor`),
+        accentColor: getFieldValue(`stream${i}-accentColor`)
+      });
+    }
 
-    // Styling
-    outlineThickness: parseFloat(getFieldValue('outlineThickness')),
-    outlineColor: getFieldValue('outlineColor'),
-    wrapLongWords: getFieldValue('wrapLongWords', 'checkbox'),
+    newSettings = {
+      enabled: getFieldValue('enabled', 'checkbox'),
+      streams: streams,
+      layout: getFieldValue('layout'),
+      columns: getFieldValue('columns'),
+      primarySpan2: getFieldValue('primarySpan2', 'checkbox'),
+      messageStyle: getFieldValue('messageStyle'),
+      density: getFieldValue('density'),
+      showAvatars: getFieldValue('showAvatars', 'checkbox'),
+      showTimestamps: getFieldValue('showTimestamps', 'checkbox'),
+      highlightPrimary: getFieldValue('highlightPrimary', 'checkbox'),
+      maxMessages: parseInt(getFieldValue('maxMessages')) || 300,
+      autoContrast: getFieldValue('autoContrast', 'checkbox'),
+      pulseOnNew: getFieldValue('pulseOnNew', 'checkbox')
+    };
+  } else {
+    // Chat and Full HUD settings
+    newSettings = {
+      // Appearance
+      fontFamily: getFieldValue('fontFamily'),
+      fontSize: parseInt(getFieldValue('fontSize')),
+      fontColor: getFieldValue('fontColor'),
+      backgroundColor: getFieldValue('backgroundColor'),
+      lineHeight: parseFloat(getFieldValue('lineHeight')),
+      letterSpacing: parseFloat(getFieldValue('letterSpacing')),
 
-    // Accessibility
-    mode: getFieldValue('mode'),
-    highContrastMode: getFieldValue('highContrastMode', 'checkbox'),
-    colorblindSafeMode: getFieldValue('colorblindSafeMode', 'checkbox'),
-    reduceMotion: getFieldValue('reduceMotion', 'checkbox'),
-    dyslexiaFont: getFieldValue('dyslexiaFont', 'checkbox'),
+      // Layout
+      alignLeft: getFieldValue('alignment') === 'left',
+      showTimestamps: getFieldValue('showTimestamps', 'checkbox'),
+      maxLines: parseInt(getFieldValue('maxLines')),
 
-    // Window settings
-    transparency: parseFloat(getFieldValue('transparency')), // 0-100
-    keepOnTop: getFieldValue('keepOnTop', 'checkbox'),
-    useVirtualScrolling: getFieldValue('useVirtualScrolling', 'checkbox'),
+      // Styling
+      outlineThickness: parseFloat(getFieldValue('outlineThickness')),
+      outlineColor: getFieldValue('outlineColor'),
+      wrapLongWords: getFieldValue('wrapLongWords', 'checkbox'),
 
-    // Badge settings
-    badgeSize: getFieldValue('badgeSize'),
-    teamLevelStyle: getFieldValue('teamLevelStyle'),
-    showTeamLevel: getFieldValue('showTeamLevel', 'checkbox'),
-    showModerator: getFieldValue('showModerator', 'checkbox'),
-    showSubscriber: getFieldValue('showSubscriber', 'checkbox'),
-    showGifter: getFieldValue('showGifter', 'checkbox'),
-    showFanClub: getFieldValue('showFanClub', 'checkbox'),
+      // Accessibility
+      mode: getFieldValue('mode'),
+      highContrastMode: getFieldValue('highContrastMode', 'checkbox'),
+      colorblindSafeMode: getFieldValue('colorblindSafeMode', 'checkbox'),
+      reduceMotion: getFieldValue('reduceMotion', 'checkbox'),
+      dyslexiaFont: getFieldValue('dyslexiaFont', 'checkbox'),
 
-    // Emoji and color settings
-    emojiRenderMode: getFieldValue('emojiRenderMode'),
-    usernameColorByTeamLevel: getFieldValue('usernameColorByTeamLevel', 'checkbox')
-  };
+      // Window settings
+      transparency: parseFloat(getFieldValue('transparency')), // 0-100
+      keepOnTop: getFieldValue('keepOnTop', 'checkbox'),
+      useVirtualScrolling: getFieldValue('useVirtualScrolling', 'checkbox'),
+
+      // Badge settings
+      badgeSize: getFieldValue('badgeSize'),
+      teamLevelStyle: getFieldValue('teamLevelStyle'),
+      showTeamLevel: getFieldValue('showTeamLevel', 'checkbox'),
+      showModerator: getFieldValue('showModerator', 'checkbox'),
+      showSubscriber: getFieldValue('showSubscriber', 'checkbox'),
+      showGifter: getFieldValue('showGifter', 'checkbox'),
+      showFanClub: getFieldValue('showFanClub', 'checkbox'),
+
+      // Emoji and color settings
+      emojiRenderMode: getFieldValue('emojiRenderMode'),
+      usernameColorByTeamLevel: getFieldValue('usernameColorByTeamLevel', 'checkbox')
+    };
+  }
 
   // Add full-specific settings
   if (currentDock === 'full') {

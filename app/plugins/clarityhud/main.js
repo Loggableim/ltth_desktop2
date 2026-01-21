@@ -39,74 +39,108 @@ class ClarityHUDPlugin {
    * Register HTTP routes
    */
   registerRoutes() {
+    // Helper function to set no-cache headers
+    const setNoCacheHeaders = (res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    };
+
     // Serve chat overlay
     this.api.registerRoute('GET', '/overlay/clarity/chat', (req, res) => {
       const overlayPath = path.join(__dirname, 'overlays', 'chat.html');
+      setNoCacheHeaders(res);
       res.sendFile(overlayPath);
     });
 
     // Serve full activity overlay
     this.api.registerRoute('GET', '/overlay/clarity/full', (req, res) => {
       const overlayPath = path.join(__dirname, 'overlays', 'full.html');
+      setNoCacheHeaders(res);
+      res.sendFile(overlayPath);
+    });
+
+    // Serve multi-stream overlay
+    this.api.registerRoute('GET', '/overlay/clarity/multi', (req, res) => {
+      const overlayPath = path.join(__dirname, 'overlays', 'multi.html');
+      setNoCacheHeaders(res);
       res.sendFile(overlayPath);
     });
 
     // Serve plugin UI
     this.api.registerRoute('GET', '/clarityhud/ui', (req, res) => {
       const uiPath = path.join(__dirname, 'ui', 'main.html');
+      setNoCacheHeaders(res);
       res.sendFile(uiPath);
     });
 
     // Serve library files
     this.api.registerRoute('GET', '/plugins/clarityhud/lib/animations.js', (req, res) => {
       const libPath = path.join(__dirname, 'lib', 'animations.js');
+      setNoCacheHeaders(res);
       res.sendFile(libPath);
     });
 
     this.api.registerRoute('GET', '/plugins/clarityhud/lib/accessibility.js', (req, res) => {
       const libPath = path.join(__dirname, 'lib', 'accessibility.js');
+      setNoCacheHeaders(res);
       res.sendFile(libPath);
     });
 
     this.api.registerRoute('GET', '/plugins/clarityhud/lib/layout-engine.js', (req, res) => {
       const libPath = path.join(__dirname, 'lib', 'layout-engine.js');
+      setNoCacheHeaders(res);
       res.sendFile(libPath);
     });
 
     this.api.registerRoute('GET', '/plugins/clarityhud/lib/emoji-parser.js', (req, res) => {
       const libPath = path.join(__dirname, 'lib', 'emoji-parser.js');
+      setNoCacheHeaders(res);
       res.sendFile(libPath);
     });
 
     this.api.registerRoute('GET', '/plugins/clarityhud/lib/badge-renderer.js', (req, res) => {
       const libPath = path.join(__dirname, 'lib', 'badge-renderer.js');
+      setNoCacheHeaders(res);
       res.sendFile(libPath);
     });
 
     this.api.registerRoute('GET', '/plugins/clarityhud/lib/message-parser.js', (req, res) => {
       const libPath = path.join(__dirname, 'lib', 'message-parser.js');
+      setNoCacheHeaders(res);
       res.sendFile(libPath);
     });
 
     this.api.registerRoute('GET', '/plugins/clarityhud/lib/virtual-scroller.js', (req, res) => {
       const libPath = path.join(__dirname, 'lib', 'virtual-scroller.js');
+      setNoCacheHeaders(res);
       res.sendFile(libPath);
     });
 
     // Serve overlay JavaScript files
     this.api.registerRoute('GET', '/plugins/clarityhud/overlays/chat.js', (req, res) => {
       const jsPath = path.join(__dirname, 'overlays', 'chat.js');
+      setNoCacheHeaders(res);
       res.sendFile(jsPath);
     });
 
     this.api.registerRoute('GET', '/plugins/clarityhud/overlays/full.js', (req, res) => {
       const jsPath = path.join(__dirname, 'overlays', 'full.js');
+      setNoCacheHeaders(res);
+      res.sendFile(jsPath);
+    });
+
+    // Serve multi-stream overlay JavaScript
+    this.api.registerRoute('GET', '/plugins/clarityhud/overlays/multi.js', (req, res) => {
+      const jsPath = path.join(__dirname, 'overlays', 'multi.js');
+      setNoCacheHeaders(res);
       res.sendFile(jsPath);
     });
 
     // Serve UI JavaScript files
     this.api.registerRoute('GET', '/plugins/clarityhud/ui/main.js', (req, res) => {
       const jsPath = path.join(__dirname, 'ui', 'main.js');
+      setNoCacheHeaders(res);
       res.sendFile(jsPath);
     });
 
