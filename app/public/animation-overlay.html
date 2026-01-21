@@ -159,6 +159,13 @@
             // For OBS overlay, we play if target is 'obs_overlay' or 'both'
             const audioTarget = data.audioTarget || 'both';
             
+            // Skip animation audio (eventType === 'animation') - now handled in main app
+            if (data.eventType === 'animation') {
+                console.log(`⏭️ [OBS Overlay] Skipping animation audio - handled in main app`);
+                updateDebug(`Skipped animation audio: ${data.label}`);
+                return;
+            }
+            
             if (audioTarget === 'obs_overlay' || audioTarget === 'both') {
                 playSoundboardAudio(data);
             } else {
