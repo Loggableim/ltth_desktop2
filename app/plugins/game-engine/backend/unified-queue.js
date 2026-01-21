@@ -208,9 +208,9 @@ class UnifiedQueueManager {
         username: this.extractUsername(this.currentItem.data),
         nickname: this.getDisplayName(this.currentItem.data),
         timestamp: this.currentItem.timestamp,
-        spinId: this.currentItem.data.spinId,
-        batchId: this.currentItem.data.batchId,
-        gameType: this.currentItem.data.gameType
+        ...(this.currentItem.data.spinId && { spinId: this.currentItem.data.spinId }),
+        ...(this.currentItem.data.batchId && { batchId: this.currentItem.data.batchId }),
+        ...(this.currentItem.data.gameType && { gameType: this.currentItem.data.gameType })
       } : null,
       queue: this.queue.map((item, index) => ({
         position: index + 1,
@@ -218,9 +218,9 @@ class UnifiedQueueManager {
         username: this.extractUsername(item.data),
         nickname: this.getDisplayName(item.data),
         timestamp: item.timestamp,
-        spinId: item.data.spinId,
-        batchId: item.data.batchId,
-        gameType: item.data.gameType
+        ...(item.data.spinId && { spinId: item.data.spinId }),
+        ...(item.data.batchId && { batchId: item.data.batchId }),
+        ...(item.data.gameType && { gameType: item.data.gameType })
       }))
     };
   }
