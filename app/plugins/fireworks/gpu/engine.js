@@ -1640,19 +1640,21 @@ class FireworksEngine {
         const dpr = window.devicePixelRatio || 1;
         const rect = this.canvas.getBoundingClientRect();
         
-        // Get resolution from preset
-        const resolutionPreset = this.config.resolutionPreset || '1080p';
-        const orientation = this.config.orientation || 'landscape';
-        const targetResolution = this.getResolutionFromPreset(resolutionPreset, orientation);
+        // CRITICAL FIX: Keep canvas at VIEWPORT size, not preset size
+        // Reason: Upscaling a 640x360 canvas to 1920x1080 display is MORE expensive
+        // than rendering 1920x1080 natively. We should vary particle COUNT, not canvas size.
         
-        // Apply target resolution
-        this.canvas.width = targetResolution.width;
-        this.canvas.height = targetResolution.height;
+        // Use actual viewport dimensions
+        this.canvas.width = rect.width * dpr;
+        this.canvas.height = rect.height * dpr;
         
-        this.width = targetResolution.width;
-        this.height = targetResolution.height;
+        this.width = rect.width * dpr;
+        this.height = rect.height * dpr;
         
-        if (DEBUG) console.log(`[Fireworks] Canvas resolution: ${this.canvas.width}x${this.canvas.height} (${resolutionPreset}, ${orientation})`);
+        // Scale context for device pixel ratio
+        this.ctx.scale(dpr, dpr);
+        
+        if (DEBUG) console.log(`[Fireworks] Canvas resolution: ${this.canvas.width}x${this.canvas.height} (viewport-based, DPR: ${dpr})`);
     }
     
     getResolutionFromPreset(preset, orientation) {
