@@ -1871,11 +1871,20 @@ class GameEnginePlugin {
   }
 
   /**
+   * Check if game type should use unified queue
+   * @param {string} gameType - Game type (connect4, chess, plinko, wheel, etc.)
+   * @returns {boolean} True if should use unified queue
+   */
+  shouldUseUnifiedQueue(gameType) {
+    return this.unifiedQueue && (gameType === 'connect4' || gameType === 'chess');
+  }
+
+  /**
    * Handle game start request - queue if game is active, start immediately otherwise
    */
   handleGameStart(gameType, viewerUsername, viewerNickname, triggerType, triggerValue, giftPictureUrl = null) {
     // Check if unified queue is available for this game type
-    const useUnifiedQueue = this.unifiedQueue && (gameType === 'connect4' || gameType === 'chess');
+    const useUnifiedQueue = this.shouldUseUnifiedQueue(gameType);
     
     if (useUnifiedQueue) {
       // Use unified queue for Connect4 and Chess
@@ -2760,8 +2769,8 @@ class GameEnginePlugin {
 
     this.logger.info(`Ended game #${sessionId}: Winner=${winnerUsername || 'none'}, Reason=${reason}`);
     
-    // Check if this is a Connect4 or Chess game that should use unified queue
-    const useUnifiedQueue = this.unifiedQueue && (session.game_type === 'connect4' || session.game_type === 'chess');
+    // Check if this is a game that should use unified queue
+    const useUnifiedQueue = this.shouldUseUnifiedQueue(session.game_type);
     
     if (useUnifiedQueue) {
       // Complete processing in unified queue

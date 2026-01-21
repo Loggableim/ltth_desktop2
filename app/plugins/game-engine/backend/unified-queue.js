@@ -182,6 +182,20 @@ class UnifiedQueueManager {
   }
 
   /**
+   * Get display name for queued item.
+   */
+  getDisplayName(data) {
+    return data?.nickname || data?.viewerNickname || data?.username || data?.viewerUsername;
+  }
+
+  /**
+   * Extract username from queued item data
+   */
+  extractUsername(data) {
+    return data?.username || data?.viewerUsername;
+  }
+
+  /**
    * Get current queue status
    * @returns {Object} Queue status
    */
@@ -191,7 +205,7 @@ class UnifiedQueueManager {
       queueLength: this.queue.length,
       currentItem: this.currentItem ? {
         type: this.currentItem.type,
-        username: this.currentItem.data.username || this.currentItem.data.viewerUsername,
+        username: this.extractUsername(this.currentItem.data),
         nickname: this.getDisplayName(this.currentItem.data),
         timestamp: this.currentItem.timestamp,
         spinId: this.currentItem.data.spinId,
@@ -201,7 +215,7 @@ class UnifiedQueueManager {
       queue: this.queue.map((item, index) => ({
         position: index + 1,
         type: item.type,
-        username: item.data.username || item.data.viewerUsername,
+        username: this.extractUsername(item.data),
         nickname: this.getDisplayName(item.data),
         timestamp: item.timestamp,
         spinId: item.data.spinId,
@@ -209,13 +223,6 @@ class UnifiedQueueManager {
         gameType: item.data.gameType
       }))
     };
-  }
-
-  /**
-   * Get display name for queued item.
-   */
-  getDisplayName(data) {
-    return data?.nickname || data?.viewerNickname || data?.username || data?.viewerUsername;
   }
 
   /**

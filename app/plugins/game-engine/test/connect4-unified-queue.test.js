@@ -67,7 +67,11 @@ describe('Connect4 Unified Queue Integration', () => {
       
       plugin.db = mockDb;
       
-      // Don't call destroy to avoid errors
+      // Note: We don't call destroy() here because:
+      // 1. It would try to cleanup resources that don't exist in the mock environment
+      // 2. The unifiedQueue.destroy() would fail because games are mocked
+      // 3. Test cleanup is sufficient with manual clearing above
+      // In a real environment, destroy() is called properly with all dependencies
     }
   });
 
