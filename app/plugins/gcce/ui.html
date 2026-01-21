@@ -1070,7 +1070,7 @@
         <!-- Gift Rotator -->
         <div class="card">
             <div class="card-title">🎁 Gift HUD Rotator</div>
-            <p class="config-description">Select gifts from the TikTok gift catalog, add headline & info, choose a template/font/color, and rotate them on your OBS HUD.</p>
+            <p class="config-description">Select gifts from the TikTok gift catalog, add headline & info, choose a template/font/color, and rotate them on your OBS HUD. You can also add custom media (images/videos) alongside gifts.</p>
             <div class="grid-2">
                 <div>
                     <div class="checkbox-group">
@@ -1081,7 +1081,18 @@
                         <label class="config-label">Rotation Interval (s)</label>
                         <input type="number" id="rotator-interval" min="3" max="60" value="10">
                     </div>
+                    
+                    <!-- Entry Type Selector -->
                     <div class="config-group">
+                        <label class="config-label">Entry Type</label>
+                        <div class="grid-2">
+                            <button class="btn btn-primary btn-sm" id="btn-select-gift-mode" style="font-size:0.9rem;">🎁 TikTok Gift</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-select-media-mode" style="font-size:0.9rem;">📁 Custom Media</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Gift Selection (default) -->
+                    <div class="config-group" id="gift-selection-section">
                         <label class="config-label">Gift Selection</label>
                         <div class="gift-catalog-header">
                             <div id="gift-catalog-status" class="config-description">Catalog not loaded</div>
@@ -1094,6 +1105,28 @@
                             <div class="selected-gift-info">
                                 <div class="selected-gift-name" id="selected-gift-preview-name">No gift selected</div>
                                 <div class="selected-gift-id" id="selected-gift-preview-id"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Custom Media Section (hidden by default) -->
+                    <div class="config-group" id="media-selection-section" style="display:none;">
+                        <label class="config-label">Custom Media</label>
+                        <div style="margin-bottom:12px;">
+                            <div class="config-description" style="margin-bottom:8px;">Upload File (PNG, JPEG, GIF, MP4)</div>
+                            <input type="file" id="media-upload-input" accept="image/png,image/jpeg,image/gif,video/mp4" style="margin-bottom:8px;">
+                            <button class="btn btn-primary btn-sm" id="btn-upload-media">📤 Upload</button>
+                        </div>
+                        <div style="margin-bottom:12px;">
+                            <div class="config-description" style="margin-bottom:8px;">Or External URL</div>
+                            <input type="text" id="media-url-input" placeholder="https://example.com/image.gif">
+                            <button class="btn btn-secondary btn-sm" id="btn-use-media-url" style="margin-top:4px;">🔗 Use URL</button>
+                        </div>
+                        <div id="selected-media-preview" class="selected-gift-preview" style="display:none;">
+                            <div id="selected-media-preview-content"></div>
+                            <div class="selected-gift-info">
+                                <div class="selected-gift-name" id="selected-media-preview-name">Media selected</div>
+                                <div class="selected-gift-id" id="selected-media-preview-type"></div>
                             </div>
                         </div>
                     </div>
@@ -1953,6 +1986,8 @@
         }
 
         let selectedGift = null;
+        let selectedMedia = null;
+        let currentEntryMode = 'gift'; // 'gift' or 'media'
 
         async function loadGiftCatalog() {
             try {
@@ -2095,6 +2130,147 @@
             }
         }
 
+        // Media handling functions
+        function switchToGiftMode() {
+            currentEntryMode = 'gift';
+            document.getElementById('gift-selection-section').style.display = 'block';
+            document.getElementById('media-selection-section').style.display = 'none';
+            document.getElementById('btn-select-gift-mode').className = 'btn btn-primary btn-sm';
+            document.getElementById('btn-select-media-mode').className = 'btn btn-secondary btn-sm';
+        }
+
+        function switchToMediaMode() {
+            currentEntryMode = 'media';
+            document.getElementById('gift-selection-section').style.display = 'none';
+            document.getElementById('media-selection-section').style.display = 'block';
+            document.getElementById('btn-select-gift-mode').className = 'btn btn-secondary btn-sm';
+            document.getElementById('btn-select-media-mode').className = 'btn btn-primary btn-sm';
+        }
+
+        async function uploadMedia() {
+            const fileInput = document.getElementById('media-upload-input');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showMessage('Please select a file first', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('media', file);
+
+            try {
+                showMessage('Uploading...', 'info');
+                const response = await fetch('/api/gcce/hud/media-upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    selectedMedia = {
+                        url: data.url,
+                        mimetype: data.mimetype,
+                        mediaKind: data.mediaKind,
+                        filename: data.filename
+                    };
+                    showMediaPreview(selectedMedia);
+                    showMessage('Media uploaded successfully', 'success');
+                } else {
+                    showMessage(data.error || 'Upload failed', 'error');
+                }
+            } catch (error) {
+                console.error('Media upload error:', error);
+                showMessage('Upload failed: ' + error.message, 'error');
+            }
+        }
+
+        function useMediaUrl() {
+            const urlInput = document.getElementById('media-url-input');
+            const url = urlInput.value.trim();
+
+            if (!url) {
+                showMessage('Please enter a URL', 'error');
+                return;
+            }
+
+            // Basic URL validation
+            let parsedUrl;
+            try {
+                parsedUrl = new URL(url);
+            } catch {
+                showMessage('Invalid URL format', 'error');
+                return;
+            }
+
+            // Infer media kind from extension
+            const pathname = parsedUrl.pathname.toLowerCase();
+            let mediaKind = 'image';
+            let mimetype = 'application/octet-stream';
+            
+            if (pathname.endsWith('.mp4')) {
+                mediaKind = 'video';
+                mimetype = 'video/mp4';
+            } else if (pathname.endsWith('.png')) {
+                mimetype = 'image/png';
+            } else if (pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) {
+                mimetype = 'image/jpeg';
+            } else if (pathname.endsWith('.gif')) {
+                mimetype = 'image/gif';
+            }
+
+            // Extract filename from pathname and strip query params/fragments
+            const pathParts = pathname.split('/').filter(p => p);
+            let filename = pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'media';
+            filename = filename.split('?')[0].split('#')[0];
+
+            selectedMedia = {
+                url,
+                mimetype,
+                mediaKind,
+                filename
+            };
+
+            showMediaPreview(selectedMedia);
+            showMessage('External URL set', 'success');
+        }
+
+        function showMediaPreview(media) {
+            const preview = document.getElementById('selected-media-preview');
+            const content = document.getElementById('selected-media-preview-content');
+            const name = document.getElementById('selected-media-preview-name');
+            const type = document.getElementById('selected-media-preview-type');
+
+            content.innerHTML = '';
+
+            if (media.mediaKind === 'video') {
+                const video = document.createElement('video');
+                video.src = media.url;
+                video.style.maxWidth = '100%';
+                video.style.maxHeight = '100px';
+                video.style.objectFit = 'contain';
+                video.controls = true;
+                content.appendChild(video);
+            } else {
+                const img = document.createElement('img');
+                img.src = media.url;
+                img.style.maxWidth = '100%';
+                img.style.maxHeight = '100px';
+                img.style.objectFit = 'contain';
+                content.appendChild(img);
+            }
+
+            name.textContent = media.filename || 'Media';
+            type.textContent = `${media.mediaKind} (${media.mimetype})`;
+            preview.style.display = 'flex';
+
+            // Auto-fill title if empty
+            const titleInput = document.getElementById('rotator-title');
+            if (!titleInput.value) {
+                const baseName = media.filename ? media.filename.replace(/\.[^.]+$/, '') : 'Custom Media';
+                titleInput.value = baseName;
+            }
+        }
+
         function renderRotatorEntries() {
             const container = document.getElementById('rotator-entries');
             if (!giftRotator.entries || giftRotator.entries.length === 0) {
@@ -2122,16 +2298,42 @@
                 const imageDiv = document.createElement('div');
                 imageDiv.className = 'rotator-entry-image';
                 
-                if (entry.giftImage) {
-                    const img = document.createElement('img');
-                    img.src = entry.giftImage;
-                    img.alt = entry.giftName || 'Gift';
-                    img.addEventListener('error', function() {
-                        this.parentElement.textContent = '🎁';
-                    });
-                    imageDiv.appendChild(img);
+                const entryType = entry.type || 'gift';
+                if (entryType === 'media') {
+                    // Media entry
+                    if (entry.mediaKind === 'video') {
+                        const video = document.createElement('video');
+                        video.src = entry.mediaUrl;
+                        video.style.width = '100%';
+                        video.style.height = '100%';
+                        video.style.objectFit = 'cover';
+                        video.muted = true;
+                        video.loop = true;
+                        imageDiv.appendChild(video);
+                    } else if (entry.mediaUrl) {
+                        const img = document.createElement('img');
+                        img.src = entry.mediaUrl;
+                        img.alt = entry.title || 'Media';
+                        img.addEventListener('error', function() {
+                            this.parentElement.textContent = '🖼️';
+                        });
+                        imageDiv.appendChild(img);
+                    } else {
+                        imageDiv.textContent = '📁';
+                    }
                 } else {
-                    imageDiv.textContent = '🎁';
+                    // Gift entry
+                    if (entry.giftImage) {
+                        const img = document.createElement('img');
+                        img.src = entry.giftImage;
+                        img.alt = entry.giftName || 'Gift';
+                        img.addEventListener('error', function() {
+                            this.parentElement.textContent = '🎁';
+                        });
+                        imageDiv.appendChild(img);
+                    } else {
+                        imageDiv.textContent = '🎁';
+                    }
                 }
 
                 // Create content container
@@ -2150,6 +2352,13 @@
 
                 const templateDiv = document.createElement('div');
                 templateDiv.className = 'rotator-entry-template';
+                
+                // Add type badge
+                const typeBadge = document.createElement('span');
+                typeBadge.className = 'rotator-entry-template-badge';
+                typeBadge.textContent = entryType === 'media' ? '📁 media' : '🎁 gift';
+                typeBadge.style.backgroundColor = entryType === 'media' ? '#4a90e2' : '#ff5f9e';
+                templateDiv.appendChild(typeBadge);
                 
                 const templateBadge = document.createElement('span');
                 templateBadge.className = 'rotator-entry-template-badge';
@@ -2190,12 +2399,17 @@
         }
 
         function addRotatorEntry() {
-            if (!selectedGift) {
+            if (currentEntryMode === 'gift' && !selectedGift) {
                 showMessage('Please select a gift from the catalog first', 'error');
                 return;
             }
+            
+            if (currentEntryMode === 'media' && !selectedMedia) {
+                showMessage('Please upload or select media first', 'error');
+                return;
+            }
 
-            const title = document.getElementById('rotator-title').value || selectedGift.name;
+            const title = document.getElementById('rotator-title').value || '';
             const info = document.getElementById('rotator-info').value || '';
             const template = document.getElementById('rotator-template').value;
             const animation = document.getElementById('rotator-animation').value;
@@ -2205,27 +2419,60 @@
             const backgroundColor = document.getElementById('rotator-bg-color').value;
 
             giftRotator.entries = giftRotator.entries || [];
-            giftRotator.entries.push({
-                id: `gift-${Date.now()}`,
-                giftId: selectedGift.id,
-                giftName: selectedGift.name,
-                giftImage: selectedGift.image_url || selectedGift.image_url_72 || '',
-                title,
-                info,
-                template,
-                animation,
-                fontFamily,
-                textColor,
-                accentColor,
-                backgroundColor
-            });
             
-            renderRotatorEntries();
-            showMessage(`Added "${title}" to rotator`, 'success');
-            
-            // Clear form
-            document.getElementById('rotator-title').value = '';
-            document.getElementById('rotator-info').value = '';
+            if (currentEntryMode === 'media') {
+                // Add media entry
+                giftRotator.entries.push({
+                    id: `media-${Date.now()}`,
+                    type: 'media',
+                    mediaUrl: selectedMedia.url,
+                    mediaKind: selectedMedia.mediaKind,
+                    mimetype: selectedMedia.mimetype,
+                    title: title || selectedMedia.filename || 'Custom Media',
+                    info,
+                    template,
+                    animation,
+                    fontFamily,
+                    textColor,
+                    accentColor,
+                    backgroundColor
+                });
+                
+                renderRotatorEntries();
+                showMessage(`Added "${title || selectedMedia.filename}" to rotator`, 'success');
+                
+                // Clear form
+                document.getElementById('rotator-title').value = '';
+                document.getElementById('rotator-info').value = '';
+                document.getElementById('media-upload-input').value = '';
+                document.getElementById('media-url-input').value = '';
+                document.getElementById('selected-media-preview').style.display = 'none';
+                selectedMedia = null;
+            } else {
+                // Add gift entry
+                giftRotator.entries.push({
+                    id: `gift-${Date.now()}`,
+                    type: 'gift',
+                    giftId: selectedGift.id,
+                    giftName: selectedGift.name,
+                    giftImage: selectedGift.image_url || selectedGift.image_url_72 || '',
+                    title: title || selectedGift.name,
+                    info,
+                    template,
+                    animation,
+                    fontFamily,
+                    textColor,
+                    accentColor,
+                    backgroundColor
+                });
+                
+                renderRotatorEntries();
+                showMessage(`Added "${title || selectedGift.name}" to rotator`, 'success');
+                
+                // Clear form
+                document.getElementById('rotator-title').value = '';
+                document.getElementById('rotator-info').value = '';
+            }
         }
 
         async function loadGiftRotator() {
@@ -2887,6 +3134,28 @@
                 giftCatalogSearch.addEventListener('input', (e) => {
                     renderGiftCatalogGrid(e.target.value);
                 });
+            }
+
+            // Entry mode switchers
+            const btnSelectGiftMode = document.getElementById('btn-select-gift-mode');
+            if (btnSelectGiftMode) {
+                btnSelectGiftMode.addEventListener('click', switchToGiftMode);
+            }
+
+            const btnSelectMediaMode = document.getElementById('btn-select-media-mode');
+            if (btnSelectMediaMode) {
+                btnSelectMediaMode.addEventListener('click', switchToMediaMode);
+            }
+
+            // Media upload handlers
+            const btnUploadMedia = document.getElementById('btn-upload-media');
+            if (btnUploadMedia) {
+                btnUploadMedia.addEventListener('click', uploadMedia);
+            }
+
+            const btnUseMediaUrl = document.getElementById('btn-use-media-url');
+            if (btnUseMediaUrl) {
+                btnUseMediaUrl.addEventListener('click', useMediaUrl);
             }
 
             const btnAddRotator = document.getElementById('btn-add-rotator');

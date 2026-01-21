@@ -7,6 +7,8 @@
  */
 
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const CommandRegistry = require('./commandRegistry');
 const CommandParser = require('./commandParser');
 const PermissionChecker = require('./permissionChecker');
@@ -1282,6 +1284,118 @@ class GlobalChatCommandEngine {
                 }
                 res.json({ success: true, rotator });
             } catch (error) {
+                res.status(500).json({ success: false, error: error.message });
+            }
+        });
+
+        // Upload media for rotator
+        this.api.registerRoute('POST', '/api/gcce/hud/media-upload', async (req, res) => {
+            try {
+                // Ensure plugin data directory exists
+                this.api.ensurePluginDataDir();
+                const mediaDir = path.join(this.api.getPluginDataDir(), 'media');
+                if (!fs.existsSync(mediaDir)) {
+                    fs.mkdirSync(mediaDir, { recursive: true });
+                }
+
+                // Configure multer for media uploads
+                const upload = multer({
+                    storage: multer.diskStorage({
+                        destination: (req, file, cb) => {
+                            cb(null, mediaDir);
+                        },
+                        filename: (req, file, cb) => {
+                            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                            const ext = path.extname(file.originalname);
+                            cb(null, 'media-' + uniqueSuffix + ext);
+                        }
+                    }),
+                    limits: {
+                        fileSize: 10 * 1024 * 1024, // 10MB max
+                        files: 1
+                    },
+                    fileFilter: (req, file, cb) => {
+                        const allowedMimes = [
+                            'image/png',
+                            'image/jpeg',
+                            'image/gif',
+                            'video/mp4'
+                        ];
+                        if (allowedMimes.includes(file.mimetype)) {
+                            cb(null, true);
+                        } else {
+                            cb(new Error(`Invalid file type. Allowed: PNG, JPEG, GIF, MP4. Got: ${file.mimetype}`));
+                        }
+                    }
+                });
+
+                // Execute multer middleware
+                upload.single('media')(req, res, async (err) => {
+                    if (err) {
+                        this.api.log(`[GCCE] Media upload error: ${err.message}`, 'error');
+                        return res.status(400).json({ success: false, error: err.message });
+                    }
+
+                    if (!req.file) {
+                        return res.status(400).json({ success: false, error: 'No file uploaded' });
+                    }
+
+                    // Determine media kind
+                    const mediaKind = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
+
+                    // Build URL for accessing the media
+                    const url = `/api/gcce/hud/media/${req.file.filename}`;
+
+                    this.api.log(`[GCCE] Media uploaded: ${req.file.filename} (${req.file.mimetype})`, 'info');
+
+                    res.json({
+                        success: true,
+                        url,
+                        mimetype: req.file.mimetype,
+                        mediaKind,
+                        filename: req.file.filename,
+                        size: req.file.size
+                    });
+                });
+            } catch (error) {
+                this.api.log(`[GCCE] Media upload route error: ${error.message}`, 'error');
+                res.status(500).json({ success: false, error: error.message });
+            }
+        });
+
+        // Serve uploaded media files
+        this.api.registerRoute('GET', '/api/gcce/hud/media/:filename', async (req, res) => {
+            try {
+                const filename = path.basename(req.params.filename); // Prevent path traversal
+                
+                // Additional validation: filename must have extension and only safe characters
+                if (!/^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/.test(filename)) {
+                    return res.status(400).json({ success: false, error: 'Invalid filename' });
+                }
+
+                const mediaDir = path.join(this.api.getPluginDataDir(), 'media');
+                const filePath = path.join(mediaDir, filename);
+
+                // Check if file exists
+                if (!fs.existsSync(filePath)) {
+                    return res.status(404).json({ success: false, error: 'Media not found' });
+                }
+
+                // Determine content type from file extension
+                const ext = path.extname(filename).toLowerCase();
+                const contentTypes = {
+                    '.png': 'image/png',
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.gif': 'image/gif',
+                    '.mp4': 'video/mp4'
+                };
+                
+                const contentType = contentTypes[ext] || 'application/octet-stream';
+                res.setHeader('Content-Type', contentType);
+                res.sendFile(filePath);
+            } catch (error) {
+                this.api.log(`[GCCE] Error serving media: ${error.message}`, 'error');
                 res.status(500).json({ success: false, error: error.message });
             }
         });

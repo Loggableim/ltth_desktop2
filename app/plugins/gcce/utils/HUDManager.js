@@ -152,7 +152,7 @@ class HUDManager {
   }
 
   /**
-   * Normalize gift rotator config
+   * Normalize gift rotator config (supports mixed gift/media entries)
    * @param {Object} giftRotator
    * @returns {Object}
    */
@@ -161,21 +161,48 @@ class HUDManager {
 
     const entries = Array.isArray(giftRotator.entries) ? giftRotator.entries : [];
     const normalizedEntries = entries
-      .filter(entry => entry && entry.giftId)
-      .map((entry, index) => ({
-        id: entry.id || `gift-${index + 1}`,
-        giftId: entry.giftId,
-        giftName: this.sanitizeText(entry.giftName || ''),
-        giftImage: entry.giftImage || '',
-        title: this.sanitizeText(entry.title || '').substring(0, 120),
-        info: this.sanitizeText(entry.info || '').substring(0, 160),
-        template: entry.template || 'card',
-        animation: entry.animation || 'fade',
-        fontFamily: entry.fontFamily || 'Inter, sans-serif',
-        textColor: entry.textColor || '#ffffff',
-        accentColor: entry.accentColor || '#ff5f9e',
-        backgroundColor: entry.backgroundColor || 'rgba(0, 0, 0, 0.65)'
-      }));
+      .filter(entry => entry && (entry.giftId || entry.type === 'media'))
+      .map((entry, index) => {
+        const type = entry.type || 'gift';
+        
+        if (type === 'media') {
+          // Media entry: requires mediaUrl
+          return {
+            id: entry.id || `media-${index + 1}`,
+            type: 'media',
+            mediaUrl: entry.mediaUrl || '',
+            mediaKind: entry.mediaKind || 'image',
+            mimetype: entry.mimetype || '',
+            durationMs: entry.durationMs ? parseInt(entry.durationMs, 10) : undefined,
+            poster: entry.poster || undefined,
+            title: this.sanitizeText(entry.title || '').substring(0, 120),
+            info: this.sanitizeText(entry.info || '').substring(0, 160),
+            template: entry.template || 'card',
+            animation: entry.animation || 'fade',
+            fontFamily: entry.fontFamily || 'Inter, sans-serif',
+            textColor: entry.textColor || '#ffffff',
+            accentColor: entry.accentColor || '#ff5f9e',
+            backgroundColor: entry.backgroundColor || 'rgba(0, 0, 0, 0.65)'
+          };
+        } else {
+          // Gift entry: requires giftId
+          return {
+            id: entry.id || `gift-${index + 1}`,
+            type: 'gift',
+            giftId: entry.giftId,
+            giftName: this.sanitizeText(entry.giftName || ''),
+            giftImage: entry.giftImage || '',
+            title: this.sanitizeText(entry.title || '').substring(0, 120),
+            info: this.sanitizeText(entry.info || '').substring(0, 160),
+            template: entry.template || 'card',
+            animation: entry.animation || 'fade',
+            fontFamily: entry.fontFamily || 'Inter, sans-serif',
+            textColor: entry.textColor || '#ffffff',
+            accentColor: entry.accentColor || '#ff5f9e',
+            backgroundColor: entry.backgroundColor || 'rgba(0, 0, 0, 0.65)'
+          };
+        }
+      });
 
     return {
       enabled: giftRotator.enabled === true || giftRotator.enabled === false ? giftRotator.enabled : this.config.giftRotator.enabled,
