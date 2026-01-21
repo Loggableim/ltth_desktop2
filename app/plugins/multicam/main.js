@@ -34,6 +34,13 @@ class MultiCamPlugin {
         
         // Cache for gift mapping keys (optimization for debug logging)
         this._giftMappingKeysCache = null;
+
+        // Auto-connect and reconnect tracking
+        this.connectDelayTimeout = null;
+        this.reconnectStartTime = null;
+
+        // Health check tracking
+        this.healthCheckInterval = null;
     }
 
     /**
@@ -67,8 +74,12 @@ class MultiCamPlugin {
 
         // OBS Auto-Connect wenn konfiguriert
         if (this.config.obs.connectOnStart) {
-            this.api.log('Multi-Cam: Auto-connecting to OBS...');
-            await this.connectOBS();
+            const delayMs = this.config.obs.connectDelayMs || 0;
+            this.api.log(`Multi-Cam: Auto-connecting to OBS in ${delayMs}ms...`);
+            this.connectDelayTimeout = setTimeout(async () => {
+                this.connectDelayTimeout = null;
+                await this.connectOBS();
+            }, delayMs);
         }
 
         this.api.log('Multi-Cam Plugin initialized successfully');
@@ -89,7 +100,15 @@ class MultiCamPlugin {
                 port: 4455,
                 password: '',
                 connectOnStart: false,
-                reconnectBackoffMs: [1000, 2000, 5000, 10000]
+                connectDelayMs: 2000,
+                autoReconnectEnabled: true,
+                reconnectBackoffMs: [1000, 2000, 5000, 10000],
+                maxReconnectMinutes: 30,
+                healthCheck: {
+                    enabled: false,
+                    intervalMs: 30000,
+                    method: 'GetVersion'
+                }
             },
             mode: 'scene', // scene | sourceToggle | sceneCollection
             defaultScene: 'Studio',
@@ -184,6 +203,14 @@ class MultiCamPlugin {
 
         try {
             const { host, port, password } = this.config.obs;
+
+            // Guard for missing host/port
+            if (!host || port == null || port === '') {
+                const errorMsg = 'OBS host or port not configured';
+                this.api.log(`Multi-Cam: ${errorMsg}`, 'error');
+                return { success: false, error: errorMsg };
+            }
+
             const address = `ws://${host}:${port}`;
 
             this.api.log(`Multi-Cam: Connecting to OBS at ${address}...`);
@@ -192,6 +219,7 @@ class MultiCamPlugin {
 
             this.connected = true;
             this.reconnectAttempt = 0;
+            this.reconnectStartTime = null;
 
             // Event-Listener (nur einmal registrieren)
             // Entferne alte Listener vor dem Hinzufügen neuer
@@ -201,6 +229,9 @@ class MultiCamPlugin {
             // Szenen und Quellen laden
             await this.refreshScenes();
             await this.refreshCurrentScene();
+
+            // Health check starten
+            this.startHealthCheck();
 
             this.api.log('Multi-Cam: Connected to OBS successfully');
             this.broadcastState();
@@ -234,6 +265,9 @@ class MultiCamPlugin {
                 this.reconnectTimeout = null;
             }
 
+            // Health check stoppen
+            this.stopHealthCheck();
+
             this.api.log('Multi-Cam: Disconnected from OBS');
             this.broadcastState();
 
@@ -253,15 +287,40 @@ class MultiCamPlugin {
         this.api.log('Multi-Cam: OBS connection closed', 'warn');
         this.broadcastState();
 
+        // Health check stoppen
+        this.stopHealthCheck();
+
         // Auto-Reconnect
         this.scheduleReconnect();
     }
 
     /**
-     * Reconnect mit Exponential Backoff
+     * Reconnect mit Exponential Backoff und Capped Duration
      */
     scheduleReconnect() {
+        // Check if auto-reconnect is enabled
+        if (!this.config.obs.autoReconnectEnabled) {
+            this.api.log('Multi-Cam: Auto-reconnect is disabled, will not retry connection', 'info');
+            return;
+        }
+
         if (this.reconnectTimeout) return;
+
+        // Track reconnect start time if not already started
+        if (!this.reconnectStartTime) {
+            this.reconnectStartTime = Date.now();
+        }
+
+        // Check if we've exceeded maxReconnectMinutes
+        const maxReconnectMs = (this.config.obs.maxReconnectMinutes || 30) * 60 * 1000;
+        const elapsedMs = Date.now() - this.reconnectStartTime;
+
+        if (elapsedMs >= maxReconnectMs) {
+            this.api.log(`Multi-Cam: Maximum reconnect duration (${this.config.obs.maxReconnectMinutes} minutes) exceeded. Stopping reconnect attempts.`, 'warn');
+            this.reconnectStartTime = null;
+            this.reconnectAttempt = 0;
+            return;
+        }
 
         const backoffs = this.config.obs.reconnectBackoffMs;
         const delay = backoffs[Math.min(this.reconnectAttempt, backoffs.length - 1)];
@@ -302,6 +361,51 @@ class MultiCamPlugin {
             this.api.log(`Multi-Cam: Current scene: ${this.currentScene}`);
         } catch (error) {
             this.api.log(`Multi-Cam: Failed to get current scene: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Start Health Check Watchdog
+     */
+    startHealthCheck() {
+        // Stop any existing health check first
+        this.stopHealthCheck();
+
+        // Check if health check is enabled
+        if (!this.config.obs.healthCheck || !this.config.obs.healthCheck.enabled) {
+            return;
+        }
+
+        const intervalMs = this.config.obs.healthCheck.intervalMs || 30000;
+        const method = this.config.obs.healthCheck.method || 'GetVersion';
+
+        this.api.log(`Multi-Cam: Starting health check (method: ${method}, interval: ${intervalMs}ms)`, 'debug');
+
+        this.healthCheckInterval = setInterval(async () => {
+            if (!this.connected) {
+                this.stopHealthCheck();
+                return;
+            }
+
+            try {
+                await this.obs.call(method);
+                this.api.log('Multi-Cam: Health check passed', 'debug');
+            } catch (error) {
+                this.api.log(`Multi-Cam: Health check failed using method '${method}': ${error.message}`, 'warn');
+                // Trigger disconnect handler to reuse existing backoff flow
+                this.handleDisconnect();
+            }
+        }, intervalMs);
+    }
+
+    /**
+     * Stop Health Check Watchdog
+     */
+    stopHealthCheck() {
+        if (this.healthCheckInterval) {
+            clearInterval(this.healthCheckInterval);
+            this.healthCheckInterval = null;
+            this.api.log('Multi-Cam: Stopped health check', 'debug');
         }
     }
 
@@ -1237,12 +1341,21 @@ class MultiCamPlugin {
         // Timers clearen
         if (this.reconnectTimeout) {
             clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
         }
 
         if (this.lockTimer) {
             clearTimeout(this.lockTimer);
             this.lockTimer = null;
         }
+
+        if (this.connectDelayTimeout) {
+            clearTimeout(this.connectDelayTimeout);
+            this.connectDelayTimeout = null;
+        }
+
+        // Health check stoppen
+        this.stopHealthCheck();
 
         this.api.log('Multi-Cam Plugin destroyed');
     }

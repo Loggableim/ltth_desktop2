@@ -356,6 +356,51 @@
                     <input type="password" id="obs-password" value="" placeholder="Optional">
                 </div>
             </div>
+            
+            <h3 style="font-size: 15px; margin-top: 20px; margin-bottom: 10px; color: var(--color-text-secondary);" data-i18n="multicam.connection.auto_connect_settings">Auto-Connect Settings</h3>
+            <div class="settings-grid" style="margin-bottom: 15px;">
+                <div class="setting-item">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="obs-connect-on-start">
+                        <span data-i18n="multicam.connection.connect_on_start">Connect on Start</span>
+                    </label>
+                    <small style="color: var(--color-text-muted); font-size: 12px;" data-i18n="multicam.connection.connect_on_start_desc">Automatically connect to OBS when plugin initializes</small>
+                </div>
+                <div class="setting-item">
+                    <label for="obs-connect-delay-ms" data-i18n="multicam.connection.connect_delay_ms">Connection Delay (ms)</label>
+                    <input type="number" id="obs-connect-delay-ms" value="2000" min="0" step="100" placeholder="2000">
+                    <small style="color: var(--color-text-muted); font-size: 12px;" data-i18n="multicam.connection.connect_delay_ms_desc">Delay before connecting on start</small>
+                </div>
+                <div class="setting-item">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="obs-auto-reconnect-enabled">
+                        <span data-i18n="multicam.connection.auto_reconnect_enabled">Enable Auto-Reconnect</span>
+                    </label>
+                    <small style="color: var(--color-text-muted); font-size: 12px;" data-i18n="multicam.connection.auto_reconnect_enabled_desc">Automatically reconnect if connection is lost</small>
+                </div>
+                <div class="setting-item">
+                    <label for="obs-max-reconnect-minutes" data-i18n="multicam.connection.max_reconnect_minutes">Max Reconnect Duration (min)</label>
+                    <input type="number" id="obs-max-reconnect-minutes" value="30" min="1" placeholder="30">
+                    <small style="color: var(--color-text-muted); font-size: 12px;" data-i18n="multicam.connection.max_reconnect_minutes_desc">Stop reconnecting after this many minutes</small>
+                </div>
+            </div>
+
+            <h3 style="font-size: 15px; margin-top: 20px; margin-bottom: 10px; color: var(--color-text-secondary);" data-i18n="multicam.connection.health_check_settings">Health Check Settings</h3>
+            <div class="settings-grid" style="margin-bottom: 15px;">
+                <div class="setting-item">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="obs-health-check-enabled">
+                        <span data-i18n="multicam.connection.health_check_enabled">Enable Health Check</span>
+                    </label>
+                    <small style="color: var(--color-text-muted); font-size: 12px;" data-i18n="multicam.connection.health_check_enabled_desc">Periodically verify OBS connection is healthy</small>
+                </div>
+                <div class="setting-item">
+                    <label for="obs-health-check-interval-ms" data-i18n="multicam.connection.health_check_interval_ms">Health Check Interval (ms)</label>
+                    <input type="number" id="obs-health-check-interval-ms" value="30000" min="5000" step="1000" placeholder="30000">
+                    <small style="color: var(--color-text-muted); font-size: 12px;" data-i18n="multicam.connection.health_check_interval_ms_desc">Time between health checks</small>
+                </div>
+            </div>
+
             <div class="button-group">
                 <button class="success" id="obs-connect-btn" data-i18n="multicam.connection.connect">Connect OBS</button>
                 <button class="danger" id="obs-disconnect-btn" data-i18n="multicam.connection.disconnect">Disconnect OBS</button>

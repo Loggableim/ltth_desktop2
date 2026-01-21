@@ -12,7 +12,16 @@ let giftCatalog = [];
 const DEFAULT_OBS_CONFIG = {
     host: '127.0.0.1',
     port: 4455,
-    password: ''
+    password: '',
+    connectOnStart: false,
+    connectDelayMs: 2000,
+    autoReconnectEnabled: true,
+    maxReconnectMinutes: 30,
+    healthCheck: {
+        enabled: false,
+        intervalMs: 30000,
+        method: 'GetVersion'
+    }
 };
 
 // Socket.io Events
@@ -136,6 +145,17 @@ function updateConnectionSettings(obsConfig) {
     document.getElementById('obs-host').value = obsConfig.host || DEFAULT_OBS_CONFIG.host;
     document.getElementById('obs-port').value = obsConfig.port || DEFAULT_OBS_CONFIG.port;
     document.getElementById('obs-password').value = obsConfig.password || DEFAULT_OBS_CONFIG.password;
+    
+    // Auto-connect settings
+    document.getElementById('obs-connect-on-start').checked = obsConfig.connectOnStart ?? DEFAULT_OBS_CONFIG.connectOnStart;
+    document.getElementById('obs-connect-delay-ms').value = obsConfig.connectDelayMs ?? DEFAULT_OBS_CONFIG.connectDelayMs;
+    document.getElementById('obs-auto-reconnect-enabled').checked = obsConfig.autoReconnectEnabled ?? DEFAULT_OBS_CONFIG.autoReconnectEnabled;
+    document.getElementById('obs-max-reconnect-minutes').value = obsConfig.maxReconnectMinutes ?? DEFAULT_OBS_CONFIG.maxReconnectMinutes;
+    
+    // Health check settings
+    const healthCheck = obsConfig.healthCheck || DEFAULT_OBS_CONFIG.healthCheck;
+    document.getElementById('obs-health-check-enabled').checked = healthCheck.enabled ?? false;
+    document.getElementById('obs-health-check-interval-ms').value = healthCheck.intervalMs ?? DEFAULT_OBS_CONFIG.healthCheck.intervalMs;
 }
 
 // Hot Buttons rendern
@@ -266,6 +286,16 @@ async function saveOBSSettings() {
         const host = document.getElementById('obs-host').value;
         const port = parseInt(document.getElementById('obs-port').value);
         const password = document.getElementById('obs-password').value;
+        
+        // Auto-connect settings
+        const connectOnStart = document.getElementById('obs-connect-on-start').checked;
+        const connectDelayMs = parseInt(document.getElementById('obs-connect-delay-ms').value) || 2000;
+        const autoReconnectEnabled = document.getElementById('obs-auto-reconnect-enabled').checked;
+        const maxReconnectMinutes = parseInt(document.getElementById('obs-max-reconnect-minutes').value) || 30;
+        
+        // Health check settings
+        const healthCheckEnabled = document.getElementById('obs-health-check-enabled').checked;
+        const healthCheckIntervalMs = parseInt(document.getElementById('obs-health-check-interval-ms').value) || 30000;
 
         if (!config) {
             alert('Configuration not loaded. Please refresh the page.');
@@ -278,7 +308,16 @@ async function saveOBSSettings() {
                 ...(config.obs || {}),
                 host,
                 port,
-                password
+                password,
+                connectOnStart,
+                connectDelayMs,
+                autoReconnectEnabled,
+                maxReconnectMinutes,
+                healthCheck: {
+                    enabled: healthCheckEnabled,
+                    intervalMs: healthCheckIntervalMs,
+                    method: config.obs?.healthCheck?.method || 'GetVersion'
+                }
             }
         };
 
