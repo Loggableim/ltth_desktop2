@@ -1532,6 +1532,12 @@ class OpenShockPlugin {
         this.api.registerRoute('post', '/api/openshock/zappiehell/chains', (req, res) => {
             try {
                 const chain = this.zappieHellManager.addEventChain(req.body);
+                
+                // Broadcast update to all clients
+                this._broadcastZappieHellChainsUpdate({
+                    chains: this.zappieHellManager.getAllEventChains()
+                });
+                
                 res.json({
                     success: true,
                     chain
@@ -1548,6 +1554,12 @@ class OpenShockPlugin {
         this.api.registerRoute('put', '/api/openshock/zappiehell/chains/:id', (req, res) => {
             try {
                 const chain = this.zappieHellManager.updateEventChain(req.params.id, req.body);
+                
+                // Broadcast update to all clients
+                this._broadcastZappieHellChainsUpdate({
+                    chains: this.zappieHellManager.getAllEventChains()
+                });
+                
                 res.json({
                     success: true,
                     chain
@@ -1564,6 +1576,12 @@ class OpenShockPlugin {
         this.api.registerRoute('delete', '/api/openshock/zappiehell/chains/:id', (req, res) => {
             try {
                 this.zappieHellManager.deleteEventChain(req.params.id);
+                
+                // Broadcast update to all clients
+                this._broadcastZappieHellChainsUpdate({
+                    chains: this.zappieHellManager.getAllEventChains()
+                });
+                
                 res.json({
                     success: true,
                     message: 'Event chain deleted'
@@ -2566,6 +2584,13 @@ class OpenShockPlugin {
      */
     _broadcastZappieHellCompleted(data) {
         this.api.emit('zappiehell:goals:completed', data);
+    }
+
+    /**
+     * ZappieHell chains update broadcasten
+     */
+    _broadcastZappieHellChainsUpdate(data) {
+        this.api.emit('zappiehell:chains:update', data);
     }
 
     /**
