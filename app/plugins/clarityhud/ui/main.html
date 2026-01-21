@@ -675,6 +675,41 @@
           </div>
         </div>
       </div>
+
+      <!-- Multi-Stream HUD Section -->
+      <div class="hud-section">
+        <div class="hud-header">
+          <h2>Multi-Stream HUD</h2>
+          <p>Display up to 3 additional TikTok streams alongside your primary stream</p>
+        </div>
+        <div class="hud-content">
+          <div class="preview-container">
+            <iframe id="multi-preview" class="preview-frame" src="/overlay/clarity/multi"></iframe>
+          </div>
+
+          <div class="url-section">
+            <div class="url-label">Overlay URL</div>
+            <div class="url-display">
+              <div class="url-text" id="multi-url">Loading...</div>
+              <button class="btn btn-info btn-icon" data-action="copy-url" data-type="multi" title="Copy URL">
+                📋
+              </button>
+            </div>
+          </div>
+
+          <div class="button-group">
+            <button class="btn btn-primary" data-action="open-settings" data-type="multi">
+              ⚙️ Settings
+            </button>
+            <button class="btn btn-success" data-action="test-event" data-type="multi">
+              🧪 Test Event
+            </button>
+            <button class="btn btn-secondary" data-action="refresh-preview" data-type="multi">
+              🔄 Refresh Preview
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
