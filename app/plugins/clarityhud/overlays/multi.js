@@ -155,6 +155,13 @@ function connectSocket() {
       updateDebugEvents();
     });
     
+    // Listen for multi-stream gift events
+    STATE.socket.on('clarityhud:multi:gift', (event) => {
+      console.log('[MULTI HUD] 🎁 Multi-stream gift event received:', event);
+      handleGiftEvent(event);
+      updateDebugEvents();
+    });
+    
     // Listen for settings updates
     STATE.socket.on('clarityhud.settings.multi', (settings) => {
       console.log('[MULTI HUD] ⚙️ Settings update received');
@@ -245,7 +252,7 @@ function handleChatEvent(event) {
     }
     
     // Render the message
-    renderMessage(event);
+    renderChatMessage(event);
     
     console.log(`[MULTI HUD] ✅ Chat from ${event.sourceLabel}: ${event.user.nickname}`);
   } catch (error) {
@@ -253,7 +260,26 @@ function handleChatEvent(event) {
   }
 }
 
-function renderMessage(event) {
+function handleGiftEvent(event) {
+  try {
+    // Add to messages array
+    STATE.messages.unshift(event);
+    
+    // Trim to max messages
+    if (STATE.messages.length > STATE.settings.maxMessages) {
+      STATE.messages = STATE.messages.slice(0, STATE.settings.maxMessages);
+    }
+    
+    // Render the gift as a special message
+    renderGiftMessage(event);
+    
+    console.log(`[MULTI HUD] ✅ Gift from ${event.sourceLabel}: ${event.user.nickname} sent ${event.gift.name} x${event.gift.count}`);
+  } catch (error) {
+    console.error('[MULTI HUD] ❌ Error handling gift event:', error);
+  }
+}
+
+function renderChatMessage(event) {
   // Create message element
   const messageEl = document.createElement('div');
   messageEl.className = `chat-message style-${STATE.settings.messageStyle}`;
@@ -324,6 +350,93 @@ function renderMessage(event) {
     textEl.innerHTML = STATE.messageParser.parse(event.message);
   } else {
     textEl.textContent = event.message;
+  }
+  
+  messageEl.appendChild(textEl);
+  
+  // Add to container
+  STATE.messagesContainer.insertBefore(messageEl, STATE.messagesContainer.firstChild);
+  
+  // Trigger animation
+  requestAnimationFrame(() => {
+    messageEl.classList.add('visible');
+    
+    if (STATE.settings.pulseOnNew) {
+      messageEl.classList.add('pulse-new');
+      setTimeout(() => {
+        messageEl.classList.remove('pulse-new');
+      }, 500);
+    }
+  });
+  
+  // Trim old messages from DOM
+  const maxDOMMessages = Math.min(STATE.settings.maxMessages, 100);
+  while (STATE.messagesContainer.children.length > maxDOMMessages) {
+    STATE.messagesContainer.removeChild(STATE.messagesContainer.lastChild);
+  }
+}
+
+function renderGiftMessage(event) {
+  // Create message element
+  const messageEl = document.createElement('div');
+  messageEl.className = `chat-message style-${STATE.settings.messageStyle}`;
+  
+  // Add primary stream class if this is from the primary stream
+  if (event.streamIndex === 0 || event.sourceId === 'primary') {
+    messageEl.classList.add('primary-stream');
+  }
+  
+  // Set color custom properties
+  messageEl.style.setProperty('--source-text', event.colors.text);
+  messageEl.style.setProperty('--source-bg', event.colors.bg);
+  messageEl.style.setProperty('--source-accent', event.colors.accent);
+  
+  // Create header
+  const headerEl = document.createElement('div');
+  headerEl.className = 'chat-message-header';
+  
+  // Add source badge (for badge style)
+  if (STATE.settings.messageStyle === 'badge') {
+    const badgeEl = document.createElement('span');
+    badgeEl.className = 'source-badge';
+    badgeEl.textContent = event.sourceLabel;
+    badgeEl.style.background = event.colors.accent;
+    headerEl.appendChild(badgeEl);
+  }
+  
+  // Add avatar if enabled
+  if (STATE.settings.showAvatars && event.user.profilePictureUrl) {
+    const avatarEl = document.createElement('img');
+    avatarEl.className = 'chat-avatar';
+    avatarEl.src = event.user.profilePictureUrl;
+    avatarEl.alt = event.user.nickname;
+    headerEl.appendChild(avatarEl);
+  }
+  
+  // Add username
+  const usernameEl = document.createElement('span');
+  usernameEl.className = 'chat-username';
+  usernameEl.textContent = event.user.nickname;
+  usernameEl.style.color = event.colors.text;
+  headerEl.appendChild(usernameEl);
+  
+  // Add timestamp if enabled
+  if (STATE.settings.showTimestamps) {
+    const timestampEl = document.createElement('span');
+    timestampEl.className = 'chat-timestamp';
+    const date = new Date(event.timestamp);
+    timestampEl.textContent = date.toLocaleTimeString();
+    headerEl.appendChild(timestampEl);
+  }
+  
+  messageEl.appendChild(headerEl);
+  
+  // Add gift message text
+  const textEl = document.createElement('div');
+  textEl.className = 'chat-text';
+  textEl.textContent = `🎁 Sent ${event.gift.name} x${event.gift.count}`;
+  if (event.gift.diamondCount > 0) {
+    textEl.textContent += ` (${event.gift.diamondCount} 💎)`;
   }
   
   messageEl.appendChild(textEl);

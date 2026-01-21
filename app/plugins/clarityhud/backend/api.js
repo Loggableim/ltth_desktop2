@@ -862,6 +862,11 @@ class ClarityHUDBackend {
             this.handleMultiStreamChat(data, i, sourceId, sourceLabel, streamConfig);
           });
 
+          // Listen to gift events from this connector
+          connector.on('gift', (data) => {
+            this.handleMultiStreamGift(data, i, sourceId, sourceLabel, streamConfig);
+          });
+
           // Connect to the stream
           await connector.connect(streamConfig.username);
           this.multiStreamConnectors.push(connector);
@@ -929,6 +934,53 @@ class ClarityHUDBackend {
       this.api.log(`Multi-stream chat from ${sourceLabel}: ${normalizedEvent.user.nickname}`, 'debug');
     } catch (error) {
       this.api.log(`Error handling multi-stream chat: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Handle gift event from multi-stream connector
+   */
+  handleMultiStreamGift(data, streamIndex, sourceId, sourceLabel, streamConfig) {
+    try {
+      // Normalize the gift event
+      const normalizedEvent = {
+        sourceId: sourceId,
+        sourceLabel: sourceLabel,
+        streamIndex: streamIndex,
+        colors: {
+          text: streamConfig.textColor,
+          bg: streamConfig.bgColor,
+          accent: streamConfig.accentColor
+        },
+        user: {
+          uniqueId: data.uniqueId || 'unknown',
+          nickname: data.nickname || 'Anonymous',
+          profilePictureUrl: data.profilePictureUrl || null,
+          badge: data.badge || null
+        },
+        gift: {
+          name: data.giftName || data.name || 'Gift',
+          count: data.repeatCount || data.count || 1,
+          diamondCount: data.diamondCount || 0,
+          coins: data.coins || 0,
+          pictureUrl: data.giftPictureUrl || null
+        },
+        timestamp: Date.now(),
+        raw: data
+      };
+
+      // Add to queue with max length management
+      this.multiStreamQueue.unshift(normalizedEvent);
+      if (this.multiStreamQueue.length > this.settings.multi.maxMessages) {
+        this.multiStreamQueue = this.multiStreamQueue.slice(0, this.settings.multi.maxMessages);
+      }
+
+      // Broadcast to multi-stream overlay
+      this.api.emit('clarityhud:multi:gift', normalizedEvent);
+
+      this.api.log(`Multi-stream gift from ${sourceLabel}: ${normalizedEvent.user.nickname} sent ${normalizedEvent.gift.name}`, 'debug');
+    } catch (error) {
+      this.api.log(`Error handling multi-stream gift: ${error.message}`, 'error');
     }
   }
 
