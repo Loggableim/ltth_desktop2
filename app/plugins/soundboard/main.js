@@ -181,13 +181,22 @@ class SoundboardManager extends EventEmitter {
         console.log(`🎬 Playing gift animation: ${animationData.type} for ${animationData.giftName} (volume: ${animationData.volume})`);
         
         // Distinguish between audio and visual animations
-        if (giftSound.animationType === 'audio' || this._isAudioFile(giftSound.animationUrl)) {
-            // Audio directly in the main app
-            this._playAudioInMainApp(
-                giftSound.animationUrl, 
-                giftSound.animationVolume || 1.0,
-                `Gift Animation: ${animationData.giftName}`
-            );
+        // Prioritize URL-based detection (more reliable than type declaration)
+        const isAudioFile = this._isAudioFile(giftSound.animationUrl);
+        const isAudioType = giftSound.animationType === 'audio';
+        
+        if (isAudioFile || isAudioType) {
+            // Audio: play directly in the main app
+            if (isAudioFile) {
+                this._playAudioInMainApp(
+                    giftSound.animationUrl, 
+                    giftSound.animationVolume || 1.0,
+                    `Gift Animation: ${animationData.giftName}`
+                );
+            } else {
+                // Type is 'audio' but URL is not audio - log warning
+                console.warn(`⚠️ [Soundboard] Animation type is 'audio' but URL doesn't match audio extension: ${giftSound.animationUrl}`);
+            }
         } else if (giftSound.animationType !== 'none' && giftSound.animationUrl) {
             // Visual animations (video, gif, image) to OBS overlay
             this.io.emit('gift:animation', animationData);
@@ -225,13 +234,22 @@ class SoundboardManager extends EventEmitter {
         console.log(`🎬 Playing ${eventType} animation: ${animationData.type} (volume: ${animationData.volume})`);
         
         // Distinguish between audio and visual animations
-        if (animationType === 'audio' || this._isAudioFile(animationUrl)) {
-            // Audio directly in the main app
-            this._playAudioInMainApp(
-                animationUrl,
-                animationVolume,
-                `${eventType.charAt(0).toUpperCase() + eventType.slice(1)} Animation`
-            );
+        // Prioritize URL-based detection (more reliable than type declaration)
+        const isAudioFile = this._isAudioFile(animationUrl);
+        const isAudioType = animationType === 'audio';
+        
+        if (isAudioFile || isAudioType) {
+            // Audio: play directly in the main app
+            if (isAudioFile) {
+                this._playAudioInMainApp(
+                    animationUrl,
+                    animationVolume,
+                    `${eventType.charAt(0).toUpperCase() + eventType.slice(1)} Animation`
+                );
+            } else {
+                // Type is 'audio' but URL is not audio - log warning
+                console.warn(`⚠️ [Soundboard] Animation type is 'audio' but URL doesn't match audio extension: ${animationUrl}`);
+            }
         } else {
             // Visual animations (video, gif, image) to OBS overlay
             this.io.emit('event:animation', animationData);
