@@ -61,9 +61,12 @@ function generateGiftEventHash(eventType, data) {
         else if (data.repeatCount) components.push(data.repeatCount.toString());
         // Include timestamp rounded to nearest second to catch near-duplicate events
         // but allow legitimate streak updates
+        // Prefer createTime from TikTok for more reliable deduplication
         if (data.timestamp) {
             try {
-                const roundedTime = Math.floor(new Date(data.timestamp).getTime() / 1000);
+                // Use createTime if available (more reliable for TikTok duplicates)
+                const timestampValue = data.createTime || data.timestamp;
+                const roundedTime = Math.floor(new Date(timestampValue).getTime() / 1000);
                 if (!isNaN(roundedTime)) {
                     components.push(roundedTime.toString());
                 }
@@ -301,6 +304,42 @@ runTest('Invalid timestamps are handled gracefully', () => {
     
     // They should be equal since both have same gift data (no valid timestamp)
     assert(hash1 === hash2, 'Invalid/null timestamps should result in same hash');
+});
+
+// Test 9: TikTok duplicate events (popup + chat) with identical createTime should have same hash
+runTest('TikTok popup and chat events with identical createTime generate same hash', () => {
+    const createTime = '2024-01-01T10:00:00.123Z';
+    
+    // First event: Gift popup/animation
+    const popupEvent = {
+        username: 'user1',
+        giftId: 5655,
+        giftName: 'Rose',
+        coins: 1,
+        repeatCount: 1,
+        createTime: createTime,  // TikTok's original timestamp
+        timestamp: createTime     // Will use createTime preferentially
+    };
+    
+    // Second event: Gift in chat log (sent milliseconds later but same createTime)
+    const chatEvent = {
+        username: 'user1',
+        giftId: 5655,
+        giftName: 'Rose',
+        coins: 1,
+        repeatCount: 1,
+        createTime: createTime,  // Identical createTime from TikTok
+        timestamp: createTime     // Will use createTime preferentially
+    };
+    
+    const hash1 = generateGiftEventHash('gift', popupEvent);
+    const hash2 = generateGiftEventHash('gift', chatEvent);
+    
+    assert(hash1 === hash2, 'TikTok duplicate events with identical createTime should have same hash (will be deduplicated)');
+    
+    // Verify the hash contains expected components
+    const expectedHash = 'gift|user1|5655|Rose|1|' + Math.floor(new Date(createTime).getTime() / 1000);
+    assert(hash1 === expectedHash, `Hash should match expected format: ${expectedHash}, got: ${hash1}`);
 });
 
 console.log(`\n📊 Test Summary: ${passed} passed, ${failed} failed`);

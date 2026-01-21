@@ -754,6 +754,9 @@ class TikTokConnector extends EventEmitter {
             }
 
             this.logger.info(`🎁 [GIFT] ${giftData.giftName}: diamondCount=${diamondCount}, repeatCount=${repeatCount}, coins=${coins}, giftType=${giftData.giftType}, repeatEnd=${giftData.repeatEnd}`);
+            
+            // Log raw gift data for debugging duplicate detection
+            this.logger.debug(`[GIFT RAW] createTime: ${data.createTime}, timestamp: ${data.timestamp}, giftName: ${giftData.giftName}, repeatCount: ${repeatCount}`);
 
             // Check if streak ended
             const isStreakEnd = giftData.repeatEnd;
@@ -790,7 +793,10 @@ class TikTokConnector extends EventEmitter {
                     teamMemberLevel: userData.teamMemberLevel,
                     isModerator: userData.isModerator,
                     isSubscriber: userData.isSubscriber,
-                    timestamp: new Date().toISOString()
+                    // Use TikTok's original timestamp (createTime) for reliable deduplication
+                    // TikTok sends duplicate events (popup + chat) with identical createTime
+                    // Using original timestamp ensures hash function detects duplicates correctly
+                    timestamp: data.createTime || data.timestamp || new Date().toISOString()
                 };
 
                 this.logger.info(`✅ [GIFT COUNTED] Total coins now: ${this.stats.totalCoins}`);
@@ -1708,9 +1714,13 @@ class TikTokConnector extends EventEmitter {
                 else if (data.repeatCount) components.push(data.repeatCount.toString());
                 // Include timestamp rounded to nearest second to catch near-duplicate events
                 // but allow legitimate streak updates
+                // Prefer createTime from TikTok for more reliable deduplication
+                // TikTok sends duplicate events (popup + chat) with identical createTime
                 if (data.timestamp) {
                     try {
-                        const roundedTime = Math.floor(new Date(data.timestamp).getTime() / 1000);
+                        // Use createTime if available (more reliable for TikTok duplicates)
+                        const timestampValue = data.createTime || data.timestamp;
+                        const roundedTime = Math.floor(new Date(timestampValue).getTime() / 1000);
                         if (!isNaN(roundedTime)) {
                             components.push(roundedTime.toString());
                         }
