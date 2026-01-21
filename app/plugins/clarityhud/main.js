@@ -51,6 +51,12 @@ class ClarityHUDPlugin {
       res.sendFile(overlayPath);
     });
 
+    // Serve multi-stream overlay
+    this.api.registerRoute('GET', '/overlay/clarity/multi', (req, res) => {
+      const overlayPath = path.join(__dirname, 'overlays', 'multi.html');
+      res.sendFile(overlayPath);
+    });
+
     // Serve plugin UI
     this.api.registerRoute('GET', '/clarityhud/ui', (req, res) => {
       const uiPath = path.join(__dirname, 'ui', 'main.html');
@@ -101,6 +107,12 @@ class ClarityHUDPlugin {
 
     this.api.registerRoute('GET', '/plugins/clarityhud/overlays/full.js', (req, res) => {
       const jsPath = path.join(__dirname, 'overlays', 'full.js');
+      res.sendFile(jsPath);
+    });
+
+    // Serve multi-stream overlay JavaScript
+    this.api.registerRoute('GET', '/plugins/clarityhud/overlays/multi.js', (req, res) => {
+      const jsPath = path.join(__dirname, 'overlays', 'multi.js');
       res.sendFile(jsPath);
     });
 

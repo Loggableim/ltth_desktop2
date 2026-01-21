@@ -5,6 +5,8 @@
  * for both Chat HUD and Full HUD overlays
  */
 
+const TikTokConnector = require('../../../modules/tiktok');
+
 class ClarityHUDBackend {
   constructor(api) {
     this.api = api;
@@ -20,6 +22,11 @@ class ClarityHUDBackend {
       treasure: [],
       join: []
     };
+
+    // Multi-stream specific: event queue and connectors
+    this.multiStreamQueue = [];
+    this.multiStreamConnectors = [];
+    this.multiStreamMaxMessages = 300;
 
     // Default settings for Chat HUD
     this.defaultChatSettings = {
@@ -81,10 +88,54 @@ class ClarityHUDBackend {
       giftImageSize: 'medium' // 'small', 'medium', 'large'
     };
 
+    // Default settings for Multi-Stream HUD
+    this.defaultMultiSettings = {
+      enabled: false,
+      streams: [
+        {
+          enabled: false,
+          username: '',
+          displayName: '',
+          textColor: '#00D4FF',
+          bgColor: '#1E3A8A',
+          accentColor: '#60A5FA'
+        },
+        {
+          enabled: false,
+          username: '',
+          displayName: '',
+          textColor: '#A78BFA',
+          bgColor: '#581C87',
+          accentColor: '#C084FC'
+        },
+        {
+          enabled: false,
+          username: '',
+          displayName: '',
+          textColor: '#FBBF24',
+          bgColor: '#78350F',
+          accentColor: '#FCD34D'
+        }
+      ],
+      layout: 'mixed',
+      columns: 'auto',
+      primarySpan2: false,
+      messageStyle: 'stripe',
+      density: 'compact',
+      showAvatars: false,
+      showTimestamps: false,
+      highlightPrimary: true,
+      primaryOpacity: 1.2,
+      maxMessages: 300,
+      autoContrast: true,
+      pulseOnNew: false
+    };
+
     // Current settings
     this.settings = {
       chat: { ...this.defaultChatSettings },
-      full: { ...this.defaultFullSettings }
+      full: { ...this.defaultFullSettings },
+      multi: { ...this.defaultMultiSettings }
     };
   }
 
@@ -105,12 +156,19 @@ class ClarityHUDBackend {
         this.settings.full = { ...this.defaultFullSettings, ...fullSettings };
       }
 
+      // Load multi-stream settings
+      const multiSettings = await this.api.getConfig('clarityhud.settings.multi');
+      if (multiSettings) {
+        this.settings.multi = { ...this.defaultMultiSettings, ...multiSettings };
+      }
+
       this.api.log('ClarityHUD backend initialized with settings loaded', 'info');
     } catch (error) {
       this.api.log(`Error initializing ClarityHUD backend: ${error.message}`, 'error');
       // Use defaults if loading fails
       this.settings.chat = { ...this.defaultChatSettings };
       this.settings.full = { ...this.defaultFullSettings };
+      this.settings.multi = { ...this.defaultMultiSettings };
     }
   }
 
@@ -139,10 +197,10 @@ class ClarityHUDBackend {
       try {
         const { dock } = req.params;
 
-        if (dock !== 'chat' && dock !== 'full') {
+        if (dock !== 'chat' && dock !== 'full' && dock !== 'multi') {
           return res.status(400).json({
             success: false,
-            error: 'Invalid dock. Must be "chat" or "full"'
+            error: 'Invalid dock. Must be "chat", "full", or "multi"'
           });
         }
 
@@ -166,15 +224,17 @@ class ClarityHUDBackend {
         const { dock } = req.params;
         const newSettings = req.body;
 
-        if (dock !== 'chat' && dock !== 'full') {
+        if (dock !== 'chat' && dock !== 'full' && dock !== 'multi') {
           return res.status(400).json({
             success: false,
-            error: 'Invalid dock. Must be "chat" or "full"'
+            error: 'Invalid dock. Must be "chat", "full", or "multi"'
           });
         }
 
         // Merge with existing settings
-        const defaults = dock === 'chat' ? this.defaultChatSettings : this.defaultFullSettings;
+        const defaults = dock === 'chat' ? this.defaultChatSettings : 
+                        dock === 'full' ? this.defaultFullSettings : 
+                        this.defaultMultiSettings;
         this.settings[dock] = { ...defaults, ...this.settings[dock], ...newSettings };
 
         // Persist to database
@@ -182,6 +242,11 @@ class ClarityHUDBackend {
 
         // Broadcast settings update to overlays
         this.api.emit(`clarityhud.settings.${dock}`, this.settings[dock]);
+
+        // If multi-stream settings changed, reconnect streams
+        if (dock === 'multi') {
+          await this.reconnectMultiStreams();
+        }
 
         this.api.log(`Settings updated for ${dock} HUD`, 'info');
 
@@ -204,10 +269,10 @@ class ClarityHUDBackend {
       try {
         const { dock } = req.params;
 
-        if (dock !== 'chat' && dock !== 'full') {
+        if (dock !== 'chat' && dock !== 'full' && dock !== 'multi') {
           return res.status(400).json({
             success: false,
-            error: 'Invalid dock. Must be "chat" or "full"'
+            error: 'Invalid dock. Must be "chat", "full", or "multi"'
           });
         }
 
@@ -220,6 +285,16 @@ class ClarityHUDBackend {
               chat: this.eventQueues.chat
             },
             settings: this.settings.chat
+          });
+        } else if (dock === 'multi') {
+          // For multi dock, return multi-stream events
+          res.json({
+            success: true,
+            dock: dock,
+            events: {
+              multi: this.multiStreamQueue
+            },
+            settings: this.settings.multi
           });
         } else {
           // For full dock, return all event queues
@@ -244,15 +319,17 @@ class ClarityHUDBackend {
       try {
         const { dock } = req.params;
 
-        if (dock !== 'chat' && dock !== 'full') {
+        if (dock !== 'chat' && dock !== 'full' && dock !== 'multi') {
           return res.status(400).json({
             success: false,
-            error: 'Invalid dock. Must be "chat" or "full"'
+            error: 'Invalid dock. Must be "chat", "full", or "multi"'
           });
         }
 
         // Reset to defaults
-        const defaults = dock === 'chat' ? this.defaultChatSettings : this.defaultFullSettings;
+        const defaults = dock === 'chat' ? this.defaultChatSettings : 
+                        dock === 'full' ? this.defaultFullSettings : 
+                        this.defaultMultiSettings;
         this.settings[dock] = { ...defaults };
 
         // Persist to database
@@ -740,7 +817,119 @@ class ClarityHUDBackend {
     Object.keys(this.eventQueues).forEach(queueName => {
       this.eventQueues[queueName] = [];
     });
+    this.multiStreamQueue = [];
     this.api.log('Cleared all event queues', 'info');
+  }
+
+  /**
+   * Initialize multi-stream connectors
+   */
+  async reconnectMultiStreams() {
+    try {
+      // Disconnect existing connectors
+      await this.disconnectMultiStreams();
+
+      // Check if multi-stream is enabled
+      if (!this.settings.multi.enabled) {
+        this.api.log('Multi-stream HUD is disabled, skipping connector initialization', 'debug');
+        return;
+      }
+
+      // Create new connectors for enabled streams
+      const io = this.api.getSocketIO();
+      const db = this.api.getDatabase();
+      const logger = {
+        info: (msg) => this.api.log(msg, 'info'),
+        warn: (msg) => this.api.log(msg, 'warn'),
+        error: (msg) => this.api.log(msg, 'error'),
+        debug: (msg) => this.api.log(msg, 'debug')
+      };
+
+      for (let i = 0; i < this.settings.multi.streams.length; i++) {
+        const streamConfig = this.settings.multi.streams[i];
+        
+        if (!streamConfig.enabled || !streamConfig.username) {
+          continue;
+        }
+
+        try {
+          const connector = new TikTokConnector(io, db, logger);
+          const sourceId = `stream${i + 1}`;
+          const sourceLabel = streamConfig.displayName || streamConfig.username;
+
+          // Listen to chat events from this connector
+          connector.on('chat', (data) => {
+            this.handleMultiStreamChat(data, i, sourceId, sourceLabel, streamConfig);
+          });
+
+          // Connect to the stream
+          await connector.connect(streamConfig.username);
+          this.multiStreamConnectors.push(connector);
+          
+          this.api.log(`Connected multi-stream connector ${i + 1} to @${streamConfig.username}`, 'info');
+        } catch (error) {
+          this.api.log(`Failed to connect multi-stream ${i + 1} (@${streamConfig.username}): ${error.message}`, 'error');
+        }
+      }
+    } catch (error) {
+      this.api.log(`Error reconnecting multi-streams: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Disconnect all multi-stream connectors
+   */
+  async disconnectMultiStreams() {
+    for (const connector of this.multiStreamConnectors) {
+      try {
+        await connector.disconnect();
+      } catch (error) {
+        this.api.log(`Error disconnecting multi-stream connector: ${error.message}`, 'error');
+      }
+    }
+    this.multiStreamConnectors = [];
+    this.api.log('Disconnected all multi-stream connectors', 'debug');
+  }
+
+  /**
+   * Handle chat event from multi-stream connector
+   */
+  handleMultiStreamChat(data, streamIndex, sourceId, sourceLabel, streamConfig) {
+    try {
+      // Normalize the event
+      const normalizedEvent = {
+        sourceId: sourceId,
+        sourceLabel: sourceLabel,
+        streamIndex: streamIndex,
+        colors: {
+          text: streamConfig.textColor,
+          bg: streamConfig.bgColor,
+          accent: streamConfig.accentColor
+        },
+        user: {
+          uniqueId: data.uniqueId || 'unknown',
+          nickname: data.nickname || 'Anonymous',
+          profilePictureUrl: data.profilePictureUrl || null,
+          badge: data.badge || null
+        },
+        message: data.comment || data.message || '',
+        timestamp: Date.now(),
+        raw: data
+      };
+
+      // Add to queue with max length management
+      this.multiStreamQueue.unshift(normalizedEvent);
+      if (this.multiStreamQueue.length > this.settings.multi.maxMessages) {
+        this.multiStreamQueue = this.multiStreamQueue.slice(0, this.settings.multi.maxMessages);
+      }
+
+      // Broadcast to multi-stream overlay
+      this.api.emit('clarityhud:multi:chat', normalizedEvent);
+
+      this.api.log(`Multi-stream chat from ${sourceLabel}: ${normalizedEvent.user.nickname}`, 'debug');
+    } catch (error) {
+      this.api.log(`Error handling multi-stream chat: ${error.message}`, 'error');
+    }
   }
 
   /**
@@ -748,12 +937,16 @@ class ClarityHUDBackend {
    */
   async cleanup() {
     try {
+      // Disconnect multi-stream connectors
+      await this.disconnectMultiStreams();
+
       // Clear all queues
       this.clearAllQueues();
 
       // Save current settings
       await this.api.setConfig('clarityhud.settings.chat', this.settings.chat);
       await this.api.setConfig('clarityhud.settings.full', this.settings.full);
+      await this.api.setConfig('clarityhud.settings.multi', this.settings.multi);
 
       this.api.log('ClarityHUD backend cleaned up', 'info');
     } catch (error) {
