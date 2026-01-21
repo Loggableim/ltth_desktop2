@@ -1,8 +1,8 @@
 /**
  * Unified Queue Manager for Game Engine
  * 
- * Manages a single FIFO queue for Plinko and Wheel games.
- * Ensures proper ordering and prevents conflicts when both games are triggered.
+ * Manages a single FIFO queue for Plinko, Wheel, Connect4, and Chess games.
+ * Ensures proper ordering and prevents conflicts when multiple games are triggered.
  */
 
 class UnifiedQueueManager {
@@ -10,8 +10,8 @@ class UnifiedQueueManager {
     this.logger = logger;
     this.io = io;
     
-    // Unified queue for both Plinko and Wheel
-    // Format: { type: 'plinko'|'wheel', data: {...}, timestamp: number }
+    // Unified queue for all games
+    // Format: { type: 'plinko'|'wheel'|'connect4'|'chess', data: {...}, timestamp: number }
     this.queue = [];
     
     // Is any game currently processing?
@@ -23,6 +23,7 @@ class UnifiedQueueManager {
     // Game references (set by games themselves)
     this.plinkoGame = null;
     this.wheelGame = null;
+    this.gameEnginePlugin = null; // Reference to main plugin for Connect4/Chess
     
     // Processing timeout (for safety)
     this.processingTimeout = null;
@@ -38,6 +39,10 @@ class UnifiedQueueManager {
 
   setWheelGame(wheelGame) {
     this.wheelGame = wheelGame;
+  }
+
+  setGameEnginePlugin(gameEnginePlugin) {
+    this.gameEnginePlugin = gameEnginePlugin;
   }
 
   /**
@@ -105,6 +110,70 @@ class UnifiedQueueManager {
   }
 
   /**
+   * Add Connect4 game to queue
+   * @param {Object} gameData - Connect4 game data
+   * @returns {Object} { queued: boolean, position: number }
+   */
+  queueConnect4(gameData) {
+    const item = {
+      type: 'connect4',
+      data: gameData,
+      timestamp: Date.now()
+    };
+    
+    this.queue.push(item);
+    const position = this.queue.length;
+    
+    this.logger.info(`🎮 [UNIFIED QUEUE] Connect4 queued for ${gameData.viewerUsername} (position: ${position})`);
+    
+    // Emit queue event
+    this.io.emit('unified-queue:connect4-queued', {
+      position,
+      gameType: 'connect4',
+      username: gameData.viewerUsername,
+      nickname: gameData.viewerNickname,
+      queueLength: this.queue.length
+    });
+    
+    // Try to process if not already processing
+    this.processNext();
+    
+    return { queued: true, position };
+  }
+
+  /**
+   * Add Chess game to queue
+   * @param {Object} gameData - Chess game data
+   * @returns {Object} { queued: boolean, position: number }
+   */
+  queueChess(gameData) {
+    const item = {
+      type: 'chess',
+      data: gameData,
+      timestamp: Date.now()
+    };
+    
+    this.queue.push(item);
+    const position = this.queue.length;
+    
+    this.logger.info(`♟️ [UNIFIED QUEUE] Chess queued for ${gameData.viewerUsername} (position: ${position})`);
+    
+    // Emit queue event
+    this.io.emit('unified-queue:chess-queued', {
+      position,
+      gameType: 'chess',
+      username: gameData.viewerUsername,
+      nickname: gameData.viewerNickname,
+      queueLength: this.queue.length
+    });
+    
+    // Try to process if not already processing
+    this.processNext();
+    
+    return { queued: true, position };
+  }
+
+  /**
    * Check if queue should accept new items (i.e., is something currently active?)
    * @returns {boolean} True if items should be queued
    */
@@ -122,20 +191,22 @@ class UnifiedQueueManager {
       queueLength: this.queue.length,
       currentItem: this.currentItem ? {
         type: this.currentItem.type,
-        username: this.currentItem.data.username,
+        username: this.currentItem.data.username || this.currentItem.data.viewerUsername,
         nickname: this.getDisplayName(this.currentItem.data),
         timestamp: this.currentItem.timestamp,
         spinId: this.currentItem.data.spinId,
-        batchId: this.currentItem.data.batchId
+        batchId: this.currentItem.data.batchId,
+        gameType: this.currentItem.data.gameType
       } : null,
       queue: this.queue.map((item, index) => ({
         position: index + 1,
         type: item.type,
-        username: item.data.username,
+        username: item.data.username || item.data.viewerUsername,
         nickname: this.getDisplayName(item.data),
         timestamp: item.timestamp,
         spinId: item.data.spinId,
-        batchId: item.data.batchId
+        batchId: item.data.batchId,
+        gameType: item.data.gameType
       }))
     };
   }
@@ -144,7 +215,7 @@ class UnifiedQueueManager {
    * Get display name for queued item.
    */
   getDisplayName(data) {
-    return data?.nickname || data?.username;
+    return data?.nickname || data?.viewerNickname || data?.username || data?.viewerUsername;
   }
 
   /**
@@ -178,6 +249,10 @@ class UnifiedQueueManager {
         await this.processPlinkoItem(item.data);
       } else if (item.type === 'wheel') {
         await this.processWheelItem(item.data);
+      } else if (item.type === 'connect4') {
+        await this.processConnect4Item(item.data);
+      } else if (item.type === 'chess') {
+        await this.processChessItem(item.data);
       }
     } catch (error) {
       this.logger.error(`❌ [UNIFIED QUEUE] Error processing ${item.type}: ${error.message}`);
@@ -233,6 +308,62 @@ class UnifiedQueueManager {
       // Note: completeProcessing() will be called by Wheel when spin is complete
     } catch (error) {
       this.logger.error(`❌ [UNIFIED QUEUE] Error starting Wheel spin: ${error.message}`);
+      this.completeProcessing();
+    }
+  }
+
+  /**
+   * Process Connect4 game item
+   */
+  async processConnect4Item(gameData) {
+    if (!this.gameEnginePlugin) {
+      this.logger.error('❌ [UNIFIED QUEUE] Game Engine plugin not set');
+      this.completeProcessing();
+      return;
+    }
+
+    try {
+      // Start Connect4 game without queuing (since we're already in the queue)
+      await this.gameEnginePlugin.startGameFromQueue(
+        'connect4',
+        gameData.viewerUsername,
+        gameData.viewerNickname,
+        gameData.triggerType,
+        gameData.triggerValue,
+        gameData.giftPictureUrl
+      );
+      
+      // Note: completeProcessing() will be called by game engine when game ends
+    } catch (error) {
+      this.logger.error(`❌ [UNIFIED QUEUE] Error starting Connect4 game: ${error.message}`);
+      this.completeProcessing();
+    }
+  }
+
+  /**
+   * Process Chess game item
+   */
+  async processChessItem(gameData) {
+    if (!this.gameEnginePlugin) {
+      this.logger.error('❌ [UNIFIED QUEUE] Game Engine plugin not set');
+      this.completeProcessing();
+      return;
+    }
+
+    try {
+      // Start Chess game without queuing (since we're already in the queue)
+      await this.gameEnginePlugin.startGameFromQueue(
+        'chess',
+        gameData.viewerUsername,
+        gameData.viewerNickname,
+        gameData.triggerType,
+        gameData.triggerValue,
+        gameData.giftPictureUrl
+      );
+      
+      // Note: completeProcessing() will be called by game engine when game ends
+    } catch (error) {
+      this.logger.error(`❌ [UNIFIED QUEUE] Error starting Chess game: ${error.message}`);
       this.completeProcessing();
     }
   }
