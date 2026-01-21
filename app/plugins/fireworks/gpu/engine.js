@@ -331,12 +331,23 @@ class Particle {
     }
     
     isDone() {
-        // Use canvas dimensions for accurate culling, not window dimensions
-        const engine = window.FireworksEngine;
-        const canvasHeight = engine?.height || window.innerHeight;
-        const margin = 200;
+        // Check lifespan first
+        if (this.lifespan <= 0) return true;
         
-        return this.lifespan <= 0 || this.y > canvasHeight + margin;
+        // Use canvas dimensions for accurate culling on ALL edges
+        // This is critical: particles can go off top/left/right edges, not just bottom!
+        const engine = window.FireworksEngine;
+        if (!engine) {
+            // Fallback: only check bottom edge if engine not available yet
+            return this.y > window.innerHeight + 200;
+        }
+        
+        // Check all four edges with margin - particles outside are done
+        // Small canvases (360p) have particles leave edges quickly, causing "zombie particles"
+        // that update but aren't rendered, killing performance
+        const margin = 200;
+        return this.x < -margin || this.x > engine.width + margin || 
+               this.y < -margin || this.y > engine.height + margin;
     }
     
     /**
