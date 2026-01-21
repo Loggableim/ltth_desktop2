@@ -640,6 +640,8 @@
         <div>FPS: <span id="fps">0</span></div>
         <div>Particles: <span id="particle-count">0</span></div>
         <div>Renderer: <span id="renderer-type">-</span></div>
+        <div>Backend: <span id="current-backend">Detecting...</span></div>
+        <div>Worker: <span id="worker-status">-</span></div>
     </div>
 
     <!-- Follower Thank You Animation -->
@@ -656,6 +658,38 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <!-- Load engine files in order: Canvas 2D (base), Manager (selector) -->
     <script src="/plugins/fireworks/gpu/engine.js"></script>
+    <script type="module">
+        // Import engine manager and initialize with backend selection
+        import FireworksEngineManager from '/plugins/fireworks/gpu/engine-manager.js';
+        
+        // Initialize engine manager with configuration
+        const engineManager = new FireworksEngineManager('fireworks-canvas', {
+            preferredBackend: localStorage.getItem('fireworks-backend') || 'auto',
+            useWorker: localStorage.getItem('fireworks-use-worker') !== 'false'
+        });
+        
+        // Initialize and start
+        (async () => {
+            try {
+                const success = await engineManager.init();
+                
+                if (success) {
+                    console.log('[Fireworks] Engine initialized successfully');
+                    console.log('[Fireworks] Backend:', engineManager.backendType);
+                    console.log('[Fireworks] Worker:', engineManager.worker ? 'enabled' : 'disabled');
+                    
+                    // Expose globally for compatibility
+                    window.FireworksEngine = engineManager.backend;
+                    window.FireworksEngineManager = engineManager;
+                } else {
+                    console.error('[Fireworks] Failed to initialize engine');
+                }
+            } catch (error) {
+                console.error('[Fireworks] Engine initialization error:', error);
+            }
+        })();
+    </script>
 </body>
 </html>

@@ -420,7 +420,10 @@ if (typeof window !== 'undefined') {
     window.FireworksEngineManager = FireworksEngineManager;
 }
 
-// Export for module systems
+// Export for ES6 modules
+export default FireworksEngineManager;
+
+// Export for CommonJS (Node.js)
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = FireworksEngineManager;
 }
