@@ -736,7 +736,7 @@
         }
 
         /**
-         * Render current rotator entry
+         * Render current rotator entry (supports gift and media types)
          */
         function renderRotatorEntry() {
             if (!rotatorContainer) return;
@@ -764,8 +764,19 @@
             const animation = escapeHtml(entry.animation || 'fade');
             const title = escapeHtml(entry.title || entry.giftName || 'Gift');
             const info = entry.info ? escapeHtml(entry.info) : '';
-            const image = entry.giftImage || '';
-            const altText = escapeHtml(entry.giftName || 'Gift');
+            
+            // Determine entry type and media source
+            const entryType = entry.type || 'gift';
+            let mediaSource = '';
+            let altText = '';
+            
+            if (entryType === 'media') {
+                mediaSource = entry.mediaUrl || '';
+                altText = escapeHtml(entry.title || 'Media');
+            } else {
+                mediaSource = entry.giftImage || '';
+                altText = escapeHtml(entry.giftName || 'Gift');
+            }
             
             // Validate CSS values to prevent injection
             const textColor = validateCssColor(entry.textColor, '#ffffff');
@@ -784,18 +795,37 @@
             const thumbDiv = document.createElement('div');
             thumbDiv.className = 'rotator-gift-thumb';
             
-            if (image) {
-                const img = document.createElement('img');
-                img.src = image;
-                img.alt = altText;
-                img.onerror = function() {
-                    this.parentElement.textContent = '🎁';
-                };
-                thumbDiv.appendChild(img);
+            if (mediaSource) {
+                // For media entries, check if it's video or image
+                if (entryType === 'media' && entry.mediaKind === 'video') {
+                    const video = document.createElement('video');
+                    video.src = mediaSource;
+                    video.autoplay = true;
+                    video.loop = true;
+                    video.muted = true;
+                    video.playsInline = true;
+                    video.style.width = '72px';
+                    video.style.height = '72px';
+                    video.style.objectFit = 'cover';
+                    video.style.borderRadius = '10px';
+                    video.onerror = function() {
+                        this.parentElement.textContent = '🎬';
+                    };
+                    thumbDiv.appendChild(video);
+                } else {
+                    // Image (for both gifts and media)
+                    const img = document.createElement('img');
+                    img.src = mediaSource;
+                    img.alt = altText;
+                    img.onerror = function() {
+                        this.parentElement.textContent = entryType === 'media' ? '🖼️' : '🎁';
+                    };
+                    thumbDiv.appendChild(img);
+                }
             } else {
                 const fallbackDiv = document.createElement('div');
                 fallbackDiv.style.cssText = 'width:72px;height:72px;border-radius:10px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:28px;';
-                fallbackDiv.textContent = '🎁';
+                fallbackDiv.textContent = entryType === 'media' ? '📁' : '🎁';
                 thumbDiv.appendChild(fallbackDiv);
             }
 
