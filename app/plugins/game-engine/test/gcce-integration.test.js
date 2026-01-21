@@ -87,6 +87,11 @@ describe('Game Engine GCCE Integration', () => {
 
   describe('GCCE Command Registration', () => {
     test('should register c4 command with GCCE', () => {
+      // Setup mock database
+      plugin.db = {
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4)
+      };
+      
       plugin.registerGCCECommands();
       
       const c4Command = registeredCommands.find(cmd => cmd.name === 'c4');
@@ -97,6 +102,11 @@ describe('Game Engine GCCE Integration', () => {
     });
 
     test('should register c4start command with GCCE', () => {
+      // Setup mock database
+      plugin.db = {
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4)
+      };
+      
       plugin.registerGCCECommands();
       
       const c4StartCommand = registeredCommands.find(cmd => cmd.name === 'c4start');
@@ -310,6 +320,56 @@ describe('Game Engine GCCE Integration', () => {
       await plugin.destroy();
       
       expect(gcceInstance.unregisterCommandsForPlugin).toHaveBeenCalledWith('game-engine');
+    });
+  });
+
+  describe('Customizable Chat Command', () => {
+    test('should use custom chat command from config', () => {
+      // Setup mock database with custom chat command
+      plugin.db = {
+        getGameConfig: jest.fn(() => ({
+          ...plugin.defaultConfigs.connect4,
+          chatCommand: 'start4'
+        }))
+      };
+      
+      plugin.registerGCCECommands();
+      
+      // Check that custom command is registered instead of default
+      const customCommand = registeredCommands.find(cmd => cmd.name === 'start4');
+      expect(customCommand).toBeDefined();
+      expect(customCommand.description).toContain('Start');
+      expect(customCommand.syntax).toBe('/start4');
+    });
+
+    test('should default to c4start when no custom command configured', () => {
+      // Setup mock database without custom chat command
+      plugin.db = {
+        getGameConfig: jest.fn(() => null)
+      };
+      
+      plugin.registerGCCECommands();
+      
+      // Check that default command is used
+      const defaultCommand = registeredCommands.find(cmd => cmd.name === 'c4start');
+      expect(defaultCommand).toBeDefined();
+      expect(defaultCommand.syntax).toBe('/c4start');
+    });
+
+    test('should fallback to c4start if chatCommand is empty', () => {
+      // Setup mock database with empty chat command
+      plugin.db = {
+        getGameConfig: jest.fn(() => ({
+          ...plugin.defaultConfigs.connect4,
+          chatCommand: ''
+        }))
+      };
+      
+      plugin.registerGCCECommands();
+      
+      // Check that default command is used
+      const defaultCommand = registeredCommands.find(cmd => cmd.name === 'c4start');
+      expect(defaultCommand).toBeDefined();
     });
   });
 });
