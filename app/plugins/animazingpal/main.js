@@ -2396,7 +2396,7 @@ class AnimazingPalPlugin {
     }
 
     // Handle response based on standalone mode
-    if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.likes) {
+    if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.like) {
       if (this.config.brain.standaloneMode) {
         // Standalone mode: use template-based response
         const message = this.buildStandaloneResponse('like', placeholders);
@@ -2501,7 +2501,7 @@ class AnimazingPalPlugin {
     }
 
     // Handle response based on standalone mode
-    if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.subscribes) {
+    if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.subscribe) {
       if (this.config.brain.standaloneMode) {
         // Standalone mode: use template-based response
         const message = this.buildStandaloneResponse('subscribe', placeholders);
