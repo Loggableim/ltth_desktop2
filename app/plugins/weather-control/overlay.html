@@ -480,8 +480,10 @@
             
             const { action, intensity = 0.5, duration = 10000, username, permanent = false } = data;
 
-            // Validate effect
-            const validEffects = ['rain', 'snow', 'storm', 'fog', 'thunder', 'sunbeam', 'glitchclouds'];
+            // Get valid effects from renderer
+            const validEffects = renderer ? renderer.getSupportedEffects() : 
+                ['rain', 'snow', 'storm', 'fog', 'thunder', 'sunbeam', 'glitchclouds'];
+                
             if (!validEffects.includes(action)) {
                 log(`Invalid effect: ${action}`);
                 return;

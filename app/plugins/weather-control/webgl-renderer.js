@@ -848,7 +848,7 @@ class WebGL2WeatherRenderer {
     
     this.textures.noise = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.textures.noise);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, size, size, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, data);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, size, size, 0, gl.RED, gl.UNSIGNED_BYTE, data);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
@@ -1629,6 +1629,13 @@ class WebGL2WeatherRenderer {
   }
   
   /**
+   * Get supported effects list
+   */
+  getSupportedEffects() {
+    return ['rain', 'snow', 'storm', 'fog', 'thunder', 'sunbeam', 'glitchclouds'];
+  }
+  
+  /**
    * Start an effect
    */
   startEffect(effect, options = {}) {
@@ -1805,12 +1812,12 @@ class WebGL2WeatherRenderer {
       
       // Delete buffers
       Object.values(this.buffers).forEach(buffer => {
-        if (buffer && buffer.deleteBuffer) {
+        if (buffer && typeof buffer === 'object') {
+          // Handle nested buffer objects (like rainInstances)
+          if (buffer.position) gl.deleteBuffer(buffer.position);
+          if (buffer.data) gl.deleteBuffer(buffer.data);
+        } else if (buffer) {
           gl.deleteBuffer(buffer);
-        } else if (typeof buffer === 'object') {
-          Object.values(buffer).forEach(b => {
-            if (b) gl.deleteBuffer(b);
-          });
         }
       });
       
