@@ -24,6 +24,11 @@ class TTSPlugin {
     // Error message constant for missing engines
     static NO_ENGINES_ERROR = 'No TTS engines available - please configure at least one engine (TikTok, Google, Speechify, ElevenLabs, OpenAI, Fish.audio, or SiliconFlow)';
 
+    // Per-user gain control constants
+    static MIN_GAIN = 0.0;    // Minimum gain multiplier (0%)
+    static MAX_GAIN = 2.5;    // Maximum gain multiplier (250%)
+    static DEFAULT_GAIN = 1.0; // Default gain multiplier (100%)
+
     // Config keys that should not be updated via regular config update mechanism
     // These keys have dedicated handling (e.g., stored in global settings, need engine reinitialization)
     static CONFIG_KEYS_EXCLUDED_FROM_UPDATE = new Set([
@@ -1514,7 +1519,7 @@ class TTSPlugin {
 
         this.api.registerRoute('POST', '/api/tts/users/:userId/voice', (req, res) => {
             const { userId } = req.params;
-            const { username, voiceId, engine, emotion } = req.body;
+            const { username, voiceId, engine, emotion, gain } = req.body;
 
             if (!voiceId || !engine) {
                 return res.status(400).json({
@@ -1528,7 +1533,8 @@ class TTSPlugin {
                 username || userId,
                 voiceId,
                 engine,
-                emotion
+                emotion,
+                gain
             );
             res.json({ success: result });
         });
@@ -1537,6 +1543,34 @@ class TTSPlugin {
             const { userId } = req.params;
             const result = this.permissionManager.removeVoiceAssignment(userId);
             res.json({ success: result });
+        });
+
+        // Update user gain
+        this.api.registerRoute('POST', '/api/tts/users/:userId/gain', (req, res) => {
+            const { userId } = req.params;
+            const { gain } = req.body;
+
+            if (gain === undefined || gain === null) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Missing required field: gain'
+                });
+            }
+
+            // Clamp gain to valid range
+            const clampedGain = Math.max(TTSPlugin.MIN_GAIN, Math.min(TTSPlugin.MAX_GAIN, parseFloat(gain) || TTSPlugin.DEFAULT_GAIN));
+
+            const result = this.permissionManager.setVolumeGain(userId, clampedGain);
+            
+            if (result) {
+                // Emit socket event for live gain updates
+                this.api.emit('tts:user:gain_updated', {
+                    userId,
+                    gain: clampedGain
+                });
+            }
+
+            res.json({ success: result, gain: clampedGain });
         });
 
         this.api.registerRoute('DELETE', '/api/tts/users/:userId', (req, res) => {

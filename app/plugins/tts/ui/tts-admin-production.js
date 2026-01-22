@@ -2,6 +2,17 @@
 // CSP-compliant, no inline handlers, robust error handling
 
 // ============================================================================
+// CONSTANTS
+// ============================================================================
+// Per-user gain control constants (must match backend)
+const MIN_GAIN = 0.0;           // Minimum gain multiplier (0%)
+const MAX_GAIN = 2.5;           // Maximum gain multiplier (250%)
+const DEFAULT_GAIN = 1.0;       // Default gain multiplier (100%)
+const MIN_GAIN_PERCENT = 0;     // Minimum gain percentage for UI
+const MAX_GAIN_PERCENT = 250;   // Maximum gain percentage for UI
+const DEFAULT_GAIN_PERCENT = 100; // Default gain percentage for UI
+
+// ============================================================================
 // GLOBAL STATE
 // ============================================================================
 let socket = null;
@@ -1024,28 +1035,52 @@ function renderUsers() {
             ? `<button class="user-action-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm" data-action="blacklist" data-user-id="${user.user_id}" data-username="${user.username}">Blacklist</button>`
             : `<button class="user-action-btn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm" data-action="unblacklist" data-user-id="${user.user_id}" data-username="${user.username}">Unblacklist</button>`;
 
+        const volumeGain = user.volume_gain ?? 1.0;
+        const volumeGainPercent = Math.round(volumeGain * 100);
+
         return `
-            <div class="bg-gray-700 rounded p-4 flex justify-between items-center fade-in">
-                <div class="flex-1">
-                    <div class="font-bold">${escapeHtml(user.username)}</div>
-                    <div class="text-sm text-gray-400">
-                        User ID: ${escapeHtml(user.user_id)}
+            <div class="bg-gray-700 rounded p-4 fade-in">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                        <div class="font-bold">${escapeHtml(user.username)}</div>
+                        <div class="text-sm text-gray-400">
+                            User ID: ${escapeHtml(user.user_id)}
+                        </div>
+                        <div class="text-sm text-gray-300 mt-1">
+                            ${user.assigned_voice_id ? `🎤 Voice: <strong>${escapeHtml(user.assigned_voice_id)}</strong> (${escapeHtml(user.assigned_engine || 'unknown')})` : '🔇 No voice assigned'}
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">
+                            ${user.allow_tts ? '<span class="text-green-400">✓ Allowed</span>' : ''}
+                            ${user.is_blacklisted ? '<span class="text-red-400">⛔ Blacklisted</span>' : ''}
+                        </div>
                     </div>
-                    <div class="text-sm text-gray-300 mt-1">
-                        ${user.assigned_voice_id ? `🎤 Voice: <strong>${escapeHtml(user.assigned_voice_id)}</strong> (${escapeHtml(user.assigned_engine || 'unknown')})` : '🔇 No voice assigned'}
-                    </div>
-                    <div class="text-xs text-gray-500 mt-1">
-                        ${user.allow_tts ? '<span class="text-green-400">✓ Allowed</span>' : ''}
-                        ${user.is_blacklisted ? '<span class="text-red-400">⛔ Blacklisted</span>' : ''}
+                    <div class="flex space-x-2">
+                        ${allowButton}
+                        ${blacklistButton}
+                        <button class="user-action-btn bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm" data-action="assign-voice" data-user-id="${user.user_id}" data-username="${user.username}">
+                            ${user.assigned_voice_id ? 'Change' : 'Assign'} Voice
+                        </button>
                     </div>
                 </div>
-                <div class="flex space-x-2">
-                    ${allowButton}
-                    ${blacklistButton}
-                    <button class="user-action-btn bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm" data-action="assign-voice" data-user-id="${user.user_id}" data-username="${user.username}">
-                        ${user.assigned_voice_id ? 'Change' : 'Assign'} Voice
-                    </button>
-                </div>
+                ${user.assigned_voice_id ? `
+                    <div class="mt-3 pt-3 border-t border-gray-600">
+                        <label class="block text-xs font-medium mb-2 text-gray-400">🔊 Volume Gain: <span class="user-gain-display text-white" data-user-id="${user.user_id}">${volumeGainPercent}%</span></label>
+                        <div class="flex items-center gap-2">
+                            <input type="range" 
+                                class="user-gain-slider flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" 
+                                min="0" max="250" step="5" value="${volumeGainPercent}"
+                                data-user-id="${user.user_id}">
+                            <input type="number" 
+                                class="user-gain-input w-16 bg-gray-600 border border-gray-500 rounded px-2 py-1 text-xs text-center" 
+                                min="0" max="250" step="1" value="${volumeGainPercent}"
+                                data-user-id="${user.user_id}">
+                            <span class="text-xs text-gray-400">%</span>
+                            <button class="user-gain-reset bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-xs" data-user-id="${user.user_id}">
+                                Reset
+                            </button>
+                        </div>
+                    </div>
+                ` : ''}
             </div>
         `;
     }).join('');
@@ -1053,6 +1088,19 @@ function renderUsers() {
     // Attach event listeners to user action buttons
     list.querySelectorAll('.user-action-btn').forEach(btn => {
         btn.addEventListener('click', handleUserAction);
+    });
+
+    // Attach event listeners to gain controls
+    list.querySelectorAll('.user-gain-slider').forEach(slider => {
+        slider.addEventListener('input', handleUserGainChange);
+    });
+
+    list.querySelectorAll('.user-gain-input').forEach(input => {
+        input.addEventListener('input', handleUserGainInputChange);
+    });
+
+    list.querySelectorAll('.user-gain-reset').forEach(btn => {
+        btn.addEventListener('click', handleUserGainReset);
     });
 }
 
@@ -1155,22 +1203,106 @@ async function unblacklistUser(userId) {
     }
 }
 
+// User Gain Control Handlers
+async function handleUserGainChange(event) {
+    const slider = event.target;
+    const userId = slider.dataset.userId;
+    const value = parseInt(slider.value, 10);
+    
+    // Update the corresponding input and display
+    const input = document.querySelector(`.user-gain-input[data-user-id="${userId}"]`);
+    const display = document.querySelector(`.user-gain-display[data-user-id="${userId}"]`);
+    
+    if (input) input.value = value;
+    if (display) display.textContent = value + '%';
+    
+    // Send update to server
+    await updateUserGain(userId, value / 100.0);
+}
+
+async function handleUserGainInputChange(event) {
+    const input = event.target;
+    const userId = input.dataset.userId;
+    let value = parseInt(input.value, 10);
+    
+    if (isNaN(value)) value = DEFAULT_GAIN_PERCENT;
+    value = Math.max(MIN_GAIN_PERCENT, Math.min(MAX_GAIN_PERCENT, value));
+    
+    input.value = value;
+    
+    // Update the corresponding slider and display
+    const slider = document.querySelector(`.user-gain-slider[data-user-id="${userId}"]`);
+    const display = document.querySelector(`.user-gain-display[data-user-id="${userId}"]`);
+    
+    if (slider) slider.value = value;
+    if (display) display.textContent = value + '%';
+    
+    // Send update to server
+    await updateUserGain(userId, value / 100.0);
+}
+
+async function handleUserGainReset(event) {
+    const btn = event.target;
+    const userId = btn.dataset.userId;
+    
+    // Reset to default (100%)
+    const slider = document.querySelector(`.user-gain-slider[data-user-id="${userId}"]`);
+    const input = document.querySelector(`.user-gain-input[data-user-id="${userId}"]`);
+    const display = document.querySelector(`.user-gain-display[data-user-id="${userId}"]`);
+    
+    if (slider) slider.value = DEFAULT_GAIN_PERCENT;
+    if (input) input.value = DEFAULT_GAIN_PERCENT;
+    if (display) display.textContent = DEFAULT_GAIN_PERCENT + '%';
+    
+    // Send update to server
+    await updateUserGain(userId, DEFAULT_GAIN);
+}
+
+async function updateUserGain(userId, gain) {
+    try {
+        const data = await postJSON(`/api/tts/users/${userId}/gain`, { gain });
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to update gain');
+        }
+        
+        // Update local user data
+        const user = currentUsers.find(u => u.user_id === userId);
+        if (user) {
+            user.volume_gain = data.gain;
+        }
+        
+        console.log(`[TTS] Updated gain for user ${userId} to ${data.gain}`);
+        
+    } catch (error) {
+        console.error('Failed to update user gain:', error);
+        showNotification(`Failed to update gain: ${error.message}`, 'error');
+    }
+}
+
 // Voice Assignment Modal State
 let modalState = {
     userId: null,
     username: null,
     selectedVoiceId: null,
-    selectedEngine: 'tiktok'
+    selectedEngine: 'tiktok',
+    selectedEmotion: null,
+    volumeGain: DEFAULT_GAIN
 };
 
 function assignVoiceDialog(userId, username) {
     console.log('[TTS] Opening voice assignment dialog for:', { userId, username });
+
+    // Get current user to retrieve their existing gain value
+    const user = currentUsers.find(u => u.user_id === userId);
+    const currentGain = user?.volume_gain ?? DEFAULT_GAIN;
 
     modalState.userId = userId;
     modalState.username = username;
     modalState.selectedVoiceId = null;
     modalState.selectedEngine = 'tiktok';
     modalState.selectedEmotion = null;
+    modalState.volumeGain = currentGain;
 
     const modal = document.getElementById('voiceAssignmentModal');
     const usernameEl = document.getElementById('modalUsername');
@@ -1178,6 +1310,9 @@ function assignVoiceDialog(userId, username) {
     const emotionSelect = document.getElementById('modalEmotion');
     const emotionContainer = document.getElementById('modalEmotionContainer');
     const voiceSearch = document.getElementById('modalVoiceSearch');
+    const gainSlider = document.getElementById('modalVolumeGainSlider');
+    const gainInput = document.getElementById('modalVolumeGainInput');
+    const gainReset = document.getElementById('modalVolumeGainReset');
 
     console.log('[TTS] Modal elements found:', {
         modal: !!modal,
@@ -1185,7 +1320,9 @@ function assignVoiceDialog(userId, username) {
         engineSelect: !!engineSelect,
         emotionSelect: !!emotionSelect,
         emotionContainer: !!emotionContainer,
-        voiceSearch: !!voiceSearch
+        voiceSearch: !!voiceSearch,
+        gainSlider: !!gainSlider,
+        gainInput: !!gainInput
     });
 
     if (!modal) {
@@ -1221,6 +1358,36 @@ function assignVoiceDialog(userId, username) {
         voiceSearch.oninput = renderModalVoiceList;
     }
 
+    // Setup gain controls
+    if (gainSlider && gainInput) {
+        const gainPercent = Math.round(currentGain * 100);
+        gainSlider.value = gainPercent;
+        gainInput.value = gainPercent;
+
+        gainSlider.oninput = () => {
+            const value = parseInt(gainSlider.value, 10);
+            gainInput.value = value;
+            modalState.volumeGain = value / 100.0;
+        };
+
+        gainInput.oninput = () => {
+            let value = parseInt(gainInput.value, 10);
+            if (isNaN(value)) value = DEFAULT_GAIN_PERCENT;
+            value = Math.max(MIN_GAIN_PERCENT, Math.min(MAX_GAIN_PERCENT, value));
+            gainInput.value = value;
+            gainSlider.value = value;
+            modalState.volumeGain = value / 100.0;
+        };
+    }
+
+    if (gainReset) {
+        gainReset.onclick = () => {
+            gainSlider.value = DEFAULT_GAIN_PERCENT;
+            gainInput.value = DEFAULT_GAIN_PERCENT;
+            modalState.volumeGain = DEFAULT_GAIN;
+        };
+    }
+
     // Initially hide emotion selector (will show if speechify is selected)
     if (emotionContainer) {
         emotionContainer.style.display = 'none';
@@ -1239,8 +1406,8 @@ function assignVoiceDialog(userId, username) {
                 showNotification('Please select a voice', 'error');
                 return;
             }
-            console.log('[TTS] Assigning voice:', modalState.selectedVoiceId, 'with emotion:', modalState.selectedEmotion, 'to user:', username);
-            await assignVoice(modalState.userId, modalState.username, modalState.selectedVoiceId, modalState.selectedEngine, modalState.selectedEmotion);
+            console.log('[TTS] Assigning voice:', modalState.selectedVoiceId, 'with emotion:', modalState.selectedEmotion, 'gain:', modalState.volumeGain, 'to user:', username);
+            await assignVoice(modalState.userId, modalState.username, modalState.selectedVoiceId, modalState.selectedEngine, modalState.selectedEmotion, modalState.volumeGain);
             closeVoiceAssignmentModal();
         };
     }
@@ -1251,8 +1418,7 @@ function assignVoiceDialog(userId, username) {
 function closeVoiceAssignmentModal() {
     const modal = document.getElementById('voiceAssignmentModal');
     if (modal) modal.classList.add('hidden');
-    // TikTok TTS temporarily disabled in UI
-    modalState = { userId: null, username: null, selectedVoiceId: null, selectedEngine: 'tiktok' };
+    modalState = { userId: null, username: null, selectedVoiceId: null, selectedEngine: 'tiktok', selectedEmotion: null, volumeGain: DEFAULT_GAIN };
 }
 
 function renderModalVoiceList() {
@@ -1315,13 +1481,14 @@ function selectModalVoice(voiceId) {
     renderModalVoiceList();
 }
 
-async function assignVoice(userId, username, voiceId, engine, emotion = null) {
+async function assignVoice(userId, username, voiceId, engine, emotion = null, gain = null) {
     try {
         const data = await postJSON(`/api/tts/users/${userId}/voice`, {
             username,
             voiceId,
             engine,
-            emotion
+            emotion,
+            gain
         });
 
         if (!data.success) {

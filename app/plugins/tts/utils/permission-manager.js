@@ -3,6 +3,11 @@
  * Manages TTS permissions with team-level gates and manual whitelisting
  */
 class PermissionManager {
+    // Gain control constants (must match TTSPlugin constants)
+    static MIN_GAIN = 0.0;    // Minimum gain multiplier (0%)
+    static MAX_GAIN = 2.5;    // Maximum gain multiplier (250%)
+    static DEFAULT_GAIN = 1.0; // Default gain multiplier (100%)
+
     constructor(db, logger) {
         this.db = db;
         this.logger = logger;
@@ -301,28 +306,56 @@ class PermissionManager {
      * @param {string} voiceId - Voice ID
      * @param {string} engine - Engine name
      * @param {string} emotion - Optional emotion setting
+     * @param {number} gain - Optional volume gain (0.0-2.5, default 1.0)
      */
-    assignVoice(userId, username, voiceId, engine, emotion = null) {
+    assignVoice(userId, username, voiceId, engine, emotion = null, gain = null) {
         try {
             const now = Math.floor(Date.now() / 1000);
+            
+            // Clamp gain to valid range if provided
+            const clampedGain = gain !== null && gain !== undefined 
+                ? Math.max(PermissionManager.MIN_GAIN, Math.min(PermissionManager.MAX_GAIN, parseFloat(gain) || PermissionManager.DEFAULT_GAIN))
+                : null;
 
-            const stmt = this.db.db.prepare(`
-                INSERT INTO tts_user_permissions (user_id, username, assigned_voice_id, assigned_engine, voice_emotion, allow_tts, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-                ON CONFLICT(user_id) DO UPDATE SET
-                    assigned_voice_id = excluded.assigned_voice_id,
-                    assigned_engine = excluded.assigned_engine,
-                    voice_emotion = excluded.voice_emotion,
-                    allow_tts = 1,
-                    is_blacklisted = 0,
-                    updated_at = excluded.updated_at
-            `);
+            let stmt, params;
+            
+            if (clampedGain !== null) {
+                // Update with gain
+                stmt = this.db.db.prepare(`
+                    INSERT INTO tts_user_permissions (user_id, username, assigned_voice_id, assigned_engine, voice_emotion, volume_gain, allow_tts, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        assigned_voice_id = excluded.assigned_voice_id,
+                        assigned_engine = excluded.assigned_engine,
+                        voice_emotion = excluded.voice_emotion,
+                        volume_gain = excluded.volume_gain,
+                        allow_tts = 1,
+                        is_blacklisted = 0,
+                        updated_at = excluded.updated_at
+                `);
+                params = [userId, username, voiceId, engine, emotion, clampedGain, now, now];
+            } else {
+                // Update without changing gain
+                stmt = this.db.db.prepare(`
+                    INSERT INTO tts_user_permissions (user_id, username, assigned_voice_id, assigned_engine, voice_emotion, allow_tts, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        assigned_voice_id = excluded.assigned_voice_id,
+                        assigned_engine = excluded.assigned_engine,
+                        voice_emotion = excluded.voice_emotion,
+                        allow_tts = 1,
+                        is_blacklisted = 0,
+                        updated_at = excluded.updated_at
+                `);
+                params = [userId, username, voiceId, engine, emotion, now, now];
+            }
 
-            stmt.run(userId, username, voiceId, engine, emotion, now, now);
+            stmt.run(...params);
             this.clearCache();
 
             const emotionInfo = emotion ? ` with emotion: ${emotion}` : '';
-            this.logger.info(`Voice assigned to ${username}: ${voiceId} (${engine})${emotionInfo}`);
+            const gainInfo = clampedGain !== null ? ` gain: ${clampedGain}` : '';
+            this.logger.info(`Voice assigned to ${username}: ${voiceId} (${engine})${emotionInfo}${gainInfo}`);
             return true;
 
         } catch (error) {
