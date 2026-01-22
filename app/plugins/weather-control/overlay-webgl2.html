@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Control Overlay - WebGL2</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            background: transparent !important;
+            background-color: transparent !important;
+        }
+
+        body {
+            background: transparent !important;
+            background-color: transparent !important;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #weather-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+            background: transparent !important;
+            background-color: transparent !important;
+        }
+
+        /* Shadow DOM isolation for canvas */
+        #canvas-host {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            background: transparent !important;
+            background-color: transparent !important;
+        }
+
+        /* Debug overlay */
+        #debug-panel {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            display: none;
+            z-index: 10000;
+            max-width: 400px;
+            border: 2px solid rgba(0, 255, 0, 0.4);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+
+        #debug-panel.active {
+            display: block;
+        }
+
+        #debug-panel .header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(0, 255, 0, 0.3);
+            display: flex;
+            align-items: center;
+        }
+
+        #debug-panel .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        #debug-panel .status-indicator.active {
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+        }
+
+        #debug-panel .status-indicator.error {
+            background: #ff0000;
+            box-shadow: 0 0 10px #ff0000;
+        }
+
+        #debug-panel .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            padding: 2px 0;
+        }
+
+        #debug-panel .metric-label {
+            color: #88ff88;
+        }
+
+        #debug-panel .metric-value {
+            color: #ffffff;
+            font-weight: bold;
+        }
+
+        #debug-panel .metric-value.good {
+            color: #00ff00;
+        }
+
+        #debug-panel .metric-value.warning {
+            color: #ffff00;
+        }
+
+        #debug-panel .metric-value.error {
+            color: #ff0000;
+        }
+
+        #debug-panel .section {
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0, 255, 0, 0.2);
+        }
+
+        #debug-panel .section-title {
+            font-weight: bold;
+            color: #88ff88;
+            margin-bottom: 6px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Lightning flash overlay */
+        #lightning-flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9998;
+            will-change: opacity;
+        }
+
+        /* Connection status */
+        #connection-status {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 11px;
+            display: none;
+            z-index: 10000;
+        }
+
+        #connection-status.show {
+            display: block;
+        }
+
+        #connection-status.connected {
+            background: rgba(0, 128, 0, 0.9);
+        }
+
+        #connection-status.disconnected {
+            background: rgba(255, 0, 0, 0.9);
+        }
+
+        #connection-status.reconnecting {
+            background: rgba(255, 165, 0, 0.9);
+        }
+    </style>
+</head>
+<body>
+    <div id="weather-container">
+        <div id="canvas-host"></div>
+    </div>
+    <div id="lightning-flash"></div>
+    <div id="debug-panel"></div>
+    <div id="connection-status"></div>
+
+    <!-- Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <!-- WebGL2 Renderer -->
+    <script src="webgl-renderer.js"></script>
+
+    <!-- Main Application -->
+    <script>
+        /**
+         * Weather Control Overlay - WebGL2 Edition
+         * 
+         * Professional weather effects with guaranteed transparency:
+         * - WebGL2 renderer with premultiplied alpha
+         * - Shadow DOM isolation for canvas
+         * - Dual Kawase bloom post-processing
+         * - Instanced particle rendering
+         * - Debug panel with transparency verification
+         */
+
+        // Configuration
+        const config = {
+            debug: new URLSearchParams(window.location.search).get('debug') === 'true',
+            maxDPR: 1.5, // Clamp DPR for performance
+            showConnectionStatus: true,
+            fallbackChromaKey: false,
+            bloomStrength: {
+                rain: 0.3,
+                snow: 0.4,
+                storm: 1.5,
+                fog: 0.2,
+                sunbeam: 0.8,
+                lightning: 2.0
+            },
+            reconnect: {
+                delay: 1000,
+                maxDelay: 30000,
+                multiplier: 1.5
+            }
+        };
+
+        // DOM elements
+        const canvasHost = document.getElementById('canvas-host');
+        const debugPanel = document.getElementById('debug-panel');
+        const lightningFlash = document.getElementById('lightning-flash');
+        const connectionStatus = document.getElementById('connection-status');
+
+        // Create canvas with Shadow DOM isolation
+        let canvas, shadowRoot;
+        
+        function createCanvas() {
+            // Use Shadow DOM to isolate canvas from external CSS
+            if (canvasHost.attachShadow) {
+                shadowRoot = canvasHost.attachShadow({ mode: 'open' });
+                
+                // Add transparent background style to shadow root
+                const style = document.createElement('style');
+                style.textContent = `
+                    :host {
+                        display: block;
+                        width: 100%;
+                        height: 100%;
+                        background: transparent !important;
+                    }
+                    canvas {
+                        display: block;
+                        width: 100%;
+                        height: 100%;
+                        background: transparent !important;
+                        background-color: transparent !important;
+                    }
+                `;
+                shadowRoot.appendChild(style);
+                
+                // Create canvas in shadow root
+                canvas = document.createElement('canvas');
+                canvas.id = 'weather-canvas';
+                shadowRoot.appendChild(canvas);
+                
+                log('✅ Canvas created with Shadow DOM isolation');
+            } else {
+                // Fallback: create canvas directly
+                canvas = document.createElement('canvas');
+                canvas.id = 'weather-canvas';
+                canvasHost.appendChild(canvas);
+                
+                log('⚠️ Shadow DOM not supported, using direct canvas');
+            }
+            
+            return canvas;
+        }
+
+        // Initialize canvas
+        const weatherCanvas = createCanvas();
+
+        // Initialize WebGL2 renderer
+        let renderer = null;
+        
+        try {
+            renderer = new WebGL2WeatherRenderer(weatherCanvas, {
+                debug: config.debug,
+                maxDPR: config.maxDPR,
+                fallbackChromaKey: config.fallbackChromaKey
+            });
+            
+            log('✅ WebGL2 renderer initialized');
+            
+            // Start animation loop
+            renderer.start();
+            
+        } catch (error) {
+            console.error('❌ Failed to initialize WebGL2 renderer:', error);
+            log(`❌ Renderer initialization failed: ${error.message}`);
+            
+            // Show error in debug panel
+            updateDebugPanel({
+                error: true,
+                message: 'WebGL2 initialization failed',
+                details: error.message
+            });
+        }
+
+        // State management
+        const state = {
+            socket: null,
+            connected: false,
+            reconnectAttempts: 0,
+            activeEffects: new Map(), // effect -> { duration, startTime, permanent, options }
+            totalEventsReceived: 0
+        };
+
+        // Logging with timestamp
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`[${timestamp}] [Weather WebGL2] ${message}`);
+        }
+
+        // Update debug panel
+        function updateDebugPanel(overrides = {}) {
+            if (!config.debug && !overrides.error) {
+                debugPanel.classList.remove('active');
+                return;
+            }
+
+            debugPanel.classList.add('active');
+
+            const debugInfo = renderer ? renderer.getDebugInfo() : {};
+            const statusClass = overrides.error ? 'error' : (state.connected ? 'active' : 'error');
+            
+            // Read initial pixel for transparency check
+            let initialPixel = 'N/A';
+            if (renderer && renderer.gl) {
+                try {
+                    const pixels = new Uint8Array(4);
+                    renderer.gl.readPixels(0, 0, 1, 1, renderer.gl.RGBA, renderer.gl.UNSIGNED_BYTE, pixels);
+                    initialPixel = `[${pixels[0]}, ${pixels[1]}, ${pixels[2]}, ${pixels[3]}]`;
+                } catch (e) {
+                    initialPixel = 'Read error';
+                }
+            }
+
+            const fpsClass = debugInfo.fps >= 55 ? 'good' : (debugInfo.fps >= 30 ? 'warning' : 'error');
+            const alphaStatus = debugInfo.alpha ? '✅ Enabled' : '❌ Disabled';
+            const premultStatus = debugInfo.premultipliedAlpha ? '✅ Yes' : '❌ No';
+
+            debugPanel.innerHTML = `
+                <div class="header">
+                    <div class="status-indicator ${statusClass}"></div>
+                    <span>Weather WebGL2 Debug Panel</span>
+                </div>
+                
+                ${overrides.error ? `
+                    <div class="metric">
+                        <span class="metric-label">Error:</span>
+                        <span class="metric-value error">${overrides.message}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Details:</span>
+                        <span class="metric-value">${overrides.details || 'N/A'}</span>
+                    </div>
+                ` : `
+                    <div class="metric">
+                        <span class="metric-label">Connection:</span>
+                        <span class="metric-value ${state.connected ? 'good' : 'error'}">
+                            ${state.connected ? 'Connected' : 'Disconnected'}
+                        </span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Events:</span>
+                        <span class="metric-value">${state.totalEventsReceived}</span>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Performance</div>
+                        <div class="metric">
+                            <span class="metric-label">FPS:</span>
+                            <span class="metric-value ${fpsClass}">${debugInfo.fps || 0}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Frame Time:</span>
+                            <span class="metric-value">${debugInfo.frameTime || '0.00'} ms</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Draw Calls:</span>
+                            <span class="metric-value">${debugInfo.drawCalls || 0}</span>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Particles</div>
+                        <div class="metric">
+                            <span class="metric-label">Total:</span>
+                            <span class="metric-value">${debugInfo.particleCount || 0}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Effects:</span>
+                            <span class="metric-value">${(debugInfo.activeEffects || []).join(', ') || 'None'}</span>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Transparency</div>
+                        <div class="metric">
+                            <span class="metric-label">Alpha:</span>
+                            <span class="metric-value ${debugInfo.alpha ? 'good' : 'error'}">${alphaStatus}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Premultiplied:</span>
+                            <span class="metric-value ${debugInfo.premultipliedAlpha ? 'good' : 'error'}">${premultStatus}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Initial Pixel:</span>
+                            <span class="metric-value ${initialPixel === '[0, 0, 0, 0]' ? 'good' : 'warning'}">${initialPixel}</span>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Renderer</div>
+                        <div class="metric">
+                            <span class="metric-label">Version:</span>
+                            <span class="metric-value">${debugInfo.webglVersion || 'N/A'}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Canvas Size:</span>
+                            <span class="metric-value">${debugInfo.canvasSize || 'N/A'}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">DPR:</span>
+                            <span class="metric-value">${debugInfo.dpr || 'N/A'}</span>
+                        </div>
+                    </div>
+                `}
+            `;
+        }
+
+        // Update connection status indicator
+        function updateConnectionStatus(status, message) {
+            if (!config.showConnectionStatus && !config.debug) return;
+
+            connectionStatus.className = `show ${status}`;
+            connectionStatus.textContent = message;
+
+            // Auto-hide success messages
+            if (status === 'connected') {
+                setTimeout(() => {
+                    connectionStatus.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Handle weather events
+        function handleWeatherEvent(data) {
+            log(`Received weather event: ${data.action}`);
+            
+            const { action, intensity = 0.5, duration = 10000, username, permanent = false } = data;
+
+            // Validate effect
+            const validEffects = ['rain', 'snow', 'storm', 'fog', 'thunder', 'sunbeam', 'glitchclouds'];
+            if (!validEffects.includes(action)) {
+                log(`Invalid effect: ${action}`);
+                return;
+            }
+
+            // Handle permanent effects
+            if (permanent) {
+                log(`Starting permanent effect: ${action}`);
+                state.activeEffects.set(action, {
+                    intensity,
+                    permanent: true,
+                    startTime: Date.now(),
+                    username
+                });
+            } else {
+                log(`Starting effect: ${action} (${intensity * 100}%, ${duration}ms)`);
+                state.activeEffects.set(action, {
+                    intensity,
+                    duration,
+                    permanent: false,
+                    startTime: Date.now(),
+                    username
+                });
+
+                // Auto-stop after duration
+                setTimeout(() => {
+                    if (!state.activeEffects.get(action)?.permanent) {
+                        stopEffect(action);
+                    }
+                }, duration);
+            }
+
+            // Start effect in renderer
+            if (renderer) {
+                renderer.startEffect(action, { intensity, duration, permanent });
+            }
+
+            // Handle special effects
+            if (action === 'thunder' || action === 'storm') {
+                triggerLightningFlash();
+            }
+
+            updateDebugPanel();
+        }
+
+        // Stop an effect
+        function stopEffect(effect) {
+            log(`Stopping effect: ${effect}`);
+            
+            state.activeEffects.delete(effect);
+
+            if (renderer) {
+                renderer.stopEffect(effect);
+            }
+
+            updateDebugPanel();
+        }
+
+        // Stop all effects
+        function stopAllEffects() {
+            log('Stopping all effects');
+            
+            state.activeEffects.clear();
+
+            if (renderer) {
+                renderer.stopAllEffects();
+            }
+
+            updateDebugPanel();
+        }
+
+        // Trigger lightning flash
+        function triggerLightningFlash() {
+            // Flash animation
+            lightningFlash.style.opacity = '0.8';
+            setTimeout(() => {
+                lightningFlash.style.opacity = '0.4';
+                setTimeout(() => {
+                    lightningFlash.style.opacity = '0.9';
+                    setTimeout(() => {
+                        lightningFlash.style.opacity = '0';
+                    }, 80);
+                }, 50);
+            }, 100);
+        }
+
+        // Initialize Socket.IO connection
+        function initSocket() {
+            log('Initializing WebSocket connection...');
+
+            state.socket = io({
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: config.reconnect.delay,
+                reconnectionDelayMax: config.reconnect.maxDelay,
+                reconnectionAttempts: Infinity,
+                timeout: 20000
+            });
+
+            state.socket.on('connect', () => {
+                state.connected = true;
+                state.reconnectAttempts = 0;
+                log('✅ Connected to server');
+                updateConnectionStatus('connected', '✓ Connected');
+                updateDebugPanel();
+            });
+
+            state.socket.on('disconnect', (reason) => {
+                state.connected = false;
+                log(`❌ Disconnected: ${reason}`);
+                updateConnectionStatus('disconnected', '✗ Disconnected');
+                updateDebugPanel();
+            });
+
+            state.socket.on('reconnect_attempt', (attemptNumber) => {
+                state.reconnectAttempts = attemptNumber;
+                log(`🔄 Reconnection attempt ${attemptNumber}...`);
+                updateConnectionStatus('reconnecting', `⟳ Reconnecting... (${attemptNumber})`);
+                updateDebugPanel();
+            });
+
+            state.socket.on('reconnect', (attemptNumber) => {
+                state.connected = true;
+                state.reconnectAttempts = 0;
+                log(`✅ Reconnected after ${attemptNumber} attempts`);
+                updateConnectionStatus('connected', '✓ Reconnected');
+                updateDebugPanel();
+            });
+
+            state.socket.on('reconnect_error', (error) => {
+                log(`❌ Reconnection error: ${error.message}`);
+            });
+
+            state.socket.on('reconnect_failed', () => {
+                log('❌ Reconnection failed');
+                updateConnectionStatus('disconnected', '✗ Connection failed');
+            });
+
+            // Weather events
+            state.socket.on('weather:trigger', (data) => {
+                state.totalEventsReceived++;
+                handleWeatherEvent(data);
+            });
+
+            state.socket.on('weather:stop', (data) => {
+                log(`Received stop event from ${data.username}`);
+                stopAllEffects();
+            });
+
+            state.socket.on('weather:stop-effect', (data) => {
+                log(`Received stop-effect: ${data.effect}`);
+                stopEffect(data.effect);
+            });
+
+            // Sync permanent effects
+            state.socket.on('weather:sync', (data) => {
+                log('Syncing permanent effects from server');
+                if (data.permanentEffects) {
+                    data.permanentEffects.forEach(effect => {
+                        handleWeatherEvent({
+                            action: effect.type,
+                            intensity: effect.intensity,
+                            permanent: true,
+                            username: 'server'
+                        });
+                    });
+                }
+            });
+
+            // Request sync on connection
+            state.socket.on('connect', () => {
+                state.socket.emit('weather:request-sync');
+            });
+        }
+
+        // Window resize handler
+        function handleResize() {
+            if (renderer) {
+                renderer.resize();
+                updateDebugPanel();
+            }
+        }
+
+        // Initialize
+        function init() {
+            log('🌦️ Weather Control Overlay initializing...');
+
+            // Setup resize handler
+            window.addEventListener('resize', handleResize);
+
+            // Initialize socket connection
+            initSocket();
+
+            // Update debug panel periodically
+            if (config.debug) {
+                setInterval(updateDebugPanel, 1000);
+            }
+
+            // Initial debug panel update
+            updateDebugPanel();
+
+            log('✅ Initialization complete');
+        }
+
+        // Cleanup on unload
+        window.addEventListener('beforeunload', () => {
+            log('Cleaning up...');
+            
+            if (state.socket) {
+                state.socket.disconnect();
+            }
+
+            if (renderer) {
+                renderer.destroy();
+            }
+        });
+
+        // Start application
+        init();
+
+        // Expose API for testing/debugging
+        window.weatherOverlay = {
+            renderer,
+            state,
+            config,
+            startEffect: (effect, intensity, duration) => {
+                handleWeatherEvent({ action: effect, intensity, duration });
+            },
+            stopEffect,
+            stopAllEffects,
+            getDebugInfo: () => renderer ? renderer.getDebugInfo() : null,
+            verifyTransparency: () => renderer ? renderer.verifyTransparency() : false
+        };
+    </script>
+</body>
+</html>
