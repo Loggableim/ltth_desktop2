@@ -778,6 +778,128 @@ class AnimazingPalPlugin {
         res.status(500).json({ success: false, error: error.message });
       }
     });
+
+    // Get single persona
+    this.api.registerRoute('get', '/api/animazingpal/persona/:name', (req, res) => {
+      const { name } = req.params;
+      
+      if (!this.brainEngine) {
+        return res.status(400).json({ success: false, error: 'Brain Engine not initialized' });
+      }
+      
+      try {
+        const persona = this.brainEngine.getPersonalities().find(p => p.name === name);
+        if (!persona) {
+          return res.status(404).json({ success: false, error: 'Persona not found' });
+        }
+        res.json({ success: true, persona });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Update persona
+    this.api.registerRoute('put', '/api/animazingpal/persona/:name', async (req, res) => {
+      const { name } = req.params;
+      const personaData = req.body;
+      
+      if (!this.brainEngine) {
+        return res.status(400).json({ success: false, error: 'Brain Engine not initialized' });
+      }
+      
+      try {
+        // Validate required fields
+        if (!personaData.display_name || !personaData.system_prompt) {
+          return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+        
+        // Update persona
+        this.brainEngine.memoryDb.updatePersonality(name, personaData);
+        const updated = this.brainEngine.getPersonalities().find(p => p.name === name);
+        
+        // Hot-reload if this is the active persona
+        if (this.config.brain.activePersonality === name) {
+          await this.brainEngine.loadActivePersonality();
+          this.api.log(`Hot-reloaded active persona: ${name}`, 'info');
+        }
+        
+        res.json({ success: true, persona: updated });
+      } catch (error) {
+        this.api.log(`Persona update error: ${error.message}`, 'error');
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Delete persona
+    this.api.registerRoute('delete', '/api/animazingpal/persona/:name', (req, res) => {
+      const { name } = req.params;
+      
+      if (!this.brainEngine) {
+        return res.status(400).json({ success: false, error: 'Brain Engine not initialized' });
+      }
+      
+      // Prevent deletion of active persona
+      if (this.config.brain.activePersonality === name) {
+        return res.status(400).json({ success: false, error: 'Cannot delete active persona' });
+      }
+      
+      try {
+        this.brainEngine.memoryDb.deletePersonality(name);
+        res.json({ success: true, message: 'Persona deleted' });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Test logic matrix evaluation
+    this.api.registerRoute('post', '/api/animazingpal/logic-matrix/test', (req, res) => {
+      try {
+        const { eventType, eventData } = req.body;
+        
+        if (!eventType) {
+          return res.status(400).json({ success: false, error: 'eventType is required' });
+        }
+        
+        const result = this.evaluateLogicMatrix(eventType, eventData || {});
+        
+        res.json({
+          success: true,
+          matched: !!result,
+          action: result,
+          eventType,
+          eventData: eventData || {}
+        });
+      } catch (error) {
+        this.api.log(`Logic matrix test error: ${error.message}`, 'error');
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Update logic matrix rules
+    this.api.registerRoute('post', '/api/animazingpal/logic-matrix/rules', (req, res) => {
+      try {
+        const { rules } = req.body;
+        
+        if (!Array.isArray(rules)) {
+          return res.status(400).json({ success: false, error: 'rules must be an array' });
+        }
+        
+        // Validate rules structure
+        for (const rule of rules) {
+          if (!rule.conditions || !rule.actions) {
+            return res.status(400).json({ success: false, error: 'Each rule must have conditions and actions' });
+          }
+        }
+        
+        this.config.logicMatrix.rules = rules;
+        this.api.setConfig('config', this.config);
+        
+        res.json({ success: true, rules: this.config.logicMatrix.rules });
+      } catch (error) {
+        this.api.log(`Logic matrix update error: ${error.message}`, 'error');
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
   }
 
   registerSocketEvents() {
