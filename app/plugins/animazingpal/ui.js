@@ -1202,7 +1202,7 @@ async function testLogicMatrix() {
   }
 
   try {
-    const response = await fetch('/api/animazingpal/logicmatrix/test', {
+    const response = await fetch('/api/animazingpal/logic-matrix/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ eventType, eventData })

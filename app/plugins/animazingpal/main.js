@@ -900,6 +900,33 @@ class AnimazingPalPlugin {
         res.status(500).json({ success: false, error: error.message });
       }
     });
+
+    // Save brain settings (standalone mode, forceTtsOnly)
+    this.api.registerRoute('post', '/api/animazingpal/brain/settings', (req, res) => {
+      try {
+        const { standaloneMode, forceTtsOnlyOnActions } = req.body;
+        
+        if (!this.config.brain) {
+          this.config.brain = this.getDefaultConfig().brain;
+        }
+        
+        if (standaloneMode !== undefined) {
+          this.config.brain.standaloneMode = standaloneMode;
+        }
+        
+        if (forceTtsOnlyOnActions !== undefined) {
+          this.config.brain.forceTtsOnlyOnActions = forceTtsOnlyOnActions;
+        }
+        
+        this.api.setConfig('config', this.config);
+        this.api.log('Brain settings updated', 'info');
+        
+        res.json({ success: true, brain: this.getSafeConfig().brain });
+      } catch (error) {
+        this.api.log(`Brain settings update error: ${error.message}`, 'error');
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
   }
 
   registerSocketEvents() {
@@ -1680,9 +1707,12 @@ class AnimazingPalPlugin {
    */
   async sendChatMessage(message, useEcho = false) {
     // Ensure -echo prefix is added when echo path is chosen
+    // Use a specific check to avoid issues if message naturally starts with '-echo'
     let finalMessage = message;
-    if (useEcho && !message.startsWith('-echo ')) {
-      finalMessage = `-echo ${message}`;
+    const ECHO_PREFIX = '-echo ';
+    
+    if (useEcho && !message.startsWith(ECHO_PREFIX)) {
+      finalMessage = `${ECHO_PREFIX}${message}`;
     }
     
     const command = {
@@ -1698,6 +1728,32 @@ class AnimazingPalPlugin {
     }
     
     return success;
+  }
+
+  /**
+   * Helper method to resolve echo setting based on priority:
+   * 1. Per-event override
+   * 2. forceTtsOnlyOnActions
+   * 3. Global chatToAvatar.useEcho setting
+   * 
+   * @param {string} eventType - The event type (gift, follow, etc.)
+   * @returns {boolean} Whether to use echo
+   */
+  resolveEchoSetting(eventType) {
+    const eventAction = this.config.eventActions?.[eventType];
+    
+    // Priority 1: Per-event override
+    if (eventAction && eventAction.useEcho !== null && eventAction.useEcho !== undefined) {
+      return eventAction.useEcho;
+    }
+    
+    // Priority 2: forceTtsOnlyOnActions
+    if (this.config.brain?.forceTtsOnlyOnActions) {
+      return true;
+    }
+    
+    // Priority 3: Global setting
+    return this.config.chatToAvatar?.useEcho || false;
   }
 
   /**
@@ -2034,9 +2090,7 @@ class AnimazingPalPlugin {
           message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
         }
         
-        const useEcho = this.config.eventActions?.gift?.useEcho !== null ? 
-          this.config.eventActions.gift.useEcho : 
-          (this.config.brain?.forceTtsOnlyOnActions || this.config.chatToAvatar?.useEcho);
+        const useEcho = this.resolveEchoSetting('gift');
         
         this.sendChatMessage(message, useEcho);
       }
@@ -2070,9 +2124,7 @@ class AnimazingPalPlugin {
         // Standalone mode: use template-based response
         const message = this.buildStandaloneResponse('gift', placeholders);
         if (message) {
-          const useEcho = this.config.eventActions?.gift?.useEcho !== null ? 
-            this.config.eventActions.gift.useEcho : 
-            (this.config.brain?.forceTtsOnlyOnActions || true);
+          const useEcho = this.resolveEchoSetting('gift');
           
           this.sendChatMessage(message, useEcho);
           this.api.emit('animazingpal:standalone-response', {
@@ -2153,9 +2205,7 @@ class AnimazingPalPlugin {
           message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
         }
         
-        const useEcho = this.config.eventActions?.chat?.useEcho !== null ? 
-          this.config.eventActions.chat.useEcho : 
-          (this.config.brain?.forceTtsOnlyOnActions || this.config.chatToAvatar?.useEcho);
+        const useEcho = this.resolveEchoSetting('chat');
         
         this.sendChatMessage(message, useEcho);
       }
@@ -2207,9 +2257,7 @@ class AnimazingPalPlugin {
         // Standalone mode: use template-based response
         const message = this.buildStandaloneResponse('chat', placeholders);
         if (message) {
-          const useEcho = this.config.eventActions?.chat?.useEcho !== null ? 
-            this.config.eventActions.chat.useEcho : 
-            (this.config.brain?.forceTtsOnlyOnActions || true);
+          const useEcho = this.resolveEchoSetting('chat');
           
           this.sendChatMessage(message, useEcho);
           this.api.emit('animazingpal:standalone-response', {
@@ -2272,9 +2320,7 @@ class AnimazingPalPlugin {
           message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
         }
         
-        const useEcho = this.config.eventActions?.follow?.useEcho !== null ? 
-          this.config.eventActions.follow.useEcho : 
-          (this.config.brain?.forceTtsOnlyOnActions || this.config.chatToAvatar?.useEcho);
+        const useEcho = this.resolveEchoSetting('follow');
         
         this.sendChatMessage(message, useEcho);
       }
@@ -2306,9 +2352,7 @@ class AnimazingPalPlugin {
         // Standalone mode: use template-based response
         const message = this.buildStandaloneResponse('follow', placeholders);
         if (message) {
-          const useEcho = this.config.eventActions?.follow?.useEcho !== null ? 
-            this.config.eventActions.follow.useEcho : 
-            (this.config.brain?.forceTtsOnlyOnActions || true);
+          const useEcho = this.resolveEchoSetting('follow');
           
           this.sendChatMessage(message, useEcho);
           this.api.emit('animazingpal:standalone-response', {
@@ -2375,9 +2419,7 @@ class AnimazingPalPlugin {
           message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
         }
         
-        const useEcho = this.config.eventActions?.share?.useEcho !== null ? 
-          this.config.eventActions.share.useEcho : 
-          (this.config.brain?.forceTtsOnlyOnActions || this.config.chatToAvatar?.useEcho);
+        const useEcho = this.resolveEchoSetting('share');
         
         this.sendChatMessage(message, useEcho);
       }
@@ -2409,9 +2451,7 @@ class AnimazingPalPlugin {
         // Standalone mode: use template-based response
         const message = this.buildStandaloneResponse('share', placeholders);
         if (message) {
-          const useEcho = this.config.eventActions?.share?.useEcho !== null ? 
-            this.config.eventActions.share.useEcho : 
-            (this.config.brain?.forceTtsOnlyOnActions || true);
+          const useEcho = this.resolveEchoSetting('share');
           
           this.sendChatMessage(message, useEcho);
           this.api.emit('animazingpal:standalone-response', {
@@ -2488,9 +2528,7 @@ class AnimazingPalPlugin {
           message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
         }
         
-        const useEcho = this.config.eventActions?.like?.useEcho !== null ? 
-          this.config.eventActions.like.useEcho : 
-          (this.config.brain?.forceTtsOnlyOnActions || this.config.chatToAvatar?.useEcho);
+        const useEcho = this.resolveEchoSetting('like');
         
         this.sendChatMessage(message, useEcho);
       }
@@ -2523,9 +2561,7 @@ class AnimazingPalPlugin {
         // Standalone mode: use template-based response
         const message = this.buildStandaloneResponse('like', placeholders);
         if (message) {
-          const useEcho = this.config.eventActions?.like?.useEcho !== null ? 
-            this.config.eventActions.like.useEcho : 
-            (this.config.brain?.forceTtsOnlyOnActions || true);
+          const useEcho = this.resolveEchoSetting('like');
           
           this.sendChatMessage(message, useEcho);
           this.api.emit('animazingpal:standalone-response', {
@@ -2594,9 +2630,7 @@ class AnimazingPalPlugin {
           message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
         }
         
-        const useEcho = this.config.eventActions?.subscribe?.useEcho !== null ? 
-          this.config.eventActions.subscribe.useEcho : 
-          (this.config.brain?.forceTtsOnlyOnActions || this.config.chatToAvatar?.useEcho);
+        const useEcho = this.resolveEchoSetting('subscribe');
         
         this.sendChatMessage(message, useEcho);
       }
@@ -2628,9 +2662,7 @@ class AnimazingPalPlugin {
         // Standalone mode: use template-based response
         const message = this.buildStandaloneResponse('subscribe', placeholders);
         if (message) {
-          const useEcho = this.config.eventActions?.subscribe?.useEcho !== null ? 
-            this.config.eventActions.subscribe.useEcho : 
-            (this.config.brain?.forceTtsOnlyOnActions || true);
+          const useEcho = this.resolveEchoSetting('subscribe');
           
           this.sendChatMessage(message, useEcho);
           this.api.emit('animazingpal:standalone-response', {
