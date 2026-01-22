@@ -155,26 +155,44 @@ class AnimazingPalPlugin {
           enabled: true,
           actionType: 'emote',     // 'emote', 'specialAction', 'pose', 'idle', 'chatMessage'
           actionValue: null,       // itemName for emote, index for others
-          chatMessage: null        // Optional message to send to ChatPal
+          chatMessage: null,       // Optional message to send to ChatPal
+          useEcho: null            // Per-event echo override (null = use global, true/false = override)
         },
         share: {
           enabled: true,
           actionType: 'emote',
           actionValue: null,
-          chatMessage: null
+          chatMessage: null,
+          useEcho: null
         },
         subscribe: {
           enabled: true,
           actionType: 'specialAction',
           actionValue: null,
-          chatMessage: 'Thank you {username} for subscribing!'
+          chatMessage: 'Thank you {username} for subscribing!',
+          useEcho: null
         },
         like: {
           enabled: false,
           actionType: null,
           actionValue: null,
           chatMessage: null,
+          useEcho: null,
           threshold: 10           // Only trigger after this many likes
+        },
+        gift: {
+          enabled: true,
+          actionType: null,
+          actionValue: null,
+          chatMessage: null,
+          useEcho: null
+        },
+        chat: {
+          enabled: false,
+          actionType: null,
+          actionValue: null,
+          chatMessage: null,
+          useEcho: null
         }
       },
       // Override behavior settings
@@ -184,25 +202,60 @@ class AnimazingPalPlugin {
       // Brain/AI settings
       brain: {
         enabled: false,
+        standaloneMode: false,        // Standalone mode: TTS-only, no GPT calls
+        forceTtsOnlyOnActions: false, // Force TTS-only (echo) for all automated actions
         openaiApiKey: null,
         model: 'gpt-4o-mini',      // Use efficient model by default
         activePersonality: null,
+        // Persona storage
+        personaStoragePath: null,  // Will use plugin data directory
         // Memory settings
         longTermMemory: true,      // Enable long-term user memory across streams
         memoryImportanceThreshold: 0.3,
         maxContextMemories: 10,
         archiveAfterDays: 7,
         pruneAfterDays: 30,
+        memoryDecayHalfLife: 7,    // Days for memory importance to decay by half
         // Auto-response settings
         autoRespond: {
           chat: false,              // Respond to chat messages
           gifts: true,              // Thank for gifts
           follows: true,            // Welcome new followers
-          shares: false             // Thank for shares
+          shares: false,            // Thank for shares
+          subscribe: true,          // Thank for subscriptions
+          like: false               // React to likes
         },
         // Rate limiting
         maxResponsesPerMinute: 10,
         chatResponseProbability: 0.3  // Respond to 30% of chats
+      },
+      // Logic Matrix for event-driven actions
+      logicMatrix: {
+        enabled: true,
+        rules: [
+          // Example rule structure:
+          // {
+          //   id: 'unique-id',
+          //   name: 'Rule name',
+          //   priority: 10,
+          //   stopOnMatch: true,
+          //   conditions: {
+          //     eventType: 'gift',
+          //     giftValueTier: 'high', // low/medium/high
+          //     userIsNew: false,
+          //     mentions: ['keyword'],
+          //     energyLevel: 'high',   // low/medium/high
+          //     personaTag: 'excited'
+          //   },
+          //   actions: {
+          //     emote: 'Happy',
+          //     specialAction: 0,
+          //     pose: null,
+          //     idle: null,
+          //     chatMessage: 'Wow, thank you so much {username}!'
+          //   }
+          // }
+        ]
       },
       // Advanced settings
       verboseLogging: false
@@ -722,6 +775,155 @@ class AnimazingPalPlugin {
         const profile = this.brainEngine.memoryDb.getOrCreateUserProfile(username);
         res.json({ success: true, profile });
       } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Get single persona
+    this.api.registerRoute('get', '/api/animazingpal/persona/:name', (req, res) => {
+      const { name } = req.params;
+      
+      if (!this.brainEngine) {
+        return res.status(400).json({ success: false, error: 'Brain Engine not initialized' });
+      }
+      
+      try {
+        const persona = this.brainEngine.getPersonalities().find(p => p.name === name);
+        if (!persona) {
+          return res.status(404).json({ success: false, error: 'Persona not found' });
+        }
+        res.json({ success: true, persona });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Update persona
+    this.api.registerRoute('put', '/api/animazingpal/persona/:name', async (req, res) => {
+      const { name } = req.params;
+      const personaData = req.body;
+      
+      if (!this.brainEngine) {
+        return res.status(400).json({ success: false, error: 'Brain Engine not initialized' });
+      }
+      
+      try {
+        // Validate required fields
+        if (!personaData.display_name || !personaData.system_prompt) {
+          return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+        
+        // Update persona
+        this.brainEngine.memoryDb.updatePersonality(name, personaData);
+        const updated = this.brainEngine.getPersonalities().find(p => p.name === name);
+        
+        // Hot-reload if this is the active persona
+        if (this.config.brain.activePersonality === name) {
+          await this.brainEngine.loadActivePersonality();
+          this.api.log(`Hot-reloaded active persona: ${name}`, 'info');
+        }
+        
+        res.json({ success: true, persona: updated });
+      } catch (error) {
+        this.api.log(`Persona update error: ${error.message}`, 'error');
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Delete persona
+    this.api.registerRoute('delete', '/api/animazingpal/persona/:name', (req, res) => {
+      const { name } = req.params;
+      
+      if (!this.brainEngine) {
+        return res.status(400).json({ success: false, error: 'Brain Engine not initialized' });
+      }
+      
+      // Prevent deletion of active persona
+      if (this.config.brain.activePersonality === name) {
+        return res.status(400).json({ success: false, error: 'Cannot delete active persona' });
+      }
+      
+      try {
+        this.brainEngine.memoryDb.deletePersonality(name);
+        res.json({ success: true, message: 'Persona deleted' });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Test logic matrix evaluation
+    this.api.registerRoute('post', '/api/animazingpal/logic-matrix/test', (req, res) => {
+      try {
+        const { eventType, eventData } = req.body;
+        
+        if (!eventType) {
+          return res.status(400).json({ success: false, error: 'eventType is required' });
+        }
+        
+        const result = this.evaluateLogicMatrix(eventType, eventData || {});
+        
+        res.json({
+          success: true,
+          matched: !!result,
+          action: result,
+          eventType,
+          eventData: eventData || {}
+        });
+      } catch (error) {
+        this.api.log(`Logic matrix test error: ${error.message}`, 'error');
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Update logic matrix rules
+    this.api.registerRoute('post', '/api/animazingpal/logic-matrix/rules', (req, res) => {
+      try {
+        const { rules } = req.body;
+        
+        if (!Array.isArray(rules)) {
+          return res.status(400).json({ success: false, error: 'rules must be an array' });
+        }
+        
+        // Validate rules structure
+        for (const rule of rules) {
+          if (!rule.conditions || !rule.actions) {
+            return res.status(400).json({ success: false, error: 'Each rule must have conditions and actions' });
+          }
+        }
+        
+        this.config.logicMatrix.rules = rules;
+        this.api.setConfig('config', this.config);
+        
+        res.json({ success: true, rules: this.config.logicMatrix.rules });
+      } catch (error) {
+        this.api.log(`Logic matrix update error: ${error.message}`, 'error');
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Save brain settings (standalone mode, forceTtsOnly)
+    this.api.registerRoute('post', '/api/animazingpal/brain/settings', (req, res) => {
+      try {
+        const { standaloneMode, forceTtsOnlyOnActions } = req.body;
+        
+        if (!this.config.brain) {
+          this.config.brain = this.getDefaultConfig().brain;
+        }
+        
+        if (standaloneMode !== undefined) {
+          this.config.brain.standaloneMode = standaloneMode;
+        }
+        
+        if (forceTtsOnlyOnActions !== undefined) {
+          this.config.brain.forceTtsOnlyOnActions = forceTtsOnlyOnActions;
+        }
+        
+        this.api.setConfig('config', this.config);
+        this.api.log('Brain settings updated', 'info');
+        
+        res.json({ success: true, brain: this.getSafeConfig().brain });
+      } catch (error) {
+        this.api.log(`Brain settings update error: ${error.message}`, 'error');
         res.status(500).json({ success: false, error: error.message });
       }
     });
@@ -1504,7 +1706,14 @@ class AnimazingPalPlugin {
    * @param {boolean} useEcho - If true, use -echo prefix for TTS only (no AI response)
    */
   async sendChatMessage(message, useEcho = false) {
-    const finalMessage = useEcho ? `-echo ${message}` : message;
+    // Ensure -echo prefix is added when echo path is chosen
+    // Use a specific check to avoid issues if message naturally starts with '-echo'
+    let finalMessage = message;
+    const ECHO_PREFIX = '-echo ';
+    
+    if (useEcho && !message.startsWith(ECHO_PREFIX)) {
+      finalMessage = `${ECHO_PREFIX}${message}`;
+    }
     
     const command = {
       action: 'ChatbotSendMessage',
@@ -1519,6 +1728,32 @@ class AnimazingPalPlugin {
     }
     
     return success;
+  }
+
+  /**
+   * Helper method to resolve echo setting based on priority:
+   * 1. Per-event override
+   * 2. forceTtsOnlyOnActions
+   * 3. Global chatToAvatar.useEcho setting
+   * 
+   * @param {string} eventType - The event type (gift, follow, etc.)
+   * @returns {boolean} Whether to use echo
+   */
+  resolveEchoSetting(eventType) {
+    const eventAction = this.config.eventActions?.[eventType];
+    
+    // Priority 1: Per-event override
+    if (eventAction && eventAction.useEcho !== null && eventAction.useEcho !== undefined) {
+      return eventAction.useEcho;
+    }
+    
+    // Priority 2: forceTtsOnlyOnActions
+    if (this.config.brain?.forceTtsOnlyOnActions) {
+      return true;
+    }
+    
+    // Priority 3: Global setting
+    return this.config.chatToAvatar?.useEcho || false;
   }
 
   /**
@@ -1589,6 +1824,150 @@ class AnimazingPalPlugin {
 
   // ==================== TikTok Event Handlers ====================
 
+  /**
+   * Build a standalone response without GPT
+   * Uses persona catchphrases and templates
+   */
+  buildStandaloneResponse(eventType, data = {}) {
+    const personality = this.brainEngine?.currentPersonality;
+    const catchphrases = personality?.catchphrases || [];
+    
+    // Default templates if no persona is active
+    const defaultTemplates = {
+      gift: [
+        'Thank you {username} for the {giftName}!',
+        'Wow, {username}! Thanks for {giftName}!',
+        'Amazing! Thanks {username} for {giftName}!'
+      ],
+      follow: [
+        'Welcome {username}!',
+        'Hey {username}, thanks for following!',
+        'Great to see you {username}!'
+      ],
+      subscribe: [
+        'Thank you {username} for subscribing!',
+        'Wow! Thanks for the sub {username}!',
+        '{username} subscribed! Amazing!'
+      ],
+      share: [
+        'Thanks for sharing {username}!',
+        '{username} shared the stream! Thank you!',
+        'Appreciate the share, {username}!'
+      ],
+      chat: [
+        '{username} says: {message}',
+        'Hey {username}: {message}'
+      ]
+    };
+    
+    // Try to use persona catchphrases first, otherwise use default templates
+    let templates = defaultTemplates[eventType] || [];
+    
+    if (catchphrases.length > 0) {
+      // Filter catchphrases by event type if they have tags
+      const filtered = catchphrases.filter(phrase => {
+        if (typeof phrase === 'object' && phrase.tags) {
+          return phrase.tags.includes(eventType);
+        }
+        return true;
+      });
+      
+      if (filtered.length > 0) {
+        templates = filtered.map(p => typeof p === 'string' ? p : p.text);
+      }
+    }
+    
+    if (templates.length === 0) {
+      return null;
+    }
+    
+    // Pick a random template
+    const template = templates[Math.floor(Math.random() * templates.length)];
+    
+    // Replace placeholders
+    let message = template;
+    for (const [key, value] of Object.entries(data)) {
+      message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+    }
+    
+    return message;
+  }
+
+  /**
+   * Evaluate logic matrix rules for an event
+   * Returns the matched rule's actions or null
+   */
+  evaluateLogicMatrix(eventType, eventData = {}) {
+    if (!this.config.logicMatrix?.enabled || !this.config.logicMatrix.rules) {
+      return null;
+    }
+    
+    const rules = this.config.logicMatrix.rules
+      .filter(r => r.conditions && r.actions)
+      .sort((a, b) => (b.priority || 0) - (a.priority || 0)); // Sort by priority descending
+    
+    for (const rule of rules) {
+      const conditions = rule.conditions;
+      let matches = true;
+      
+      // Check eventType
+      if (conditions.eventType && conditions.eventType !== eventType) {
+        matches = false;
+      }
+      
+      // Check giftValueTier
+      if (matches && conditions.giftValueTier && eventData.giftValue) {
+        const tier = eventData.giftValue < 10 ? 'low' : eventData.giftValue < 100 ? 'medium' : 'high';
+        if (tier !== conditions.giftValueTier) {
+          matches = false;
+        }
+      }
+      
+      // Check userIsNew
+      if (matches && conditions.userIsNew !== undefined) {
+        const isNew = eventData.isNewUser || false;
+        if (isNew !== conditions.userIsNew) {
+          matches = false;
+        }
+      }
+      
+      // Check mentions (keywords in message)
+      if (matches && conditions.mentions && conditions.mentions.length > 0 && eventData.message) {
+        const message = eventData.message.toLowerCase();
+        const hasMention = conditions.mentions.some(keyword => 
+          message.includes(keyword.toLowerCase())
+        );
+        if (!hasMention) {
+          matches = false;
+        }
+      }
+      
+      // Check energyLevel (placeholder for now)
+      if (matches && conditions.energyLevel) {
+        // This could be calculated based on recent event frequency
+        // For now, we'll skip this check
+      }
+      
+      // Check personaTag
+      if (matches && conditions.personaTag) {
+        const personality = this.brainEngine?.currentPersonality;
+        if (!personality || !personality.tags || !personality.tags.includes(conditions.personaTag)) {
+          matches = false;
+        }
+      }
+      
+      if (matches) {
+        this.api.log(`Logic matrix rule matched: ${rule.name || rule.id}`, 'info');
+        return {
+          ...rule.actions,
+          stopOnMatch: rule.stopOnMatch || false
+        };
+      }
+    }
+    
+    return null;
+  }
+
   canTriggerEvent(eventType) {
     const now = Date.now();
     const lastTime = this.lastEventTimes.get(eventType) || 0;
@@ -1608,7 +1987,7 @@ class AnimazingPalPlugin {
   async executeAction(actionConfig, placeholders = {}) {
     if (!actionConfig || !actionConfig.actionType) return;
 
-    const { actionType, actionValue, chatMessage } = actionConfig;
+    const { actionType, actionValue, chatMessage, useEcho } = actionConfig;
 
     // Execute the main action
     switch (actionType) {
@@ -1644,7 +2023,20 @@ class AnimazingPalPlugin {
       for (const [key, value] of Object.entries(placeholders)) {
         message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
       }
-      await this.sendChatMessage(message, this.config.chatToAvatar?.useEcho);
+      
+      // Determine if we should use echo
+      // Priority: per-event override > forceTtsOnlyOnActions > global setting
+      let shouldUseEcho = this.config.chatToAvatar?.useEcho || false;
+      
+      if (this.config.brain?.forceTtsOnlyOnActions) {
+        shouldUseEcho = true;
+      }
+      
+      if (useEcho !== null && useEcho !== undefined) {
+        shouldUseEcho = useEcho;
+      }
+      
+      await this.sendChatMessage(message, shouldUseEcho);
     }
   }
 
@@ -1657,51 +2049,117 @@ class AnimazingPalPlugin {
     const giftValue = data.diamondCount || 1;
     const username = data.uniqueId || 'Someone';
 
+    // Evaluate logic matrix first
+    const logicMatrixAction = this.evaluateLogicMatrix('gift', {
+      giftValue,
+      giftName,
+      username,
+      isNewUser: data.isNewUser
+    });
+
     // Find matching gift mapping
     const mapping = this.config.giftMappings?.find(m => 
       (m.giftId && m.giftId === giftId) || 
       (m.giftName && m.giftName === giftName)
     );
 
+    const placeholders = {
+      username,
+      nickname: data.nickname || username,
+      giftName: giftName || 'a gift',
+      count: data.repeatCount || 1
+    };
+
+    // Execute logic matrix action if matched
+    if (logicMatrixAction) {
+      if (logicMatrixAction.emote) {
+        this.triggerEmote(logicMatrixAction.emote);
+      }
+      if (logicMatrixAction.specialAction !== null && logicMatrixAction.specialAction !== undefined) {
+        this.triggerSpecialAction(logicMatrixAction.specialAction);
+      }
+      if (logicMatrixAction.pose !== null && logicMatrixAction.pose !== undefined) {
+        this.triggerPose(logicMatrixAction.pose);
+      }
+      if (logicMatrixAction.idle !== null && logicMatrixAction.idle !== undefined) {
+        this.triggerIdle(logicMatrixAction.idle);
+      }
+      if (logicMatrixAction.chatMessage) {
+        let message = logicMatrixAction.chatMessage;
+        for (const [key, value] of Object.entries(placeholders)) {
+          message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+        }
+        
+        const useEcho = this.resolveEchoSetting('gift');
+        
+        this.sendChatMessage(message, useEcho);
+      }
+      
+      if (logicMatrixAction.stopOnMatch) {
+        this.api.emit('animazingpal:gift-handled', { giftId, giftName, username, logicMatrixAction });
+        return;
+      }
+    }
+
+    // Execute gift mapping if exists
     if (mapping) {
       this.api.log(`Gift mapping triggered: ${giftName} (${giftId})`, 'info');
-
-      const placeholders = {
-        username,
-        nickname: data.nickname || username,
-        giftName: giftName || 'a gift',
-        count: data.repeatCount || 1
-      };
-
-      // Execute the mapped action
       this.executeAction(mapping, placeholders);
     }
 
-    // Process through Brain Engine for intelligent response
+    // Always log memory even in standalone mode (for future GPT use)
+    if (this.brainEngine) {
+      this.brainEngine.storeMemory(`${username} sent gift: ${giftName}`, {
+        type: 'gift',
+        user: username,
+        event: 'gift',
+        importance: 0.6,
+        context: { giftName, giftValue }
+      });
+    }
+
+    // Handle response based on standalone mode
     if (this.brainEngine && this.config.brain?.enabled) {
-      this.brainEngine.processGift(username, giftName, giftValue, {
-        nickname: data.nickname
-      }).then(response => {
-        if (response && this.isConnected) {
-          // Send AI-generated thank you message to Animaze
-          this.sendChatMessage(response.text, false);
-          this.api.emit('animazingpal:brain-response', {
+      if (this.config.brain.standaloneMode) {
+        // Standalone mode: use template-based response
+        const message = this.buildStandaloneResponse('gift', placeholders);
+        if (message) {
+          const useEcho = this.resolveEchoSetting('gift');
+          
+          this.sendChatMessage(message, useEcho);
+          this.api.emit('animazingpal:standalone-response', {
             type: 'gift',
             username,
-            response: response.text,
-            emotion: response.emotion
+            response: message
           });
         }
-      }).catch(err => {
-        this.api.log(`Brain gift response error: ${err.message}`, 'error');
-      });
+      } else {
+        // GPT mode: intelligent response
+        this.brainEngine.processGift(username, giftName, giftValue, {
+          nickname: data.nickname
+        }).then(response => {
+          if (response && this.isConnected) {
+            // Send AI-generated thank you message to Animaze
+            this.sendChatMessage(response.text, false);
+            this.api.emit('animazingpal:brain-response', {
+              type: 'gift',
+              username,
+              response: response.text,
+              emotion: response.emotion
+            });
+          }
+        }).catch(err => {
+          this.api.log(`Brain gift response error: ${err.message}`, 'error');
+        });
+      }
     }
 
     this.api.emit('animazingpal:gift-handled', {
       giftId,
       giftName,
       username,
-      mapping
+      mapping,
+      logicMatrixAction
     });
   }
 
@@ -1713,6 +2171,55 @@ class AnimazingPalPlugin {
     const username = data.uniqueId || 'Someone';
 
     if (!comment) return;
+
+    const placeholders = {
+      username,
+      nickname: data.nickname || username,
+      comment
+    };
+
+    // Evaluate logic matrix first
+    const logicMatrixAction = this.evaluateLogicMatrix('chat', {
+      username,
+      comment,
+      isNewUser: data.isNewUser
+    });
+
+    // Execute logic matrix action if matched
+    if (logicMatrixAction) {
+      if (logicMatrixAction.emote) {
+        this.triggerEmote(logicMatrixAction.emote);
+      }
+      if (logicMatrixAction.specialAction !== null && logicMatrixAction.specialAction !== undefined) {
+        this.triggerSpecialAction(logicMatrixAction.specialAction);
+      }
+      if (logicMatrixAction.pose !== null && logicMatrixAction.pose !== undefined) {
+        this.triggerPose(logicMatrixAction.pose);
+      }
+      if (logicMatrixAction.idle !== null && logicMatrixAction.idle !== undefined) {
+        this.triggerIdle(logicMatrixAction.idle);
+      }
+      if (logicMatrixAction.chatMessage) {
+        let message = logicMatrixAction.chatMessage;
+        for (const [key, value] of Object.entries(placeholders)) {
+          message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+        }
+        
+        const useEcho = this.resolveEchoSetting('chat');
+        
+        this.sendChatMessage(message, useEcho);
+      }
+      
+      if (logicMatrixAction.stopOnMatch) {
+        this.api.emit('animazingpal:chat-handled', { username, comment, logicMatrixAction });
+        return;
+      }
+    }
+
+    // Execute configured action
+    if (this.config.eventActions?.chat?.enabled) {
+      this.executeAction(this.config.eventActions.chat, placeholders);
+    }
 
     // Legacy: Forward to ChatPal directly if enabled (without AI)
     if (this.config.chatToAvatar?.enabled) {
@@ -1733,26 +2240,55 @@ class AnimazingPalPlugin {
       });
     }
 
-    // Process through Brain Engine for intelligent response
+    // Always log memory even in standalone mode
+    if (this.brainEngine) {
+      this.brainEngine.storeMemory(`${username}: ${comment}`, {
+        type: 'chat',
+        user: username,
+        event: 'chat',
+        importance: 0.3,
+        context: { comment }
+      });
+    }
+
+    // Handle response based on standalone mode
     if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.chat) {
-      this.brainEngine.processChat(username, comment, {
-        nickname: data.nickname
-      }).then(response => {
-        if (response && this.isConnected) {
-          // Send AI-generated response to Animaze
-          this.sendChatMessage(response.text, false);
-          this.api.emit('animazingpal:brain-response', {
+      if (this.config.brain.standaloneMode) {
+        // Standalone mode: use template-based response
+        const message = this.buildStandaloneResponse('chat', placeholders);
+        if (message) {
+          const useEcho = this.resolveEchoSetting('chat');
+          
+          this.sendChatMessage(message, useEcho);
+          this.api.emit('animazingpal:standalone-response', {
             type: 'chat',
             username,
             userMessage: comment,
-            response: response.text,
-            emotion: response.emotion
+            response: message
           });
         }
-      }).catch(err => {
-        this.api.log(`Brain chat response error: ${err.message}`, 'error');
-      });
+      } else {
+        // GPT mode: intelligent response
+        this.brainEngine.processChat(username, comment, {
+          nickname: data.nickname
+        }).then(response => {
+          if (response && this.isConnected) {
+            this.sendChatMessage(response.text, false);
+            this.api.emit('animazingpal:brain-response', {
+              type: 'chat',
+              username,
+              userMessage: comment,
+              response: response.text,
+              emotion: response.emotion
+            });
+          }
+        }).catch(err => {
+          this.api.log(`Brain chat response error: ${err.message}`, 'error');
+        });
+      }
     }
+
+    this.api.emit('animazingpal:chat-handled', { username, comment, logicMatrixAction });
   }
 
   handleFollowEvent(data) {
@@ -1762,31 +2298,90 @@ class AnimazingPalPlugin {
     const username = data.uniqueId || 'Someone';
     this.api.log(`Follow event from ${username}`, 'info');
 
-    // Execute configured action
-    if (this.config.eventActions?.follow?.enabled) {
-      this.executeAction(this.config.eventActions.follow, { username });
+    const placeholders = { username, nickname: data.nickname || username };
+
+    // Evaluate logic matrix
+    const logicMatrixAction = this.evaluateLogicMatrix('follow', {
+      username,
+      isNewUser: data.isNewUser
+    });
+
+    // Execute logic matrix action if matched
+    if (logicMatrixAction) {
+      if (logicMatrixAction.emote) {
+        this.triggerEmote(logicMatrixAction.emote);
+      }
+      if (logicMatrixAction.specialAction !== null && logicMatrixAction.specialAction !== undefined) {
+        this.triggerSpecialAction(logicMatrixAction.specialAction);
+      }
+      if (logicMatrixAction.chatMessage) {
+        let message = logicMatrixAction.chatMessage;
+        for (const [key, value] of Object.entries(placeholders)) {
+          message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+        }
+        
+        const useEcho = this.resolveEchoSetting('follow');
+        
+        this.sendChatMessage(message, useEcho);
+      }
+      
+      if (logicMatrixAction.stopOnMatch) {
+        this.api.emit('animazingpal:follow-handled', { username, logicMatrixAction });
+        return;
+      }
     }
 
-    // Process through Brain Engine for intelligent response
-    if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.follows) {
-      this.brainEngine.processFollow(username, {
-        nickname: data.nickname
-      }).then(response => {
-        if (response && this.isConnected) {
-          this.sendChatMessage(response.text, false);
-          this.api.emit('animazingpal:brain-response', {
-            type: 'follow',
-            username,
-            response: response.text,
-            emotion: response.emotion
-          });
-        }
-      }).catch(err => {
-        this.api.log(`Brain follow response error: ${err.message}`, 'error');
+    // Execute configured action
+    if (this.config.eventActions?.follow?.enabled) {
+      this.executeAction(this.config.eventActions.follow, placeholders);
+    }
+
+    // Always log memory even in standalone mode
+    if (this.brainEngine) {
+      this.brainEngine.storeMemory(`${username} followed the channel`, {
+        type: 'follow',
+        user: username,
+        event: 'follow',
+        importance: 0.5
       });
     }
 
-    this.api.emit('animazingpal:follow-handled', { username });
+    // Handle response based on standalone mode
+    if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.follows) {
+      if (this.config.brain.standaloneMode) {
+        // Standalone mode: use template-based response
+        const message = this.buildStandaloneResponse('follow', placeholders);
+        if (message) {
+          const useEcho = this.resolveEchoSetting('follow');
+          
+          this.sendChatMessage(message, useEcho);
+          this.api.emit('animazingpal:standalone-response', {
+            type: 'follow',
+            username,
+            response: message
+          });
+        }
+      } else {
+        // GPT mode: intelligent response
+        this.brainEngine.processFollow(username, {
+          nickname: data.nickname
+        }).then(response => {
+          if (response && this.isConnected) {
+            this.sendChatMessage(response.text, false);
+            this.api.emit('animazingpal:brain-response', {
+              type: 'follow',
+              username,
+              response: response.text,
+              emotion: response.emotion
+            });
+          }
+        }).catch(err => {
+          this.api.log(`Brain follow response error: ${err.message}`, 'error');
+        });
+      }
+    }
+
+    this.api.emit('animazingpal:follow-handled', { username, logicMatrixAction });
   }
 
   handleShareEvent(data) {
@@ -1796,63 +2391,307 @@ class AnimazingPalPlugin {
     const username = data.uniqueId || 'Someone';
     this.api.log(`Share event from ${username}`, 'info');
 
-    // Execute configured action
-    if (this.config.eventActions?.share?.enabled) {
-      this.executeAction(this.config.eventActions.share, { username });
+    const placeholders = { username, nickname: data.nickname || username };
+
+    // Evaluate logic matrix first
+    const logicMatrixAction = this.evaluateLogicMatrix('share', {
+      username,
+      isNewUser: data.isNewUser
+    });
+
+    // Execute logic matrix action if matched
+    if (logicMatrixAction) {
+      if (logicMatrixAction.emote) {
+        this.triggerEmote(logicMatrixAction.emote);
+      }
+      if (logicMatrixAction.specialAction !== null && logicMatrixAction.specialAction !== undefined) {
+        this.triggerSpecialAction(logicMatrixAction.specialAction);
+      }
+      if (logicMatrixAction.pose !== null && logicMatrixAction.pose !== undefined) {
+        this.triggerPose(logicMatrixAction.pose);
+      }
+      if (logicMatrixAction.idle !== null && logicMatrixAction.idle !== undefined) {
+        this.triggerIdle(logicMatrixAction.idle);
+      }
+      if (logicMatrixAction.chatMessage) {
+        let message = logicMatrixAction.chatMessage;
+        for (const [key, value] of Object.entries(placeholders)) {
+          message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+        }
+        
+        const useEcho = this.resolveEchoSetting('share');
+        
+        this.sendChatMessage(message, useEcho);
+      }
+      
+      if (logicMatrixAction.stopOnMatch) {
+        this.api.emit('animazingpal:share-handled', { username, logicMatrixAction });
+        return;
+      }
     }
 
-    // Process through Brain Engine for intelligent response
-    if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.shares) {
-      this.brainEngine.processShare(username, {
-        nickname: data.nickname
-      }).then(response => {
-        if (response && this.isConnected) {
-          this.sendChatMessage(response.text, false);
-          this.api.emit('animazingpal:brain-response', {
-            type: 'share',
-            username,
-            response: response.text,
-            emotion: response.emotion
-          });
-        }
-      }).catch(err => {
-        this.api.log(`Brain share response error: ${err.message}`, 'error');
+    // Execute configured action
+    if (this.config.eventActions?.share?.enabled) {
+      this.executeAction(this.config.eventActions.share, placeholders);
+    }
+
+    // Always log memory even in standalone mode
+    if (this.brainEngine) {
+      this.brainEngine.storeMemory(`${username} shared the stream`, {
+        type: 'share',
+        user: username,
+        event: 'share',
+        importance: 0.5
       });
     }
 
-    this.api.emit('animazingpal:share-handled', { username });
+    // Handle response based on standalone mode
+    if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.shares) {
+      if (this.config.brain.standaloneMode) {
+        // Standalone mode: use template-based response
+        const message = this.buildStandaloneResponse('share', placeholders);
+        if (message) {
+          const useEcho = this.resolveEchoSetting('share');
+          
+          this.sendChatMessage(message, useEcho);
+          this.api.emit('animazingpal:standalone-response', {
+            type: 'share',
+            username,
+            response: message
+          });
+        }
+      } else {
+        // GPT mode: intelligent response
+        this.brainEngine.processShare(username, {
+          nickname: data.nickname
+        }).then(response => {
+          if (response && this.isConnected) {
+            this.sendChatMessage(response.text, false);
+            this.api.emit('animazingpal:brain-response', {
+              type: 'share',
+              username,
+              response: response.text,
+              emotion: response.emotion
+            });
+          }
+        }).catch(err => {
+          this.api.log(`Brain share response error: ${err.message}`, 'error');
+        });
+      }
+    }
+
+    this.api.emit('animazingpal:share-handled', { username, logicMatrixAction });
   }
 
   handleLikeEvent(data) {
     if (!this.config.enabled || !this.isConnected) return;
-    if (!this.config.eventActions?.like?.enabled) return;
-
-    const action = this.config.eventActions.like;
-    const likeCount = data.likeCount || 1;
-    const threshold = action.threshold || 10;
-
-    // Only trigger after threshold likes
-    if (likeCount < threshold) return;
     if (!this.canTriggerEvent('like')) return;
 
     const username = data.uniqueId || 'Someone';
+    const likeCount = data.likeCount || 1;
+    const action = this.config.eventActions?.like;
+    const threshold = action?.threshold || 10;
 
-    this.executeAction(action, { username, likeCount });
+    // Only trigger after threshold likes
+    if (likeCount < threshold) return;
 
-    this.api.emit('animazingpal:like-handled', { username, likeCount });
+    const placeholders = {
+      username,
+      nickname: data.nickname || username,
+      likeCount
+    };
+
+    // Evaluate logic matrix first
+    const logicMatrixAction = this.evaluateLogicMatrix('like', {
+      username,
+      likeCount,
+      isNewUser: data.isNewUser
+    });
+
+    // Execute logic matrix action if matched
+    if (logicMatrixAction) {
+      if (logicMatrixAction.emote) {
+        this.triggerEmote(logicMatrixAction.emote);
+      }
+      if (logicMatrixAction.specialAction !== null && logicMatrixAction.specialAction !== undefined) {
+        this.triggerSpecialAction(logicMatrixAction.specialAction);
+      }
+      if (logicMatrixAction.pose !== null && logicMatrixAction.pose !== undefined) {
+        this.triggerPose(logicMatrixAction.pose);
+      }
+      if (logicMatrixAction.idle !== null && logicMatrixAction.idle !== undefined) {
+        this.triggerIdle(logicMatrixAction.idle);
+      }
+      if (logicMatrixAction.chatMessage) {
+        let message = logicMatrixAction.chatMessage;
+        for (const [key, value] of Object.entries(placeholders)) {
+          message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+        }
+        
+        const useEcho = this.resolveEchoSetting('like');
+        
+        this.sendChatMessage(message, useEcho);
+      }
+      
+      if (logicMatrixAction.stopOnMatch) {
+        this.api.emit('animazingpal:like-handled', { username, likeCount, logicMatrixAction });
+        return;
+      }
+    }
+
+    // Execute configured action
+    if (action?.enabled) {
+      this.executeAction(action, placeholders);
+    }
+
+    // Always log memory even in standalone mode
+    if (this.brainEngine) {
+      this.brainEngine.storeMemory(`${username} sent ${likeCount} likes`, {
+        type: 'like',
+        user: username,
+        event: 'like',
+        importance: 0.2,
+        context: { likeCount }
+      });
+    }
+
+    // Handle response based on standalone mode
+    if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.like) {
+      if (this.config.brain.standaloneMode) {
+        // Standalone mode: use template-based response
+        const message = this.buildStandaloneResponse('like', placeholders);
+        if (message) {
+          const useEcho = this.resolveEchoSetting('like');
+          
+          this.sendChatMessage(message, useEcho);
+          this.api.emit('animazingpal:standalone-response', {
+            type: 'like',
+            username,
+            likeCount,
+            response: message
+          });
+        }
+      } else {
+        // GPT mode: intelligent response
+        this.brainEngine.processLike(username, likeCount, {
+          nickname: data.nickname
+        }).then(response => {
+          if (response && this.isConnected) {
+            this.sendChatMessage(response.text, false);
+            this.api.emit('animazingpal:brain-response', {
+              type: 'like',
+              username,
+              likeCount,
+              response: response.text,
+              emotion: response.emotion
+            });
+          }
+        }).catch(err => {
+          this.api.log(`Brain like response error: ${err.message}`, 'error');
+        });
+      }
+    }
+
+    this.api.emit('animazingpal:like-handled', { username, likeCount, logicMatrixAction });
   }
 
   handleSubscribeEvent(data) {
     if (!this.config.enabled || !this.isConnected) return;
-    if (!this.config.eventActions?.subscribe?.enabled) return;
     if (!this.canTriggerEvent('subscribe')) return;
 
     const username = data.uniqueId || 'Someone';
     this.api.log(`Subscribe event from ${username}`, 'info');
 
-    this.executeAction(this.config.eventActions.subscribe, { username });
+    const placeholders = { username, nickname: data.nickname || username };
 
-    this.api.emit('animazingpal:subscribe-handled', { username });
+    // Evaluate logic matrix first
+    const logicMatrixAction = this.evaluateLogicMatrix('subscribe', {
+      username,
+      isNewUser: data.isNewUser
+    });
+
+    // Execute logic matrix action if matched
+    if (logicMatrixAction) {
+      if (logicMatrixAction.emote) {
+        this.triggerEmote(logicMatrixAction.emote);
+      }
+      if (logicMatrixAction.specialAction !== null && logicMatrixAction.specialAction !== undefined) {
+        this.triggerSpecialAction(logicMatrixAction.specialAction);
+      }
+      if (logicMatrixAction.pose !== null && logicMatrixAction.pose !== undefined) {
+        this.triggerPose(logicMatrixAction.pose);
+      }
+      if (logicMatrixAction.idle !== null && logicMatrixAction.idle !== undefined) {
+        this.triggerIdle(logicMatrixAction.idle);
+      }
+      if (logicMatrixAction.chatMessage) {
+        let message = logicMatrixAction.chatMessage;
+        for (const [key, value] of Object.entries(placeholders)) {
+          message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+        }
+        
+        const useEcho = this.resolveEchoSetting('subscribe');
+        
+        this.sendChatMessage(message, useEcho);
+      }
+      
+      if (logicMatrixAction.stopOnMatch) {
+        this.api.emit('animazingpal:subscribe-handled', { username, logicMatrixAction });
+        return;
+      }
+    }
+
+    // Execute configured action
+    if (this.config.eventActions?.subscribe?.enabled) {
+      this.executeAction(this.config.eventActions.subscribe, placeholders);
+    }
+
+    // Always log memory even in standalone mode
+    if (this.brainEngine) {
+      this.brainEngine.storeMemory(`${username} subscribed`, {
+        type: 'subscribe',
+        user: username,
+        event: 'subscribe',
+        importance: 0.7
+      });
+    }
+
+    // Handle response based on standalone mode
+    if (this.brainEngine && this.config.brain?.enabled && this.config.brain?.autoRespond?.subscribe) {
+      if (this.config.brain.standaloneMode) {
+        // Standalone mode: use template-based response
+        const message = this.buildStandaloneResponse('subscribe', placeholders);
+        if (message) {
+          const useEcho = this.resolveEchoSetting('subscribe');
+          
+          this.sendChatMessage(message, useEcho);
+          this.api.emit('animazingpal:standalone-response', {
+            type: 'subscribe',
+            username,
+            response: message
+          });
+        }
+      } else {
+        // GPT mode: intelligent response
+        this.brainEngine.processSubscribe(username, {
+          nickname: data.nickname
+        }).then(response => {
+          if (response && this.isConnected) {
+            this.sendChatMessage(response.text, false);
+            this.api.emit('animazingpal:brain-response', {
+              type: 'subscribe',
+              username,
+              response: response.text,
+              emotion: response.emotion
+            });
+          }
+        }).catch(err => {
+          this.api.log(`Brain subscribe response error: ${err.message}`, 'error');
+        });
+      }
+    }
+
+    this.api.emit('animazingpal:subscribe-handled', { username, logicMatrixAction });
   }
 
   // ==================== Utility Methods ====================
@@ -1861,12 +2700,16 @@ class AnimazingPalPlugin {
     // Return config without sensitive data (no API key)
     const brainConfig = this.config.brain ? {
       enabled: this.config.brain.enabled,
+      standaloneMode: this.config.brain.standaloneMode,
+      forceTtsOnlyOnActions: this.config.brain.forceTtsOnlyOnActions,
       model: this.config.brain.model,
       activePersonality: this.config.brain.activePersonality,
+      longTermMemory: this.config.brain.longTermMemory,
       memoryImportanceThreshold: this.config.brain.memoryImportanceThreshold,
       maxContextMemories: this.config.brain.maxContextMemories,
       archiveAfterDays: this.config.brain.archiveAfterDays,
       pruneAfterDays: this.config.brain.pruneAfterDays,
+      memoryDecayHalfLife: this.config.brain.memoryDecayHalfLife,
       autoRespond: this.config.brain.autoRespond,
       maxResponsesPerMinute: this.config.brain.maxResponsesPerMinute,
       chatResponseProbability: this.config.brain.chatResponseProbability,
@@ -1886,6 +2729,7 @@ class AnimazingPalPlugin {
       eventActions: this.config.eventActions,
       overrides: this.config.overrides,
       brain: brainConfig,
+      logicMatrix: this.config.logicMatrix,
       verboseLogging: this.config.verboseLogging
     };
   }

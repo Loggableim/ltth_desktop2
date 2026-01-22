@@ -404,7 +404,189 @@ Dieses Plugin nutzt die offizielle Animaze WebSocket API. Die vollständige Doku
 3. Prüfe ob eine Persönlichkeit ausgewählt ist
 4. Überprüfe die Rate-Limits
 
+## 🤖 Standalone Mode - Autonomer Host ohne GPT
+
+Der Standalone-Modus ermöglicht es AnimazingPal, vollständig autonom als Host zu agieren, ohne OpenAI GPT-Aufrufe. Perfekt für TTS-only Streams oder wenn du GPT-Kosten sparen möchtest.
+
+### Features
+
+- **🔇 TTS-Only Modus**: Nutzt ChatPal nur für Text-to-Speech ohne KI-Antworten
+- **📝 Template-basierte Antworten**: Verwendet Persona-Catchphrases für Responses
+- **🎯 Logic Matrix**: Event-gesteuerte Aktionen mit intelligenten Regeln
+- **💾 Memory Logging**: Speichert weiterhin Erinnerungen für spätere GPT-Nutzung
+- **🔄 Umschaltbar**: Einfaches Wechseln zwischen Standalone und GPT-Modus
+
+### Konfiguration
+
+```javascript
+brain: {
+  enabled: true,
+  standaloneMode: true,              // Aktiviert Standalone-Modus
+  forceTtsOnlyOnActions: true,       // Erzwingt -echo für alle Event-Aktionen
+  // ...
+}
+
+eventActions: {
+  follow: {
+    enabled: true,
+    actionType: 'emote',
+    actionValue: 'Happy',
+    chatMessage: 'Welcome {username}!',
+    useEcho: true                    // Per-Event Echo-Override
+  }
+}
+```
+
+### Echo-Override Priorität
+
+Die Echo-Einstellung wird in folgender Priorität angewendet:
+1. **Per-Event Override** (`eventActions.follow.useEcho`)
+2. **Force TTS-Only** (`brain.forceTtsOnlyOnActions`)
+3. **Global Setting** (`chatToAvatar.useEcho`)
+
+### Standalone Response Flow
+
+```
+TikTok Event → Logic Matrix → Template Response → TTS
+             ↓
+        Memory Logging (für spätere GPT-Nutzung)
+```
+
+## 🎯 Logic Matrix - Event-Driven Actions
+
+Die Logic Matrix ermöglicht es dir, intelligente Regeln zu erstellen, die automatisch passende Aktionen basierend auf Event-Eigenschaften auslösen.
+
+### Rule Structure
+
+```javascript
+logicMatrix: {
+  enabled: true,
+  rules: [
+    {
+      id: 'high-value-gift',
+      name: 'Teure Geschenke',
+      priority: 10,                  // Höhere Priorität = zuerst geprüft
+      stopOnMatch: true,             // Stoppe nach dieser Regel
+      conditions: {
+        eventType: 'gift',
+        giftValueTier: 'high',       // low/medium/high
+        userIsNew: false
+      },
+      actions: {
+        emote: 'Excited',
+        specialAction: 0,
+        chatMessage: 'WOW! Vielen Dank {username} für {giftName}!'
+      }
+    }
+  ]
+}
+```
+
+### Match Conditions
+
+| Condition | Beschreibung | Werte |
+|-----------|--------------|-------|
+| `eventType` | Event-Typ | gift, follow, share, subscribe, like, chat |
+| `giftValueTier` | Geschenk-Wert-Stufe | low (<10), medium (10-99), high (100+) |
+| `userIsNew` | Ist neuer Zuschauer | true/false |
+| `mentions` | Keywords im Chat | Array von Strings |
+| `energyLevel` | Stream-Energie-Level | low/medium/high (Platzhalter) |
+| `personaTag` | Persona-Tag Matching | String-Tag |
+
+### Actions
+
+- `emote` - Emote-Name auslösen
+- `specialAction` - Special Action Index
+- `pose` - Pose Index
+- `idle` - Idle Animation Index
+- `chatMessage` - ChatPal-Nachricht mit Platzhaltern
+
+### Testing
+
+```bash
+POST /api/animazingpal/logic-matrix/test
+{
+  "eventType": "gift",
+  "eventData": {
+    "giftValue": 150,
+    "username": "testuser"
+  }
+}
+```
+
+## 🧠 Enhanced Memory System
+
+Das erweiterte Memory-System nutzt kombinierte Scoring-Metriken für optimale Erinnerungs-Auswahl.
+
+### Memory Scoring
+
+Jede Erinnerung wird mit einem kombinierten Score bewertet:
+
+```
+Score = (semantic × 0.3) + (importance × 0.3) + (recency × 0.2) + (usage × 0.1) + (decay × 0.1)
+```
+
+#### Scoring-Faktoren
+
+1. **Semantic** (30%): Semantische Ähnlichkeit zum Query (Vektor-basiert)
+2. **Importance** (30%): Manuelle Wichtigkeits-Bewertung (0.0-1.0)
+3. **Recency** (20%): Wie neu ist die Erinnerung
+4. **Usage** (10%): Wie oft wurde auf sie zugegriffen
+5. **Decay** (10%): Zeit-basierter Verfall
+
+### Memory Decay
+
+Memories verlieren mit der Zeit an Wichtigkeit basierend auf der `memoryDecayHalfLife` Einstellung:
+
+```javascript
+brain: {
+  memoryDecayHalfLife: 7  // Tage bis zur Halbierung der Importance
+}
+```
+
+**Decay-Formel:**
+```
+decay = 0.5 ^ (age_in_days / half_life)
+```
+
+### Access Tracking
+
+Jeder Speicher-Zugriff wird getrackt:
+- `access_count` - Anzahl der Zugriffe
+- `last_accessed` - Letzter Zugriffszeitpunkt
+
+Dies hilft, häufig genutzte Erinnerungen höher zu priorisieren.
+
+### Memory Types
+
+- `interaction` - Normale Interaktionen
+- `chat` - Chat-Nachrichten
+- `gift` - Geschenke
+- `follow` - Follows
+- `share` - Shares
+- `subscribe` - Subscriptions
+- `important` - Manuell markierte wichtige Events
+
 ## 📝 Changelog
+
+### Version 1.2.0 (NEW)
+- **NEU**: Standalone Mode - TTS-only Betrieb ohne GPT
+  - Template-basierte Antworten mit Persona-Catchphrases
+  - Per-Event Echo-Override Einstellungen
+  - Force TTS-Only auf Actions
+- **NEU**: Logic Matrix System
+  - Event-gesteuerte intelligente Aktionen
+  - Priorisierte Regel-Evaluation
+  - Test-Endpoint für Regeln
+- **NEU**: Enhanced Memory System
+  - Kombiniertes Scoring (semantic, importance, recency, usage, decay)
+  - Memory Decay mit konfigurierbarer Half-Life
+  - Access Tracking für häufig genutzte Memories
+- **NEU**: Persona Management
+  - CRUD API Endpoints für Personas
+  - Hot-Reload aktiver Personas
+  - Persona Editor UI (vorbereitet)
+- Verbesserte UI mit neuen Einstellungen und Logic Matrix Tab
 
 ### Version 1.1.0
 - **NEU**: Brain Engine - KI-Intelligenz System

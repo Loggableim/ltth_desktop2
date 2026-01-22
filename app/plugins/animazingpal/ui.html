@@ -117,6 +117,7 @@
       <div class="tab" data-tab="emotes">Emotes & Aktionen</div>
       <div class="tab" data-tab="gifts">Gift Mappings</div>
       <div class="tab" data-tab="events">Event Aktionen</div>
+      <div class="tab" data-tab="logicmatrix">Logic Matrix</div>
       <div class="tab" data-tab="chatpal">ChatPal</div>
       <div class="tab" data-tab="personalities">Persönlichkeiten</div>
       <div class="tab" data-tab="memories">Erinnerungen</div>
@@ -265,6 +266,14 @@
               <label class="text-gray-400 text-sm">ChatPal Nachricht (optional)</label>
               <input type="text" class="input" id="followChatMessage" placeholder="{username} folgt jetzt!">
             </div>
+            <div>
+              <label class="text-gray-400 text-sm">Echo Override</label>
+              <select class="select" id="followEchoOverride">
+                <option value="">Globale Einstellung verwenden</option>
+                <option value="true">Echo erzwingen</option>
+                <option value="false">Kein Echo erzwingen</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -295,6 +304,14 @@
             <div>
               <label class="text-gray-400 text-sm">ChatPal Nachricht (optional)</label>
               <input type="text" class="input" id="shareChatMessage" placeholder="Danke fürs Teilen, {username}!">
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">Echo Override</label>
+              <select class="select" id="shareEchoOverride">
+                <option value="">Globale Einstellung verwenden</option>
+                <option value="true">Echo erzwingen</option>
+                <option value="false">Kein Echo erzwingen</option>
+              </select>
             </div>
           </div>
         </div>
@@ -327,6 +344,14 @@
               <label class="text-gray-400 text-sm">ChatPal Nachricht (optional)</label>
               <input type="text" class="input" id="subscribeChatMessage" placeholder="Vielen Dank für das Abo, {username}!">
             </div>
+            <div>
+              <label class="text-gray-400 text-sm">Echo Override</label>
+              <select class="select" id="subscribeEchoOverride">
+                <option value="">Globale Einstellung verwenden</option>
+                <option value="true">Echo erzwingen</option>
+                <option value="false">Kein Echo erzwingen</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -357,6 +382,65 @@
               <select class="select" id="likeActionValue">
                 <option value="">Auswählen...</option>
               </select>
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">Echo Override</label>
+              <select class="select" id="likeEchoOverride">
+                <option value="">Globale Einstellung verwenden</option>
+                <option value="true">Echo erzwingen</option>
+                <option value="false">Kein Echo erzwingen</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Logic Matrix -->
+    <div id="tab-logicmatrix" class="tab-content hidden">
+      <div class="card">
+        <h2 class="text-xl font-bold mb-4">🎯 Logic Matrix - Event-Driven Actions</h2>
+        <p class="text-gray-400 mb-6">
+          Definiere fortgeschrittene Regeln, die auf TikTok-Events reagieren. Die Logic Matrix erlaubt komplexe Bedingungen und Aktionen basierend auf Event-Daten.
+        </p>
+
+        <!-- Logic Matrix Rules List -->
+        <div class="mb-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold">📋 Konfigurierte Regeln</h3>
+            <button class="btn btn-success" id="addRuleBtn">+ Regel hinzufügen</button>
+          </div>
+          <div id="logicMatrixRules" class="space-y-3">
+            <p class="text-gray-400">Keine Regeln konfiguriert</p>
+          </div>
+        </div>
+
+        <!-- Test Logic Matrix -->
+        <div class="border-t border-gray-700 pt-6">
+          <h3 class="text-lg font-bold mb-4">🧪 Logic Matrix testen</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="text-gray-400 text-sm">Event-Typ</label>
+              <select class="select" id="testEventType">
+                <option value="">Auswählen...</option>
+                <option value="gift">Gift</option>
+                <option value="follow">Follow</option>
+                <option value="share">Share</option>
+                <option value="subscribe">Subscribe</option>
+                <option value="like">Like</option>
+                <option value="chat">Chat</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-gray-400 text-sm">Event-Daten (JSON)</label>
+              <textarea class="input" id="testEventData" rows="4" placeholder='{"username": "TestUser", "giftName": "Rose", "giftId": 5655}'></textarea>
+            </div>
+          </div>
+          <button class="btn btn-primary mt-4" id="testLogicMatrixBtn">🔍 Testen</button>
+          <div id="testLogicMatrixResults" class="mt-4 hidden">
+            <h4 class="font-bold mb-2">Ergebnisse:</h4>
+            <div class="bg-gray-800 rounded-lg p-4">
+              <pre id="testLogicMatrixOutput" class="text-sm text-gray-300 whitespace-pre-wrap"></pre>
             </div>
           </div>
         </div>
@@ -411,6 +495,24 @@
     <div id="tab-personalities" class="tab-content hidden">
       <div class="card">
         <h2 class="text-xl font-bold mb-4">🎭 Persönlichkeiten & Einstellungen</h2>
+        
+        <!-- Persona Management -->
+        <div class="mb-6 pb-6 border-b border-gray-700">
+          <h3 class="text-lg font-bold mb-4">👤 Persona Verwaltung</h3>
+          <div class="flex gap-3 mb-4">
+            <select id="personaSelector" class="select flex-1">
+              <option value="">Persona auswählen...</option>
+              <option value="friendly_streamer">Freundlicher Streamer</option>
+              <option value="gaming_pro">Gaming Pro</option>
+              <option value="entertainer">Entertainer</option>
+              <option value="chill_vibes">Chill Vibes</option>
+              <option value="anime_fan">Anime Fan</option>
+            </select>
+            <button class="btn btn-success" id="createPersonaBtn">+ Erstellen</button>
+            <button class="btn btn-primary" id="editPersonaBtn">✏️ Bearbeiten</button>
+            <button class="btn btn-danger" id="deletePersonaBtn">🗑️ Löschen</button>
+          </div>
+        </div>
         
         <!-- Personality Selection -->
         <div class="mb-6">
@@ -564,6 +666,23 @@
           </label>
         </div>
         <button class="btn btn-primary mt-4" data-action="save-settings">💾 Einstellungen speichern</button>
+      </div>
+
+      <div class="card mt-4">
+        <h2 class="text-xl font-bold mb-4">🧠 Brain Einstellungen</h2>
+        <div class="space-y-3">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="standaloneMode">
+            <span>Standalone Mode</span>
+            <span class="text-xs text-gray-500 ml-2">(ChatPal unabhängig nutzen)</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="forceTtsOnlyOnActions">
+            <span>Force TTS-Only on Actions</span>
+            <span class="text-xs text-gray-500 ml-2">(Nur TTS für Event-Aktionen erzwingen)</span>
+          </label>
+        </div>
+        <button class="btn btn-primary mt-4" id="saveBrainSettingsBtn">💾 Brain Einstellungen speichern</button>
       </div>
     </div>
 

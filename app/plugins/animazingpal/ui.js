@@ -95,6 +95,9 @@ function setupEventListeners() {
 
     const threshold = document.getElementById(`${event}Threshold`);
     if (threshold) threshold.addEventListener('change', () => updateEventAction(event));
+
+    const echoOverride = document.getElementById(`${event}EchoOverride`);
+    if (echoOverride) echoOverride.addEventListener('change', () => updateEventAction(event));
   });
 
   // Gift mappings
@@ -143,6 +146,27 @@ function setupEventListeners() {
       }
     });
   }
+
+  // Brain settings
+  const saveBrainSettingsBtn = document.getElementById('saveBrainSettingsBtn');
+  if (saveBrainSettingsBtn) saveBrainSettingsBtn.addEventListener('click', saveBrainSettings);
+
+  // Logic Matrix
+  const addRuleBtn = document.getElementById('addRuleBtn');
+  if (addRuleBtn) addRuleBtn.addEventListener('click', addLogicMatrixRule);
+
+  const testLogicMatrixBtn = document.getElementById('testLogicMatrixBtn');
+  if (testLogicMatrixBtn) testLogicMatrixBtn.addEventListener('click', testLogicMatrix);
+
+  // Persona Management
+  const createPersonaBtn = document.getElementById('createPersonaBtn');
+  if (createPersonaBtn) createPersonaBtn.addEventListener('click', createPersona);
+
+  const editPersonaBtn = document.getElementById('editPersonaBtn');
+  if (editPersonaBtn) editPersonaBtn.addEventListener('click', editPersonaFromSelector);
+
+  const deletePersonaBtn = document.getElementById('deletePersonaBtn');
+  if (deletePersonaBtn) deletePersonaBtn.addEventListener('click', deletePersonaFromSelector);
 }
 
 async function fetchStatus() {
@@ -334,11 +358,23 @@ function updateEventActionUI(event) {
   const valueEl = document.getElementById(`${event}ActionValue`);
   const messageEl = document.getElementById(`${event}ChatMessage`);
   const thresholdEl = document.getElementById(`${event}Threshold`);
+  const echoOverrideEl = document.getElementById(`${event}EchoOverride`);
   
   if (enabledEl) enabledEl.checked = action.enabled || false;
   if (typeEl) typeEl.value = action.actionType || '';
   if (messageEl) messageEl.value = action.chatMessage || '';
   if (thresholdEl) thresholdEl.value = action.threshold || 10;
+  
+  // Set echo override
+  if (echoOverrideEl) {
+    if (action.echoOverride === true) {
+      echoOverrideEl.value = 'true';
+    } else if (action.echoOverride === false) {
+      echoOverrideEl.value = 'false';
+    } else {
+      echoOverrideEl.value = '';
+    }
+  }
   
   // Update value select after type is set
   updateActionValueSelects();
@@ -477,6 +513,8 @@ async function updateEventAction(event) {
   const actionValue = document.getElementById(`${event}ActionValue`)?.value || null;
   const chatMessage = document.getElementById(`${event}ChatMessage`)?.value || null;
   const threshold = document.getElementById(`${event}Threshold`)?.value;
+  const echoOverrideElement = document.getElementById(`${event}EchoOverride`);
+  const echoOverride = echoOverrideElement ? echoOverrideElement.value : null;
   
   const eventActions = { ...currentConfig.eventActions };
   eventActions[event] = {
@@ -485,6 +523,15 @@ async function updateEventAction(event) {
     actionValue: actionValue ? (actionType === 'emote' ? actionValue : parseInt(actionValue)) : null,
     chatMessage: chatMessage || null
   };
+  
+  // Add echo override if set
+  if (echoOverride === 'true') {
+    eventActions[event].echoOverride = true;
+  } else if (echoOverride === 'false') {
+    eventActions[event].echoOverride = false;
+  } else {
+    eventActions[event].echoOverride = null;
+  }
   
   if (event === 'like' && threshold) {
     eventActions[event].threshold = parseInt(threshold);
@@ -1101,6 +1148,135 @@ async function setActivePersona() {
     }
   } catch (error) {
     showToast('Fehler: ' + error.message, 'error');
+  }
+}
+
+// Brain Settings
+async function saveBrainSettings() {
+  const standaloneMode = document.getElementById('standaloneMode').checked;
+  const forceTtsOnlyOnActions = document.getElementById('forceTtsOnlyOnActions').checked;
+
+  try {
+    const response = await fetch('/api/animazingpal/brain/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        standaloneMode,
+        forceTtsOnlyOnActions
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast('Brain Einstellungen gespeichert!');
+    } else {
+      showToast('Fehler: ' + result.error, 'error');
+    }
+  } catch (error) {
+    showToast('Fehler beim Speichern: ' + error.message, 'error');
+  }
+}
+
+// Logic Matrix Functions
+async function addLogicMatrixRule() {
+  showToast('Logic Matrix Editor wird implementiert...', 'info');
+  // Stub for future implementation
+}
+
+async function testLogicMatrix() {
+  const eventType = document.getElementById('testEventType').value;
+  const eventDataText = document.getElementById('testEventData').value;
+
+  if (!eventType) {
+    showToast('Bitte Event-Typ auswählen', 'error');
+    return;
+  }
+
+  let eventData;
+  try {
+    eventData = JSON.parse(eventDataText);
+  } catch (error) {
+    showToast('Ungültiges JSON Format', 'error');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/animazingpal/logic-matrix/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType, eventData })
+    });
+
+    const result = await response.json();
+
+    const resultsDiv = document.getElementById('testLogicMatrixResults');
+    const outputPre = document.getElementById('testLogicMatrixOutput');
+
+    if (result.success) {
+      resultsDiv.classList.remove('hidden');
+      outputPre.textContent = JSON.stringify(result, null, 2);
+      showToast('Test erfolgreich durchgeführt');
+    } else {
+      resultsDiv.classList.remove('hidden');
+      outputPre.textContent = `Fehler: ${result.error}`;
+      showToast('Test fehlgeschlagen', 'error');
+    }
+  } catch (error) {
+    showToast('Fehler beim Test: ' + error.message, 'error');
+  }
+}
+
+// Persona Management Functions
+async function createPersona() {
+  const personaName = prompt('Neuer Persona Name:');
+  if (!personaName) return;
+
+  showToast('Persona Editor wird implementiert...', 'info');
+  // Stub for future implementation
+}
+
+async function editPersonaFromSelector() {
+  const personaSelector = document.getElementById('personaSelector');
+  const selectedPersona = personaSelector.value;
+
+  if (!selectedPersona) {
+    showToast('Bitte eine Persona auswählen', 'error');
+    return;
+  }
+
+  showToast('Persona Editor wird implementiert...', 'info');
+  // Stub for future implementation
+}
+
+async function deletePersonaFromSelector() {
+  const personaSelector = document.getElementById('personaSelector');
+  const selectedPersona = personaSelector.value;
+
+  if (!selectedPersona) {
+    showToast('Bitte eine Persona auswählen', 'error');
+    return;
+  }
+
+  if (!confirm(`Persona "${selectedPersona}" wirklich löschen?`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/animazingpal/brain/personality/${selectedPersona}`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast('Persona gelöscht');
+      personaSelector.value = '';
+    } else {
+      showToast('Fehler: ' + result.error, 'error');
+    }
+  } catch (error) {
+    showToast('Fehler beim Löschen: ' + error.message, 'error');
   }
 }
 
