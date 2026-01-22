@@ -1,11 +1,16 @@
 # Weather Control Plugin
 
-Professional weather effects system for TikTok Live overlays with modern GPU-accelerated animations.
+Professional weather effects system for TikTok Live overlays with **WebGL2-accelerated rendering** and guaranteed transparency.
 
 ## 🌦️ Features
 
 - **7 Weather Effects**: Rain, Snow, Storm, Fog, Thunder, Sunbeam, Glitch Clouds
-- **Modern Animations**: GPU-accelerated Canvas 2D rendering
+- **WebGL2 Renderer**: GPU-accelerated particle systems with instanced rendering
+- **Guaranteed Transparency**: Premultiplied alpha blending with Shadow DOM isolation
+- **Dual Kawase Bloom**: Professional post-processing with 3-level bloom chain
+- **Instanced Rendering**: Efficient particle systems (Rain: 1200 particles, Snow: 700 particles)
+- **Performance Optimized**: DPR clamping (max 1.5), particle limits, 60 FPS target
+- **Debug Panel**: Real-time FPS, particle counts, transparency verification, initial pixel readback
 - **Permission System**: Role-based access control (Followers, Superfans, Subscribers, Team Members, Top Gifters)
 - **Rate Limiting**: Configurable spam protection (default: 10 requests/minute)
 - **WebSocket Integration**: Real-time event streaming to overlays
@@ -14,6 +19,31 @@ Professional weather effects system for TikTok Live overlays with modern GPU-acc
 - **Chat Commands**: Integration with Global Chat Command Engine (GCCE)
 - **Configurable**: Intensity, duration, and visual parameters for each effect
 - **Security**: Input validation, sanitization, and API key authentication
+
+## 🎨 WebGL2 Renderer
+
+### Technical Features
+
+- **Rendering**: WebGL2-based with premultiplied alpha for perfect transparency in OBS
+- **Particle Systems**: Instanced rendering for rain (1200 max), snow (700 max)
+- **Post-Processing**: Dual Kawase bloom with 3 iterations, threshold, and additive blending
+- **Effects Shaders**: 
+  - Rain: Multi-layer streaks with parallax depth
+  - Snow: Soft glows with wobble animation and sparkle effects
+  - Storm: Rain + wind modulation + lightning bolts with additive bloom
+  - Fog: Multi-layer Perlin noise with soft blending
+  - Sunbeam: Godrays with warm color grading
+  - Lightning: Bolt geometry with screen flash and additive glow
+- **Transparency**: 
+  - Canvas initialized with `alpha: true` and `premultipliedAlpha: true`
+  - Shadow DOM isolation prevents external CSS interference
+  - Debug panel shows transparency status and initial pixel RGBA readback
+  - All shaders use premultiplied alpha for geometry, additive for glows
+- **Performance**: 
+  - DPR clamping to max 1.5 for 1080p canvas
+  - Particle count limits enforced per effect
+  - Optional chroma-key mode (hot-pink background) for browsers without alpha support
+  - Framebuffer architecture with efficient bloom passes
 
 ## 🚀 Quick Start
 
@@ -131,47 +161,59 @@ chatCommands: {
 ## 🎨 Weather Effects
 
 ### Rain 🌧️
-Realistic falling rain with varying particle sizes and speeds.
+Realistic falling rain with instanced particle rendering and depth layers.
+- **Renderer**: WebGL2 instanced geometry
 - **Default Intensity**: 0.5
 - **Default Duration**: 10 seconds
-- **Particles**: ~200
+- **Max Particles**: 1200
+- **Layers**: Far/Mid/Near with parallax depth
+- **Features**: Multi-speed streaks, wind modulation, premultiplied alpha blending
 
 ### Snow ❄️
-Gentle snowfall with wobbling particles and sparkles.
+Gentle snowfall with wobbling particles, soft glows, and sparkle effects.
+- **Renderer**: WebGL2 instanced quads
 - **Default Intensity**: 0.5
 - **Default Duration**: 10 seconds
-- **Particles**: ~150
+- **Max Particles**: 700
+- **Layers**: 3 depth layers
+- **Features**: Rotation animation, wobble physics, occasional sparkles
 
 ### Storm ⛈️
-Heavy rain with strong winds and camera shake.
+Heavy rain with strong winds, lightning bolts, and screen flash effects.
+- **Renderer**: WebGL2 combined effects
 - **Default Intensity**: 0.7
 - **Default Duration**: 8 seconds
-- **Particles**: ~300
-- **Special**: Camera shake effect
+- **Max Particles**: 1200 (rain) + lightning geometry
+- **Features**: Enhanced rain, lightning bolts with additive bloom, screen flash, wind modulation
 
 ### Fog 🌫️
-Mysterious fog with layered noise.
+Multi-layer volumetric fog with Perlin noise and soft blending.
+- **Renderer**: WebGL2 fullscreen quads with noise texture
 - **Default Intensity**: 0.4
 - **Default Duration**: 15 seconds
-- **Particles**: ~30 (large)
+- **Layers**: 2-3 noise layers
+- **Features**: Procedural noise texture, scrolling layers, soft alpha blending
 
 ### Thunder ⚡
-Random lightning flashes with screen brightening.
+Lightning bolts with screen flash and additive glow.
+- **Renderer**: WebGL2 procedural geometry
 - **Default Intensity**: 0.8
 - **Default Duration**: 5 seconds
-- **Special**: Lightning flash overlay
+- **Features**: Random bolt generation, additive blending, bloom glow, screen flash overlay
 
 ### Sunbeam ☀️
-Warm light rays moving across the screen.
+Warm godrays with volumetric lighting and color grading.
+- **Renderer**: WebGL2 godray shader
 - **Default Intensity**: 0.6
 - **Default Duration**: 12 seconds
-- **Special**: 5 animated light beams
+- **Features**: 3 animated beams, warm color grading, additive blending, slow movement
 
 ### Glitch Clouds ☁️
-Digital glitch effect with colorful noise.
+Digital glitch effect with colorful noise and RGB chromatic aberration.
+- **Renderer**: WebGL2 post-processing effects
 - **Default Intensity**: 0.7
 - **Default Duration**: 8 seconds
-- **Special**: RGB glitch lines, digital noise
+- **Features**: RGB split, digital noise overlay, glitch lines (planned for future update)
 
 ## 🔒 Permission System
 
@@ -340,44 +382,79 @@ These can be customized in the plugin code.
 
 ## 🎯 Performance
 
-- **GPU Acceleration**: Canvas 2D with hardware acceleration
-- **FPS Cap**: 60 FPS maximum
-- **Particle Limits**: Configurable max particles (default: 500)
-- **Memory Management**: Automatic cleanup of expired effects
-- **No Memory Leaks**: Clean start/stop routines
+- **WebGL2 Acceleration**: Hardware-accelerated rendering with instancing
+- **FPS Target**: 60 FPS (configurable, option for 30 FPS)
+- **DPR Clamping**: Max 1.5 device pixel ratio for 1080p performance
+- **Particle Limits**: 
+  - Rain: 1200 max (adjustable via intensity)
+  - Snow: 700 max (adjustable via intensity)
+  - Fog: 2-3 fullscreen quads
+- **Bloom Post-Processing**: 3-level dual Kawase bloom chain with threshold
+- **Memory Management**: Automatic cleanup of expired effects, framebuffer pooling
+- **Instanced Rendering**: Single draw call per particle system
+- **No Memory Leaks**: Clean initialization/destruction routines
 
 ## 🐛 Debugging
 
 Enable debug mode by adding `?debug=true` to the overlay URL.
 
 Debug panel shows:
-- Current FPS
-- Active particle count
-- Active effects list
-- Effect intensities
+- Current FPS and frame time
+- Active particle count per system
+- Active effects list with intensities
+- Draw calls per frame
+- Transparency status (Alpha enabled, Premultiplied alpha)
+- Initial pixel RGBA readback (should be [0, 0, 0, 0])
+- Canvas size and DPR
+- WebGL version and context attributes
 
 Console logs show:
 - Weather events received
-- Effect start/stop
+- Effect start/stop with parameters
 - Connection status
+- Shader compilation status
+- Framebuffer creation
+- Transparency verification
 
 ## 📊 Technical Details
 
-### Canvas Rendering
-- Resolution: Matches window size (responsive)
-- Alpha: Enabled for transparency
-- Composite operations: Normal + Lighter (for sunbeams)
+### WebGL2 Rendering Pipeline
+1. **Scene Pass**: Render all effects to main framebuffer with premultiplied alpha
+   - Fog layers (back to front)
+   - Sunbeams (additive blending)
+   - Rain particles (instanced)
+   - Snow particles (instanced)
+   - Lightning bolts (procedural geometry)
+2. **Bloom Downsampling**: 3-level pyramid with threshold at first level
+3. **Bloom Upsampling**: Dual Kawase blur with increasing radius
+4. **Composite**: Combine scene + bloom with optional LUT and chromatic aberration
+
+### Shader Architecture
+- **Vertex Shaders**: Transform particles with per-instance attributes (position, rotation, size, alpha)
+- **Fragment Shaders**: Material properties with premultiplied alpha output
+- **Post-Processing**: Fullscreen quads with texture sampling
+- **Instancing**: Single draw call for hundreds of particles
+
+### Transparency System
+- Canvas initialized with `alpha: true` and `premultipliedAlpha: true`
+- WebGL clearColor set to `(0, 0, 0, 0)` - transparent black
+- Shadow DOM isolation prevents external CSS from interfering
+- Blending mode: `gl.blendFuncSeparate(ONE, ONE_MINUS_SRC_ALPHA, ONE, ONE_MINUS_SRC_ALPHA)`
+- Additive blending for glows: `gl.blendFunc(ONE, ONE)`
+- Initial pixel readback verification on startup
 
 ### Particle System
-- Class-based particle management
-- Per-frame delta time calculation
-- Physics simulation (gravity, wind, wobble)
-- Depth-based parallax (z-coordinate)
+- Instanced rendering with dynamic buffers
+- Per-instance attributes: position (vec3), data (vec4)
+- Physics simulation on CPU: gravity, wind, wobble, rotation
+- Depth-based parallax via Z coordinate (0-1 range)
+- Automatic particle recycling when out of bounds
 
 ### WebSocket Events
 - Event: `weather:trigger`
 - Format: `{ type, action, intensity, duration, username, meta, timestamp }`
-- Auto-reconnect on disconnect
+- Auto-reconnect with exponential backoff
+- Sync event for permanent effects on connection
 
 ## 🔧 Customization
 
@@ -562,6 +639,72 @@ For issues and feature requests, please create an issue on GitHub.
 
 ---
 
-**Version**: 1.0.0
-**Author**: Pup Cid
-**Last Updated**: 2025-11-19
+**Version**: 2.0.0 - WebGL2 Edition
+**Author**: Pup Cid  
+**Last Updated**: 2026-01-22
+
+## Changelog
+
+### Version 2.0.0 (2026-01-22) - WebGL2 Overhaul
+
+**Major Rewrite**: Complete replacement of Canvas 2D renderer with WebGL2-based system
+
+#### New Features
+- **WebGL2 Renderer**: Professional GPU-accelerated particle rendering
+- **Instanced Rendering**: Single draw call per particle system (rain: 1200 particles, snow: 700 particles)
+- **Dual Kawase Bloom**: 3-level bloom post-processing with threshold and radius control
+- **Guaranteed Transparency**: Premultiplied alpha + Shadow DOM isolation + debug readback
+- **Advanced Shaders**: 
+  - Rain: Depth-layered streaks with wind modulation
+  - Snow: Wobble physics with sparkle effects
+  - Storm: Combined rain + procedural lightning bolts
+  - Fog: Multi-layer Perlin noise with scrolling
+  - Sunbeam: Godrays with warm color grading
+  - Lightning: Bolt geometry with additive bloom
+- **Debug Panel**: 
+  - Real-time FPS and frame time monitoring
+  - Particle counts per system
+  - Draw call tracking
+  - Transparency verification (initial pixel RGBA readback)
+  - WebGL context attributes display
+  - Canvas size and DPR monitoring
+- **Performance Optimizations**:
+  - DPR clamping to max 1.5 for 1080p
+  - Particle count limits per effect
+  - Framebuffer pooling for bloom chain
+  - Efficient instanced draw calls
+  - Delta time normalization for consistent physics
+
+#### Technical Improvements
+- Shadow DOM isolation for canvas (prevents external CSS interference)
+- Premultiplied alpha blending throughout pipeline
+- Proper blend modes: premultiplied for geometry, additive for glows
+- Procedural noise texture generation (256x256)
+- Framebuffer architecture for post-processing
+- Shader compilation with error reporting
+- Automatic WebGL2 fallback detection
+- Optional chroma-key mode (hot-pink background) for browsers without alpha support
+
+#### Files Changed
+- `webgl-renderer.js` - New 1500+ line WebGL2 rendering engine
+- `overlay.html` - Rewritten to use WebGL2 renderer with Shadow DOM
+- `overlay-canvas2d-backup.html` - Backup of original Canvas 2D implementation
+- `README.md` - Updated with WebGL2 technical details
+
+#### Breaking Changes
+- Canvas 2D fallback removed (WebGL2 required)
+- Some particle visual properties changed due to shader-based rendering
+- Debug panel layout redesigned
+
+#### Compatibility
+- Requires modern browser with WebGL2 support (Chrome 56+, Firefox 51+, Edge 79+)
+- OBS Studio 27.0+ recommended for best browser source transparency
+- Backward compatible with all API endpoints and chat commands
+
+### Version 1.0.0 (Previous) - Canvas 2D Implementation
+- Initial release with Canvas 2D rendering
+- 7 weather effects
+- Permission system
+- Chat commands via GCCE
+- Flow actions
+- Gift triggers

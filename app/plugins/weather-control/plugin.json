@@ -1,12 +1,12 @@
 {
   "id": "weather-control",
   "name": "Weather Control",
-  "version": "1.0.0",
-  "description": "Professional weather effects plugin with rain, snow, storm, fog, thunder, sunbeam, and glitch cloud effects for TikTok Live overlays",
+  "version": "2.0.0",
+  "description": "Professional weather effects plugin with WebGL2 rendering, rain, snow, storm, fog, thunder, sunbeam, and glitch cloud effects for TikTok Live overlays. Features instanced particle rendering, dual Kawase bloom, and guaranteed transparency.",
   "author": "Pup Cid",
   "entry": "main.js",
   "enabled": false,
-  "devStatus": "development-beta",
+  "devStatus": "stable",
   "permissions": [
     "socket.io",
     "routes",
@@ -14,9 +14,9 @@
     "database"
   ],
   "descriptions": {
-    "en": "Professional weather effects plugin with rain, snow, storm, fog, thunder, sunbeam, and glitch cloud effects for TikTok Live overlays. Features customizable intensity and layering.",
-    "de": "Professionelles Wettereffekt-Plugin mit Regen, Schnee, Sturm, Nebel, Donner, Sonnenstrahl und Glitch-Cloud-Effekten für TikTok-Live-Overlays. Bietet anpassbare Intensität und Layering.",
-    "es": "Plugin profesional de efectos climáticos con lluvia, nieve, tormenta, niebla, trueno, rayo de sol y efectos de nube con falla para overlays de TikTok Live. Presenta intensidad y capas personalizables.",
-    "fr": "Plugin d'effets météorologiques professionnel avec pluie, neige, tempête, brouillard, tonnerre, rayon de soleil et effets de nuage glitch pour overlays TikTok Live. Comprend intensité et superposition personnalisables."
+    "en": "Professional weather effects plugin with WebGL2 rendering, rain, snow, storm, fog, thunder, sunbeam, and glitch cloud effects for TikTok Live overlays. Features instanced particle rendering (1200 rain, 700 snow), dual Kawase bloom post-processing, guaranteed transparency with premultiplied alpha, and Shadow DOM isolation. DPR clamping for performance, debug panel with FPS/particle monitoring, and full transparency verification.",
+    "de": "Professionelles Wettereffekt-Plugin mit WebGL2-Rendering, Regen, Schnee, Sturm, Nebel, Donner, Sonnenstrahl und Glitch-Cloud-Effekten für TikTok-Live-Overlays. Bietet instanziertes Partikel-Rendering (1200 Regen, 700 Schnee), Dual-Kawase-Bloom-Nachbearbeitung, garantierte Transparenz mit vormultipliziertem Alpha und Shadow-DOM-Isolation. DPR-Begrenzung für Performance, Debug-Panel mit FPS/Partikel-Überwachung und vollständige Transparenzprüfung.",
+    "es": "Plugin profesional de efectos climáticos con renderizado WebGL2, lluvia, nieve, tormenta, niebla, trueno, rayo de sol y efectos de nube con falla para overlays de TikTok Live. Presenta renderizado de partículas instanciadas (1200 lluvia, 700 nieve), postprocesamiento Bloom dual Kawase, transparencia garantizada con alfa premultiplicado y aislamiento Shadow DOM. Límite DPR para rendimiento, panel de depuración con monitoreo FPS/partículas y verificación completa de transparencia.",
+    "fr": "Plugin d'effets météorologiques professionnel avec rendu WebGL2, pluie, neige, tempête, brouillard, tonnerre, rayon de soleil et effets de nuage glitch pour overlays TikTok Live. Comprend rendu de particules instanciées (1200 pluie, 700 neige), post-traitement Bloom dual Kawase, transparence garantie avec alpha prémultiplié et isolation Shadow DOM. Limitation DPR pour performance, panneau de débogage avec surveillance FPS/particules et vérification complète de transparence."
   }
 }

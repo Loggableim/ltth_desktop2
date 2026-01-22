@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Weather Control Plugin - WebGL2 Renderer Overhaul**
+  - Complete rewrite of weather overlay with WebGL2-based rendering engine
+  - Instanced particle rendering: Rain (1200 particles), Snow (700 particles)
+  - Dual Kawase bloom post-processing with 3-level chain (threshold, downsample, upsample)
+  - Guaranteed transparency: premultiplied alpha + Shadow DOM isolation + debug readback
+  - Advanced shader effects:
+    - Rain: Multi-layer streaks with parallax depth and wind modulation
+    - Snow: Soft glows with wobble animation and sparkle effects  
+    - Storm: Rain + procedural lightning bolts with additive bloom + screen flash
+    - Fog: Multi-layer Perlin noise with scrolling and soft alpha blending
+    - Sunbeam: Godrays with warm color grading and slow movement
+    - Lightning: Bolt geometry with additive glow and screen flash overlay
+  - Performance optimizations: DPR clamping (max 1.5), particle limits, efficient instancing
+  - Debug panel: FPS, frame time, particle counts, draw calls, transparency verification, initial pixel RGBA readback
+  - Shadow DOM canvas isolation prevents external CSS interference
+  - Procedural noise texture generation (256x256) for fog effects
+  - Framebuffer architecture for multi-pass rendering
+  - Fallback chroma-key mode (hot-pink background) for browsers without alpha support
+  - Files: `webgl-renderer.js` (1500+ lines), updated `overlay.html`, backup `overlay-canvas2d-backup.html`
+  - Requires WebGL2 (Chrome 56+, Firefox 51+, Edge 79+, OBS Studio 27.0+)
+
 ### Fixed
 - **Weather Control Plugin - OBS Overlay Transparency**
   - Fixed black background issue in OBS HUD overlay
