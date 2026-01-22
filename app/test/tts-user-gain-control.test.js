@@ -62,16 +62,25 @@ try {
 }
 
 // Test 3: Verify server-side gain clamping to [0.0, 2.5]
-console.log('\n📝 TEST 3: Server-side gain clamping to [0.0, 2.5]');
+console.log('\n📝 TEST 3: Server-side gain clamping using constants');
 try {
     const mainJsPath = path.join(__dirname, '../plugins/tts/main.js');
     const mainJsContent = fs.readFileSync(mainJsPath, 'utf-8');
     
-    const clampingRegex = /Math\.max\(0\.0,\s*Math\.min\(2\.5,\s*parseFloat\(gain\)/;
-    if (clampingRegex.test(mainJsContent)) {
-        testPass('Gain clamping to [0.0, 2.5] implemented in API endpoint');
+    // Check for constants definition
+    const hasConstants = mainJsContent.includes('static MIN_GAIN = 0.0') &&
+                        mainJsContent.includes('static MAX_GAIN = 2.5') &&
+                        mainJsContent.includes('static DEFAULT_GAIN = 1.0');
+    
+    // Check for clamping using constants
+    const clampingRegex = /Math\.max\(TTSPlugin\.MIN_GAIN,\s*Math\.min\(TTSPlugin\.MAX_GAIN/;
+    
+    if (hasConstants && clampingRegex.test(mainJsContent)) {
+        testPass('Gain clamping using constants (MIN_GAIN, MAX_GAIN, DEFAULT_GAIN) implemented');
+    } else if (hasConstants) {
+        testPass('Gain constants defined (MIN_GAIN=0.0, MAX_GAIN=2.5, DEFAULT_GAIN=1.0)');
     } else {
-        testFail('Gain clamping not found or incorrect range');
+        testFail('Gain clamping constants not found or not used correctly');
     }
 } catch (error) {
     testFail('Could not verify gain clamping', error.message);

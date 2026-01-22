@@ -2,6 +2,17 @@
 // CSP-compliant, no inline handlers, robust error handling
 
 // ============================================================================
+// CONSTANTS
+// ============================================================================
+// Per-user gain control constants (must match backend)
+const MIN_GAIN = 0.0;           // Minimum gain multiplier (0%)
+const MAX_GAIN = 2.5;           // Maximum gain multiplier (250%)
+const DEFAULT_GAIN = 1.0;       // Default gain multiplier (100%)
+const MIN_GAIN_PERCENT = 0;     // Minimum gain percentage for UI
+const MAX_GAIN_PERCENT = 250;   // Maximum gain percentage for UI
+const DEFAULT_GAIN_PERCENT = 100; // Default gain percentage for UI
+
+// ============================================================================
 // GLOBAL STATE
 // ============================================================================
 let socket = null;
@@ -1214,8 +1225,8 @@ async function handleUserGainInputChange(event) {
     const userId = input.dataset.userId;
     let value = parseInt(input.value, 10);
     
-    if (isNaN(value)) value = 100;
-    value = Math.max(0, Math.min(250, value));
+    if (isNaN(value)) value = DEFAULT_GAIN_PERCENT;
+    value = Math.max(MIN_GAIN_PERCENT, Math.min(MAX_GAIN_PERCENT, value));
     
     input.value = value;
     
@@ -1234,17 +1245,17 @@ async function handleUserGainReset(event) {
     const btn = event.target;
     const userId = btn.dataset.userId;
     
-    // Reset to 100%
+    // Reset to default (100%)
     const slider = document.querySelector(`.user-gain-slider[data-user-id="${userId}"]`);
     const input = document.querySelector(`.user-gain-input[data-user-id="${userId}"]`);
     const display = document.querySelector(`.user-gain-display[data-user-id="${userId}"]`);
     
-    if (slider) slider.value = 100;
-    if (input) input.value = 100;
-    if (display) display.textContent = '100%';
+    if (slider) slider.value = DEFAULT_GAIN_PERCENT;
+    if (input) input.value = DEFAULT_GAIN_PERCENT;
+    if (display) display.textContent = DEFAULT_GAIN_PERCENT + '%';
     
     // Send update to server
-    await updateUserGain(userId, 1.0);
+    await updateUserGain(userId, DEFAULT_GAIN);
 }
 
 async function updateUserGain(userId, gain) {
@@ -1276,7 +1287,7 @@ let modalState = {
     selectedVoiceId: null,
     selectedEngine: 'tiktok',
     selectedEmotion: null,
-    volumeGain: 1.0
+    volumeGain: DEFAULT_GAIN
 };
 
 function assignVoiceDialog(userId, username) {
@@ -1284,7 +1295,7 @@ function assignVoiceDialog(userId, username) {
 
     // Get current user to retrieve their existing gain value
     const user = currentUsers.find(u => u.user_id === userId);
-    const currentGain = user?.volume_gain ?? 1.0;
+    const currentGain = user?.volume_gain ?? DEFAULT_GAIN;
 
     modalState.userId = userId;
     modalState.username = username;
@@ -1361,8 +1372,8 @@ function assignVoiceDialog(userId, username) {
 
         gainInput.oninput = () => {
             let value = parseInt(gainInput.value, 10);
-            if (isNaN(value)) value = 100;
-            value = Math.max(0, Math.min(250, value));
+            if (isNaN(value)) value = DEFAULT_GAIN_PERCENT;
+            value = Math.max(MIN_GAIN_PERCENT, Math.min(MAX_GAIN_PERCENT, value));
             gainInput.value = value;
             gainSlider.value = value;
             modalState.volumeGain = value / 100.0;
@@ -1371,9 +1382,9 @@ function assignVoiceDialog(userId, username) {
 
     if (gainReset) {
         gainReset.onclick = () => {
-            gainSlider.value = 100;
-            gainInput.value = 100;
-            modalState.volumeGain = 1.0;
+            gainSlider.value = DEFAULT_GAIN_PERCENT;
+            gainInput.value = DEFAULT_GAIN_PERCENT;
+            modalState.volumeGain = DEFAULT_GAIN;
         };
     }
 
@@ -1407,7 +1418,7 @@ function assignVoiceDialog(userId, username) {
 function closeVoiceAssignmentModal() {
     const modal = document.getElementById('voiceAssignmentModal');
     if (modal) modal.classList.add('hidden');
-    modalState = { userId: null, username: null, selectedVoiceId: null, selectedEngine: 'tiktok', selectedEmotion: null, volumeGain: 1.0 };
+    modalState = { userId: null, username: null, selectedVoiceId: null, selectedEngine: 'tiktok', selectedEmotion: null, volumeGain: DEFAULT_GAIN };
 }
 
 function renderModalVoiceList() {

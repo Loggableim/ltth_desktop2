@@ -3,6 +3,11 @@
  * Manages TTS permissions with team-level gates and manual whitelisting
  */
 class PermissionManager {
+    // Gain control constants (must match TTSPlugin constants)
+    static MIN_GAIN = 0.0;    // Minimum gain multiplier (0%)
+    static MAX_GAIN = 2.5;    // Maximum gain multiplier (250%)
+    static DEFAULT_GAIN = 1.0; // Default gain multiplier (100%)
+
     constructor(db, logger) {
         this.db = db;
         this.logger = logger;
@@ -309,7 +314,7 @@ class PermissionManager {
             
             // Clamp gain to valid range if provided
             const clampedGain = gain !== null && gain !== undefined 
-                ? Math.max(0.0, Math.min(2.5, parseFloat(gain) || 1.0))
+                ? Math.max(PermissionManager.MIN_GAIN, Math.min(PermissionManager.MAX_GAIN, parseFloat(gain) || PermissionManager.DEFAULT_GAIN))
                 : null;
 
             let stmt, params;

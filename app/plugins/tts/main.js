@@ -24,6 +24,11 @@ class TTSPlugin {
     // Error message constant for missing engines
     static NO_ENGINES_ERROR = 'No TTS engines available - please configure at least one engine (TikTok, Google, Speechify, ElevenLabs, OpenAI, Fish.audio, or SiliconFlow)';
 
+    // Per-user gain control constants
+    static MIN_GAIN = 0.0;    // Minimum gain multiplier (0%)
+    static MAX_GAIN = 2.5;    // Maximum gain multiplier (250%)
+    static DEFAULT_GAIN = 1.0; // Default gain multiplier (100%)
+
     // Config keys that should not be updated via regular config update mechanism
     // These keys have dedicated handling (e.g., stored in global settings, need engine reinitialization)
     static CONFIG_KEYS_EXCLUDED_FROM_UPDATE = new Set([
@@ -1552,8 +1557,8 @@ class TTSPlugin {
                 });
             }
 
-            // Clamp gain to valid range [0.0, 2.5]
-            const clampedGain = Math.max(0.0, Math.min(2.5, parseFloat(gain) || 1.0));
+            // Clamp gain to valid range
+            const clampedGain = Math.max(TTSPlugin.MIN_GAIN, Math.min(TTSPlugin.MAX_GAIN, parseFloat(gain) || TTSPlugin.DEFAULT_GAIN));
 
             const result = this.permissionManager.setVolumeGain(userId, clampedGain);
             
