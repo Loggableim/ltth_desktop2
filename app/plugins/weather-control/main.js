@@ -215,6 +215,12 @@ class WeatherControlPlugin {
             res.sendFile(overlayPath);
         });
 
+        // Serve WebGL2 test page
+        this.api.registerRoute('get', '/weather-control/test', (req, res) => {
+            const testPath = path.join(__dirname, 'test-webgl2.html');
+            res.sendFile(testPath);
+        });
+
         // Get current configuration
         this.api.registerRoute('get', '/api/weather/config', async (req, res) => {
             try {

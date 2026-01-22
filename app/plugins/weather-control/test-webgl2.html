@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Control - WebGL2 Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .info-box {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .info-box h2 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .info-box ul {
+            list-style-position: inside;
+            line-height: 1.8;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .controls h2 {
+            margin-bottom: 20px;
+        }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        button {
+            padding: 15px 25px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            backdrop-filter: blur(5px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.stop {
+            background: rgba(239, 68, 68, 0.5);
+            border-color: rgba(239, 68, 68, 0.7);
+        }
+
+        button.stop:hover {
+            background: rgba(239, 68, 68, 0.7);
+        }
+
+        .preview-frame {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+        }
+
+        .status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 2px solid rgba(0, 255, 0, 0.5);
+            min-width: 200px;
+            z-index: 1000;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00ff00;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-info {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .note {
+            background: rgba(59, 130, 246, 0.2);
+            border-left: 4px solid rgba(59, 130, 246, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+
+        .note strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌦️ Weather Control - WebGL2 Renderer Test</h1>
+
+        <div class="info-box">
+            <h2>✨ Features</h2>
+            <ul>
+                <li>WebGL2-based particle rendering with instancing</li>
+                <li>Dual Kawase bloom post-processing (3 levels)</li>
+                <li>Guaranteed transparency with premultiplied alpha</li>
+                <li>Shadow DOM isolation for canvas</li>
+                <li>Debug mode with FPS, particle counts, and transparency verification</li>
+                <li>1200 rain particles, 700 snow particles maximum</li>
+                <li>DPR clamping to 1.5 for optimal performance</li>
+            </ul>
+        </div>
+
+        <div class="controls">
+            <h2>🎮 Test Controls</h2>
+            <div class="button-grid">
+                <button onclick="triggerEffect('rain')">🌧️ Rain</button>
+                <button onclick="triggerEffect('snow')">❄️ Snow</button>
+                <button onclick="triggerEffect('storm')">⛈️ Storm</button>
+                <button onclick="triggerEffect('fog')">🌫️ Fog</button>
+                <button onclick="triggerEffect('thunder')">⚡ Thunder</button>
+                <button onclick="triggerEffect('sunbeam')">☀️ Sunbeam</button>
+                <button class="stop" onclick="stopAll()">🛑 Stop All</button>
+            </div>
+
+            <div class="note">
+                <strong>📝 Note:</strong>
+                This test page loads the overlay in debug mode. Check the green debug panel in the overlay for:
+                <ul style="margin-left: 20px; margin-top: 10px;">
+                    <li>FPS and frame time</li>
+                    <li>Particle counts</li>
+                    <li>Transparency status (should show Alpha: ✅ Enabled)</li>
+                    <li>Initial pixel RGBA (should be [0, 0, 0, 0])</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="preview-frame">
+            <iframe 
+                id="overlay-frame" 
+                src="/weather-control/overlay?debug=true"
+                allow="autoplay">
+            </iframe>
+        </div>
+    </div>
+
+    <div class="status">
+        <div class="status-indicator">
+            <div class="status-dot"></div>
+            <strong>WebGL2 Test Active</strong>
+        </div>
+        <div class="status-info">
+            <div>Effects tested: <span id="effect-count">0</span></div>
+            <div>Last effect: <span id="last-effect">None</span></div>
+        </div>
+    </div>
+
+    <script>
+        let effectCount = 0;
+
+        function triggerEffect(effect) {
+            fetch('/api/weather/trigger', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: effect,
+                    intensity: 0.7,
+                    duration: 10000,
+                    username: 'test-user'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    effectCount++;
+                    document.getElementById('effect-count').textContent = effectCount;
+                    document.getElementById('last-effect').textContent = effect;
+                    console.log(`✅ ${effect} triggered successfully`);
+                } else {
+                    console.error(`❌ Failed to trigger ${effect}:`, data.error);
+                    alert(`Failed to trigger ${effect}: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('❌ Request error:', error);
+                alert(`Request error: ${error.message}`);
+            });
+        }
+
+        function stopAll() {
+            fetch('/api/weather/trigger', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'stop',
+                    username: 'test-user'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('🛑 All effects stopped');
+            })
+            .catch(error => {
+                console.error('❌ Request error:', error);
+            });
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case '1': triggerEffect('rain'); break;
+                case '2': triggerEffect('snow'); break;
+                case '3': triggerEffect('storm'); break;
+                case '4': triggerEffect('fog'); break;
+                case '5': triggerEffect('thunder'); break;
+                case '6': triggerEffect('sunbeam'); break;
+                case 'Escape': stopAll(); break;
+            }
+        });
+
+        console.log('🌦️ Weather Control WebGL2 Test Page loaded');
+        console.log('Keyboard shortcuts: 1-6 for effects, ESC to stop all');
+    </script>
+</body>
+</html>
