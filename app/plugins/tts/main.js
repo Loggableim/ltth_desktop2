@@ -1514,7 +1514,7 @@ class TTSPlugin {
 
         this.api.registerRoute('POST', '/api/tts/users/:userId/voice', (req, res) => {
             const { userId } = req.params;
-            const { username, voiceId, engine, emotion } = req.body;
+            const { username, voiceId, engine, emotion, gain } = req.body;
 
             if (!voiceId || !engine) {
                 return res.status(400).json({
@@ -1528,7 +1528,8 @@ class TTSPlugin {
                 username || userId,
                 voiceId,
                 engine,
-                emotion
+                emotion,
+                gain
             );
             res.json({ success: result });
         });
@@ -1537,6 +1538,34 @@ class TTSPlugin {
             const { userId } = req.params;
             const result = this.permissionManager.removeVoiceAssignment(userId);
             res.json({ success: result });
+        });
+
+        // Update user gain
+        this.api.registerRoute('POST', '/api/tts/users/:userId/gain', (req, res) => {
+            const { userId } = req.params;
+            const { gain } = req.body;
+
+            if (gain === undefined || gain === null) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Missing required field: gain'
+                });
+            }
+
+            // Clamp gain to valid range [0.0, 2.5]
+            const clampedGain = Math.max(0.0, Math.min(2.5, parseFloat(gain) || 1.0));
+
+            const result = this.permissionManager.setVolumeGain(userId, clampedGain);
+            
+            if (result) {
+                // Emit socket event for live gain updates
+                this.api.emit('tts:user:gain_updated', {
+                    userId,
+                    gain: clampedGain
+                });
+            }
+
+            res.json({ success: result, gain: clampedGain });
         });
 
         this.api.registerRoute('DELETE', '/api/tts/users/:userId', (req, res) => {
