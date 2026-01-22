@@ -395,7 +395,6 @@ class WebGL2WeatherRenderer {
         precision highp float;
         
         in vec2 a_position;
-        in vec2 a_texCoord;
         
         uniform vec2 u_resolution;
         uniform vec2 u_offset;
@@ -404,12 +403,13 @@ class WebGL2WeatherRenderer {
         out vec2 v_texCoord;
         
         void main() {
-          vec2 worldPos = (a_position * u_scale) + u_offset;
+          v_texCoord = a_position * 0.5 + 0.5;
+          
+          vec2 worldPos = (a_position * u_scale * vec2(u_resolution.x, u_resolution.y)) + u_offset;
           vec2 clipSpace = (worldPos / u_resolution) * 2.0 - 1.0;
           clipSpace.y *= -1.0;
           
           gl_Position = vec4(clipSpace, 0.5, 1.0);
-          v_texCoord = a_texCoord;
         }`;
         
       case 'lightning':
@@ -828,6 +828,33 @@ class WebGL2WeatherRenderer {
       this.createFramebuffer('bloom1'),
       this.createFramebuffer('bloom2')
     ];
+    
+    // Create noise texture for fog
+    this.createNoiseTexture();
+  }
+  
+  /**
+   * Create a procedural noise texture
+   */
+  createNoiseTexture() {
+    const gl = this.gl;
+    const size = 256;
+    const data = new Uint8Array(size * size);
+    
+    // Generate simple noise
+    for (let i = 0; i < data.length; i++) {
+      data[i] = Math.random() * 255;
+    }
+    
+    this.textures.noise = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.textures.noise);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, size, size, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    
+    console.log('✅ Noise texture created');
   }
   
   /**
@@ -1015,11 +1042,48 @@ class WebGL2WeatherRenderer {
    * Update all particle systems
    */
   updateParticles(deltaTime) {
+    const speed = deltaTime / 16.67; // Normalize to 60fps
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    
     // Update rain particles
-    // TODO: Implement particle update logic
+    this.particleSystems.rain.particles.forEach(p => {
+      p.y += p.speed * speed;
+      p.x += Math.sin(p.angle) * p.speed * 0.1 * speed;
+      
+      // Wrap around when out of bounds
+      if (p.y > h + 50) {
+        p.y = -50;
+        p.x = Math.random() * w;
+      }
+      if (p.x < -50) p.x = w + 50;
+      if (p.x > w + 50) p.x = -50;
+    });
     
     // Update snow particles
-    // TODO: Implement particle update logic
+    this.particleSystems.snow.particles.forEach(p => {
+      const speedY = 1 + (1 - p.layer) * 2; // Closer = faster
+      p.y += speedY * speed;
+      
+      // Update wobble animation
+      p.wobble += 0.03 * speed;
+      p.x += Math.sin(p.wobble) * 0.8 * speed;
+      p.rotation += 0.02 * speed;
+      
+      // Wrap around
+      if (p.y > h + 50) {
+        p.y = -50;
+        p.x = Math.random() * w;
+      }
+      if (p.x < -50) p.x = w + 50;
+      if (p.x > w + 50) p.x = -50;
+    });
+    
+    // Update fog layers
+    this.particleSystems.fog.quads.forEach(q => {
+      q.scrollX += 0.5 * speed * 0.01;
+      q.scrollY += 0.3 * speed * 0.01;
+    });
     
     // Count total particles
     this.metrics.particleCount = 
@@ -1099,11 +1163,73 @@ class WebGL2WeatherRenderer {
     gl.useProgram(program);
     
     // Set uniforms
-    gl.uniform2f(program.uniforms.u_resolution, this.canvas.width, this.canvas.height);
+    gl.uniform2f(program.uniforms.u_resolution, window.innerWidth, window.innerHeight);
     gl.uniform1f(program.uniforms.u_time, time * 0.001);
     
-    // TODO: Setup instance data and draw
-    // For now, just increment draw calls
+    // Prepare instance data
+    const instancePositions = new Float32Array(particles.length * 3);
+    const instanceData = new Float32Array(particles.length * 4);
+    
+    particles.forEach((p, i) => {
+      const i3 = i * 3;
+      const i4 = i * 4;
+      
+      // Position (x, y, layer)
+      instancePositions[i3] = p.x;
+      instancePositions[i3 + 1] = p.y;
+      instancePositions[i3 + 2] = p.layer;
+      
+      // Data (length, angle, alpha, speed)
+      instanceData[i4] = p.length;
+      instanceData[i4 + 1] = p.angle;
+      instanceData[i4 + 2] = p.alpha;
+      instanceData[i4 + 3] = p.speed;
+    });
+    
+    // Upload instance data
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.rainInstances.position);
+    gl.bufferData(gl.ARRAY_BUFFER, instancePositions, gl.DYNAMIC_DRAW);
+    
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.rainInstances.data);
+    gl.bufferData(gl.ARRAY_BUFFER, instanceData, gl.DYNAMIC_DRAW);
+    
+    // Setup geometry
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.rainGeometry);
+    const posLoc = program.attributes.a_position;
+    if (posLoc !== undefined && posLoc !== -1) {
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    }
+    
+    // Setup instance position attribute
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.rainInstances.position);
+    const instPosLoc = program.attributes.a_instancePosition;
+    if (instPosLoc !== undefined && instPosLoc !== -1) {
+      gl.enableVertexAttribArray(instPosLoc);
+      gl.vertexAttribPointer(instPosLoc, 3, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribDivisor(instPosLoc, 1);
+    }
+    
+    // Setup instance data attribute
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.rainInstances.data);
+    const instDataLoc = program.attributes.a_instanceData;
+    if (instDataLoc !== undefined && instDataLoc !== -1) {
+      gl.enableVertexAttribArray(instDataLoc);
+      gl.vertexAttribPointer(instDataLoc, 4, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribDivisor(instDataLoc, 1);
+    }
+    
+    // Draw instanced
+    gl.drawArraysInstanced(gl.LINES, 0, 2, particles.length);
+    
+    // Clean up divisors
+    if (instPosLoc !== undefined && instPosLoc !== -1) {
+      gl.vertexAttribDivisor(instPosLoc, 0);
+    }
+    if (instDataLoc !== undefined && instDataLoc !== -1) {
+      gl.vertexAttribDivisor(instDataLoc, 0);
+    }
+    
     this.metrics.drawCalls++;
   }
   
@@ -1121,10 +1247,73 @@ class WebGL2WeatherRenderer {
     gl.useProgram(program);
     
     // Set uniforms
-    gl.uniform2f(program.uniforms.u_resolution, this.canvas.width, this.canvas.height);
+    gl.uniform2f(program.uniforms.u_resolution, window.innerWidth, window.innerHeight);
     gl.uniform1f(program.uniforms.u_time, time * 0.001);
     
-    // TODO: Setup instance data and draw
+    // Prepare instance data
+    const instancePositions = new Float32Array(particles.length * 3);
+    const instanceData = new Float32Array(particles.length * 4);
+    
+    particles.forEach((p, i) => {
+      const i3 = i * 3;
+      const i4 = i * 4;
+      
+      // Position (x, y, layer)
+      instancePositions[i3] = p.x;
+      instancePositions[i3 + 1] = p.y;
+      instancePositions[i3 + 2] = p.layer;
+      
+      // Data (size, rotation, alpha, wobble)
+      instanceData[i4] = p.size;
+      instanceData[i4 + 1] = p.rotation;
+      instanceData[i4 + 2] = p.alpha;
+      instanceData[i4 + 3] = p.wobble;
+    });
+    
+    // Upload instance data
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.snowInstances.position);
+    gl.bufferData(gl.ARRAY_BUFFER, instancePositions, gl.DYNAMIC_DRAW);
+    
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.snowInstances.data);
+    gl.bufferData(gl.ARRAY_BUFFER, instanceData, gl.DYNAMIC_DRAW);
+    
+    // Setup geometry
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.snowGeometry);
+    const posLoc = program.attributes.a_position;
+    if (posLoc !== undefined && posLoc !== -1) {
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    }
+    
+    // Setup instance position attribute
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.snowInstances.position);
+    const instPosLoc = program.attributes.a_instancePosition;
+    if (instPosLoc !== undefined && instPosLoc !== -1) {
+      gl.enableVertexAttribArray(instPosLoc);
+      gl.vertexAttribPointer(instPosLoc, 3, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribDivisor(instPosLoc, 1);
+    }
+    
+    // Setup instance data attribute
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.snowInstances.data);
+    const instDataLoc = program.attributes.a_instanceData;
+    if (instDataLoc !== undefined && instDataLoc !== -1) {
+      gl.enableVertexAttribArray(instDataLoc);
+      gl.vertexAttribPointer(instDataLoc, 4, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribDivisor(instDataLoc, 1);
+    }
+    
+    // Draw instanced
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, particles.length);
+    
+    // Clean up divisors
+    if (instPosLoc !== undefined && instPosLoc !== -1) {
+      gl.vertexAttribDivisor(instPosLoc, 0);
+    }
+    if (instDataLoc !== undefined && instDataLoc !== -1) {
+      gl.vertexAttribDivisor(instDataLoc, 0);
+    }
+    
     this.metrics.drawCalls++;
   }
   
@@ -1132,15 +1321,106 @@ class WebGL2WeatherRenderer {
    * Render fog layers
    */
   renderFog(time) {
-    // TODO: Implement fog rendering
-    this.metrics.drawCalls++;
+    const gl = this.gl;
+    const program = this.programs.fog;
+    if (!program) return;
+    
+    const quads = this.particleSystems.fog.quads;
+    if (quads.length === 0) return;
+    
+    gl.useProgram(program);
+    
+    // Set common uniforms
+    gl.uniform2f(program.uniforms.u_resolution, window.innerWidth, window.innerHeight);
+    gl.uniform1f(program.uniforms.u_time, time * 0.001);
+    
+    // Bind noise texture
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.textures.noise);
+    gl.uniform1i(program.uniforms.u_noiseTexture, 0);
+    
+    // Setup fullscreen quad geometry
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.fullscreenQuad);
+    const posLoc = program.attributes.a_position;
+    
+    if (posLoc !== undefined && posLoc !== -1) {
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    }
+    
+    // Draw each fog layer
+    quads.forEach(q => {
+      gl.uniform2f(program.uniforms.u_offset, 0, 0);
+      gl.uniform1f(program.uniforms.u_scale, q.scale);
+      gl.uniform1f(program.uniforms.u_alpha, q.alpha);
+      gl.uniform2f(program.uniforms.u_scroll, q.scrollX, q.scrollY);
+      
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      this.metrics.drawCalls++;
+    });
   }
   
   /**
    * Render lightning bolts
    */
   renderLightning(time) {
-    // TODO: Implement lightning rendering
+    const gl = this.gl;
+    const program = this.programs.lightning;
+    if (!program) return;
+    
+    // Check if we should show lightning (random chance or storm active)
+    const shouldShowLightning = this.activeEffects.has('storm') && Math.random() > 0.98;
+    
+    if (!shouldShowLightning && !this.lastLightningTime) return;
+    
+    // Track lightning timing
+    if (!this.lastLightningTime) {
+      this.lastLightningTime = time;
+      this.lightningDuration = 150 + Math.random() * 200; // 150-350ms
+    }
+    
+    const elapsed = time - this.lastLightningTime;
+    if (elapsed > this.lightningDuration) {
+      this.lastLightningTime = null;
+      return;
+    }
+    
+    gl.useProgram(program);
+    
+    // Lightning parameters
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const startX = Math.random() * w;
+    const startY = 0;
+    const endX = startX + (Math.random() - 0.5) * 300;
+    const endY = h * (0.3 + Math.random() * 0.4);
+    
+    gl.uniform2f(program.uniforms.u_resolution, w, h);
+    gl.uniform2f(program.uniforms.u_start, startX, startY);
+    gl.uniform2f(program.uniforms.u_end, endX, endY);
+    gl.uniform1f(program.uniforms.u_thickness, 20 + Math.random() * 30);
+    gl.uniform3f(program.uniforms.u_color, 0.9, 0.95, 1.0); // Bright blue-white
+    gl.uniform1f(program.uniforms.u_intensity, 1.0 - (elapsed / this.lightningDuration));
+    
+    // Setup geometry
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.fullscreenQuad);
+    const posLoc = program.attributes.a_position;
+    if (posLoc !== undefined && posLoc !== -1) {
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    }
+    
+    // Use additive blending for glow
+    gl.blendFunc(gl.ONE, gl.ONE);
+    
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    
+    // Restore premultiplied alpha blending
+    gl.blendFuncSeparate(
+      gl.ONE, gl.ONE_MINUS_SRC_ALPHA,
+      gl.ONE, gl.ONE_MINUS_SRC_ALPHA
+    );
+    
     this.metrics.drawCalls++;
   }
   
@@ -1148,8 +1428,48 @@ class WebGL2WeatherRenderer {
    * Render sunbeams
    */
   renderSunbeams(time) {
-    // TODO: Implement sunbeam rendering
-    this.metrics.drawCalls++;
+    const gl = this.gl;
+    const program = this.programs.sunbeam;
+    if (!program) return;
+    
+    gl.useProgram(program);
+    
+    // Sunbeam parameters
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const originX = w * (0.3 + Math.sin(time * 0.0001) * 0.2); // Slowly moving
+    const originY = -h * 0.2; // Above screen
+    
+    gl.uniform2f(program.uniforms.u_resolution, w, h);
+    gl.uniform2f(program.uniforms.u_origin, originX, originY);
+    gl.uniform1f(program.uniforms.u_angle, Math.PI * 0.4); // Angled from top
+    gl.uniform1f(program.uniforms.u_spread, Math.PI * 0.3); // Beam spread
+    gl.uniform1f(program.uniforms.u_intensity, 0.6);
+    
+    // Setup geometry
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.fullscreenQuad);
+    const posLoc = program.attributes.a_position;
+    if (posLoc !== undefined && posLoc !== -1) {
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    }
+    
+    // Use additive blending for glow
+    gl.blendFunc(gl.ONE, gl.ONE);
+    
+    // Draw multiple beams
+    for (let i = 0; i < 3; i++) {
+      const offset = (i - 1) * 0.15;
+      gl.uniform1f(program.uniforms.u_angle, Math.PI * (0.4 + offset));
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      this.metrics.drawCalls++;
+    }
+    
+    // Restore premultiplied alpha blending
+    gl.blendFuncSeparate(
+      gl.ONE, gl.ONE_MINUS_SRC_ALPHA,
+      gl.ONE, gl.ONE_MINUS_SRC_ALPHA
+    );
   }
   
   /**
