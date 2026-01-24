@@ -242,9 +242,7 @@ class Particle {
         // Handle despawn fade effect
         if (this.isDespawning) {
             const despawnDuration = CONFIG.despawnFadeDuration * 1000; // Convert to ms
-            // Quick Win #7: Use cached timestamp
-            const now = window.fireworksEngine?.frameTimestamp || performance.now();
-            const elapsed = now - this.despawnStartTime;
+            const elapsed = performance.now() - this.despawnStartTime;
             const fadeProgress = Math.min(elapsed / despawnDuration, 1.0);
             
             // Fade out alpha smoothly
@@ -254,15 +252,6 @@ class Particle {
             if (fadeProgress >= 1.0) {
                 this.lifespan = 0;
             }
-        }
-        
-        // Quick Win #2: Skip physics for far offscreen particles
-        const margin = 200;
-        if (this.x < -margin * 2 || this.x > window.innerWidth + margin * 2 ||
-            this.y > window.innerHeight + margin * 2) {
-            // Mark for removal but don't waste CPU on physics
-            this.lifespan = 0;
-            return;
         }
         
         // Apply air resistance (frame-independent)
@@ -296,19 +285,8 @@ class Particle {
             }
         }
         
-        // Quick Win #3: Dynamic trail length based on performance
-        const engine = window.fireworksEngine;
-        const maxTrailLength = !engine ? CONFIG.trailLength :
-                              engine.fps > 50 ? CONFIG.trailLength :
-                              engine.fps > 35 ? Math.floor(CONFIG.trailLength * 0.6) :
-                              Math.floor(CONFIG.trailLength * 0.3);
-
-        // Ensure minimum trail length to prevent array thrashing
-        const minTrailLength = 5; // Never go below 5 to avoid shift() overhead
-        const effectiveMaxTrailLength = Math.max(minTrailLength, maxTrailLength);
-
         // Store trail with fading based on age
-        if (this.trail.length > effectiveMaxTrailLength) {
+        if (this.trail.length > CONFIG.trailLength) {
             this.trail.shift();
         }
         
@@ -331,23 +309,7 @@ class Particle {
     }
     
     isDone() {
-        // Check lifespan first
-        if (this.lifespan <= 0) return true;
-        
-        // Use canvas dimensions for accurate culling on ALL edges
-        // This is critical: particles can go off top/left/right edges, not just bottom!
-        const engine = window.fireworksEngine;
-        if (!engine) {
-            // Fallback: only check bottom edge if engine not available yet
-            return this.y > window.innerHeight + 200;
-        }
-        
-        // Check all four edges with margin - particles outside are done
-        // Small canvases (360p) have particles leave edges quickly, causing "zombie particles"
-        // that update but aren't rendered, killing performance
-        const margin = 200;
-        return this.x < -margin || this.x > engine.width + margin || 
-               this.y < -margin || this.y > engine.height + margin;
+        return this.lifespan <= 0 || this.y > window.innerHeight + 100;
     }
     
     /**
@@ -357,8 +319,7 @@ class Particle {
     startDespawn() {
         if (!this.isDespawning) {
             this.isDespawning = true;
-            // Quick Win #7: Use cached timestamp
-            this.despawnStartTime = window.fireworksEngine?.frameTimestamp || performance.now();
+            this.despawnStartTime = performance.now();
         }
     }
     
@@ -624,16 +585,14 @@ class Firework {
         const comboMult = 1 + (this.combo - 1) * 0.2;
         
         // Reduce particles for high combos to improve performance
-        // Quick Win #4: More aggressive combo reduction for better FPS
+        // Aggressive combo reduction for better FPS
         let baseParticles = 40 + Math.random() * 60;
         if (this.combo >= 20) {
-            baseParticles *= 0.2; // 20% at combo >= 20
-        } else if (this.combo >= 15) {
-            baseParticles *= 0.3; // 30% at combo >= 15 (NEW)
+            baseParticles *= 0.2; // 80% reduction for combo >= 20
         } else if (this.combo >= 10) {
-            baseParticles *= 0.4; // 40% at combo >= 10 (was 50%)
+            baseParticles *= 0.5; // 50% particles for combo >= 10
         } else if (this.combo >= 5) {
-            baseParticles *= 0.6; // 60% at combo >= 5 (was 70%)
+            baseParticles *= 0.7; // 70% particles for combo >= 5
         }
         
         // Additional FPS-based reduction - reduce particles when FPS is low
@@ -756,18 +715,13 @@ class Firework {
         }
         
         // Update explosion particles
-        // Quick Win #6: Cache array lengths
-        const particlesLength = this.particles.length;
-        for (let i = particlesLength - 1; i >= 0; i--) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
             p.applyGravity();
             p.update(deltaTime);
             
-            // Quick Win #7: Use cached timestamp for burst checks
-            const now = window.fireworksEngine?.frameTimestamp || performance.now();
-            
             // Check for secondary mini-burst (burst shape)
-            if (p.willBurst && !p.hasBurst && now - p.burstTime >= p.burstDelay) {
+            if (p.willBurst && !p.hasBurst && performance.now() - p.burstTime >= p.burstDelay) {
                 p.hasBurst = true;
                 this.createMiniBurst(p);
                 // Trigger crackling sound callback
@@ -778,7 +732,7 @@ class Firework {
             }
             
             // Check for secondary spiral burst (spiral shape)
-            if (p.willSpiral && !p.hasSpiraled && now - p.burstTime >= p.spiralDelay) {
+            if (p.willSpiral && !p.hasSpiraled && performance.now() - p.burstTime >= p.spiralDelay) {
                 p.hasSpiraled = true;
                 this.createSpiralBurst(p);
                 // Trigger crackling sound callback
@@ -804,8 +758,7 @@ class Firework {
         }
         
         // Update secondary explosions
-        const secondaryLength = this.secondaryExplosions.length;
-        for (let i = secondaryLength - 1; i >= 0; i--) {
+        for (let i = this.secondaryExplosions.length - 1; i >= 0; i--) {
             const p = this.secondaryExplosions[i];
             p.applyGravity();
             p.update(deltaTime);
@@ -1558,13 +1511,7 @@ class AudioManager {
 class FireworksEngine {
     constructor(canvasId) {
         this.canvas = document.getElementById(canvasId);
-        
-        // Force hardware acceleration with performance hints
-        this.ctx = this.canvas.getContext('2d', {
-            alpha: true,
-            desynchronized: true,        // Unlock from vsync for better perf
-            willReadFrequently: false    // Hint: only writing, no reading
-        });
+        this.ctx = this.canvas.getContext('2d');
         
         this.fireworks = [];
         this.audioManager = new AudioManager();
@@ -1577,7 +1524,6 @@ class FireworksEngine {
         
         this.lastTime = performance.now();
         this.lastRenderTime = performance.now(); // Track last actual render time for FPS limiting
-        this.frameTimestamp = performance.now(); // Quick Win #7: Cached timestamp
         this.frameCount = 0;
         this.fps = 0;
         this.fpsUpdateTime = performance.now();
@@ -2162,9 +2108,6 @@ class FireworksEngine {
 
         const now = performance.now();
         
-        // Quick Win #7: Cache timestamp for this frame
-        this.frameTimestamp = now;
-        
         // FPS Throttling: Calculate target frame time based on targetFps
         const targetFps = this.config.targetFps || CONFIG.targetFps;
         const targetFrameTime = 1000 / targetFps; // ms per frame
@@ -2188,9 +2131,7 @@ class FireworksEngine {
         this.ctx.fillRect(0, 0, this.width, this.height);
 
         // Update and render all fireworks with deltaTime for frame-independent physics
-        // Quick Win #6: Cache array length for performance
-        const fireworksLength = this.fireworks.length;
-        for (let i = fireworksLength - 1; i >= 0; i--) {
+        for (let i = this.fireworks.length - 1; i >= 0; i--) {
             this.fireworks[i].update(deltaTime);
             this.renderFirework(this.fireworks[i]);
             
@@ -2260,31 +2201,25 @@ class FireworksEngine {
                 CONFIG.trailLength = 3; // Minimal performance
             }
             
-            // Adaptive performance mode with resolution-aware thresholds
+            // Adaptive performance mode
             const targetFps = this.config.targetFps || CONFIG.targetFps;
             const minFps = this.config.minFps || CONFIG.minFps;
             
-            // Scale FPS expectations based on resolution
-            // 360p should target ~40 FPS, 1080p should target 60 FPS
-            const resolutionScale = Math.min(this.width / 1920, 1.0); // 0.33 for 360p, 1.0 for 1080p+
-            const adjustedMinFps = Math.floor(minFps * (0.7 + resolutionScale * 0.3)); // 19 for 360p, 24 for 1080p
-            const adjustedTargetFps = Math.floor(targetFps * (0.7 + resolutionScale * 0.3)); // 45 for 360p, 60 for 1080p
-            
-            if (avgFps < adjustedMinFps) {
+            if (avgFps < minFps) {
                 // Performance is suffering - enter minimal mode
                 if (this.performanceMode !== 'minimal') {
                     this.performanceMode = 'minimal';
                     this.applyPerformanceMode();
-                    if (DEBUG) console.log('[Fireworks] Adaptive Performance: MINIMAL mode (FPS:', avgFps.toFixed(1), ', adjusted threshold:', adjustedMinFps, ')');
+                    if (DEBUG) console.log('[Fireworks] Adaptive Performance: MINIMAL mode (FPS:', avgFps.toFixed(1), ')');
                 }
-            } else if (avgFps < adjustedTargetFps * 0.8) {
+            } else if (avgFps < targetFps * 0.8) {
                 // Performance is degraded - enter reduced mode
                 if (this.performanceMode !== 'reduced') {
                     this.performanceMode = 'reduced';
                     this.applyPerformanceMode();
-                    if (DEBUG) console.log('[Fireworks] Adaptive Performance: REDUCED mode (FPS:', avgFps.toFixed(1), ', adjusted threshold:', adjustedTargetFps * 0.8, ')');
+                    if (DEBUG) console.log('[Fireworks] Adaptive Performance: REDUCED mode (FPS:', avgFps.toFixed(1), ')');
                 }
-            } else if (avgFps >= adjustedTargetFps * 0.95) {
+            } else if (avgFps >= targetFps * 0.95) {
                 // Performance is good - return to normal mode
                 if (this.performanceMode !== 'normal') {
                     this.performanceMode = 'normal';
@@ -2315,46 +2250,64 @@ class FireworksEngine {
         // Adjust CONFIG based on performance mode
         switch (this.performanceMode) {
             case 'minimal':
-                // Quick Win #5: Extreme reduction for very low FPS
+                // Extreme reduction for very low FPS
                 CONFIG.maxParticlesPerExplosion = 50;
-                CONFIG.trailLength = 3; // Reduced from 5
+                CONFIG.trailLength = 5;
                 CONFIG.sparkleChance = 0.05;
                 CONFIG.secondaryExplosionChance = 0;
                 this.config.glowEnabled = false;
-                this.config.trailsEnabled = false; // Ensure trails are fully disabled
-                
-                // Only despawn when EXTREMELY overloaded (>20 fireworks, not >5)
-                while (this.fireworks.length > 20) {
+                this.config.trailsEnabled = false;
+                // Limit active fireworks with graceful despawn
+                while (this.fireworks.length > 5) {
                     const fw = this.fireworks[this.fireworks.length - 1];
-                    
-                    // Instant removal without fade (faster than despawn animation)
-                    if (globalParticlePool) {
-                        globalParticlePool.releaseAll(fw.particles);
-                        globalParticlePool.releaseAll(fw.secondaryExplosions);
+                    // Start despawn fade for rocket
+                    if (!fw.exploded && fw.rocket) {
+                        fw.rocket.startDespawn();
                     }
-                    this.fireworks.pop();
+                    // Start despawn fade for all particles
+                    fw.particles.forEach(p => p.startDespawn());
+                    fw.secondaryExplosions.forEach(p => p.startDespawn());
+                    // Don't remove immediately - let despawn effect complete
+                    // Only remove if already despawning for enough time
+                    // Using half of despawn duration ensures smooth fade without premature removal
+                    const minDespawnTime = (CONFIG.despawnFadeDuration * 1000) / 2;
+                    if (fw.rocket && fw.rocket.isDespawning && 
+                        performance.now() - fw.rocket.despawnStartTime > minDespawnTime) {
+                        this.fireworks.pop();
+                    } else {
+                        break; // Wait for despawn to complete
+                    }
                 }
                 break;
                 
             case 'reduced':
-                // Quick Win #5: Moderate reduction for low FPS
+                // Moderate reduction for low FPS
                 CONFIG.maxParticlesPerExplosion = 100;
-                CONFIG.trailLength = 8; // Reduced from 10
+                CONFIG.trailLength = 10;
                 CONFIG.sparkleChance = 0.08;
                 CONFIG.secondaryExplosionChance = 0.05;
-                this.config.glowEnabled = false; // Disable glow in reduced mode (NEW)
+                this.config.glowEnabled = true;
                 this.config.trailsEnabled = true;
-                
-                // Instant removal despawn at 15 fireworks
+                // Limit active fireworks with graceful despawn
                 while (this.fireworks.length > 15) {
                     const fw = this.fireworks[this.fireworks.length - 1];
-                    
-                    // Instant removal without fade
-                    if (globalParticlePool) {
-                        globalParticlePool.releaseAll(fw.particles);
-                        globalParticlePool.releaseAll(fw.secondaryExplosions);
+                    // Start despawn fade for rocket
+                    if (!fw.exploded && fw.rocket) {
+                        fw.rocket.startDespawn();
                     }
-                    this.fireworks.pop();
+                    // Start despawn fade for all particles
+                    fw.particles.forEach(p => p.startDespawn());
+                    fw.secondaryExplosions.forEach(p => p.startDespawn());
+                    // Don't remove immediately - let despawn effect complete
+                    // Only remove if already despawning for enough time
+                    // Using half of despawn duration ensures smooth fade without premature removal
+                    const minDespawnTime = (CONFIG.despawnFadeDuration * 1000) / 2;
+                    if (fw.rocket && fw.rocket.isDespawning && 
+                        performance.now() - fw.rocket.despawnStartTime > minDespawnTime) {
+                        this.fireworks.pop();
+                    } else {
+                        break; // Wait for despawn to complete
+                    }
                 }
                 break;
                 
@@ -2606,28 +2559,12 @@ class FireworksEngine {
 }
 
 // ============================================================================
-// EXPOSE FIREWORKS ENGINE CLASS
-// ============================================================================
-
-// Expose FireworksEngine class immediately so engine-manager.js can use it
-if (typeof window !== 'undefined') {
-    window.FireworksEngine = FireworksEngine;
-}
-
-// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
 let engine = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Skip auto-initialization if engine-manager is being used
-    // engine-manager will handle initialization and audio preloading
-    if (window.FireworksEngineManager) {
-        if (DEBUG) console.log('[Fireworks] Skipping auto-init (engine-manager detected)');
-        return;
-    }
-    
     const canvas = document.getElementById('fireworks-canvas');
     if (!canvas) {
         console.error('[Fireworks] Canvas element not found');
@@ -2693,9 +2630,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (DEBUG) console.log('[Fireworks] Advanced engine ready');
 });
 
-// Also expose the initialized engine instance for backwards compatibility
+// Only expose engine after initialization
 if (typeof window !== 'undefined') {
-    Object.defineProperty(window, 'fireworksEngine', {
+    Object.defineProperty(window, 'FireworksEngine', {
         get: () => engine,
         configurable: false,
         enumerable: true

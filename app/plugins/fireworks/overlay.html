@@ -28,8 +28,8 @@
 
         #fireworks-canvas {
             display: block;
-            /* Remove CSS scaling - let canvas size be its natural size */
-            /* This prevents upscaling overhead */
+            width: 100%;
+            height: 100%;
         }
 
         /* Gift info popup */
@@ -640,8 +640,6 @@
         <div>FPS: <span id="fps">0</span></div>
         <div>Particles: <span id="particle-count">0</span></div>
         <div>Renderer: <span id="renderer-type">-</span></div>
-        <div>Backend: <span id="current-backend">Detecting...</span></div>
-        <div>Worker: <span id="worker-status">-</span></div>
     </div>
 
     <!-- Follower Thank You Animation -->
@@ -658,88 +656,6 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <!-- Load engine files in order: Canvas 2D (base), Manager (selector) -->
-    <!-- First, expose a flag to prevent auto-initialization -->
-    <script>
-        // Signal that engine-manager will handle initialization
-        window.FireworksEngineManager = true;
-    </script>
     <script src="/plugins/fireworks/gpu/engine.js"></script>
-    <script type="module">
-        // Import engine manager and initialize with backend selection
-        import FireworksEngineManager from '/plugins/fireworks/gpu/engine-manager.js';
-        
-        // Initialize engine manager with configuration
-        const engineManager = new FireworksEngineManager('fireworks-canvas', {
-            preferredBackend: localStorage.getItem('fireworks-backend') || 'auto',
-            useWorker: localStorage.getItem('fireworks-use-worker') !== 'false'
-        });
-        
-        // Initialize and start
-        (async () => {
-            try {
-                const success = await engineManager.init();
-                
-                if (success) {
-                    console.log('[Fireworks] Engine initialized successfully');
-                    console.log('[Fireworks] Backend:', engineManager.backendType);
-                    console.log('[Fireworks] Worker:', engineManager.worker ? 'enabled' : 'disabled');
-                    
-                    // Expose globally for compatibility
-                    const engine = engineManager.backend;
-                    window.FireworksEngine = engine;
-                    window.FireworksEngineManager = engineManager;
-                    
-                    // Preload audio files
-                    if (engine && engine.audioManager) {
-                        await engine.audioManager.preload('/plugins/fireworks/audio/abschussgeraeusch.mp3', 'launch-basic');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/abschussgeraeusch2.mp3', 'launch-basic2');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/explosion.mp3', 'explosion-basic');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/rocket.mp3', 'rocket-basic');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/explosion_small1.mp3', 'explosion-small');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/explosion_medium.mp3', 'explosion-medium');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/explosion2.mp3', 'explosion-alt1');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/explosion3.mp3', 'explosion-alt2');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/explosion_big.mp3', 'explosion-big');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/explosion_huge.mp3', 'explosion-huge');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/explosion%20Pop%2CSharp%2C.mp3', 'explosion-pop');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/crackling.mp3', 'crackling-long');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/crackling2.mp3', 'crackling-medium');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/woosh_abheben_crackling_bang.mp3', 'combined-crackling-bang');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/woosh_abheben_mit-pfeifen_normal-bang.mp3', 'combined-whistle-normal');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/woosh_abheben_mit-pfeifen_tiny-bang.mp3', 'combined-whistle-tiny1');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/woosh_abheben_mit-pfeifen_tiny-bang2.mp3', 'combined-whistle-tiny2');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/woosh_abheben_mit-pfeifen_tiny-bang3.mp3', 'combined-whistle-tiny3');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/woosh_abheben_mit-pfeifen_tiny-bang4.mp3', 'combined-whistle-tiny4');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/woosh_abheben_mit-pfeifen_no-bang.mp3', 'launch-whistle');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/woosh_abheben_nocrackling_no-bang.mp3', 'launch-smooth');
-                        await engine.audioManager.preload('/plugins/fireworks/audio/woosh_abheben_nocrackling_no-bang2.mp3', 'launch-smooth2');
-                        
-                        console.log('[Fireworks] Audio files preloaded');
-                        
-                        // Enable audio context on first user interaction
-                        const enableAudio = async () => {
-                            await engine.audioManager.ensureAudioContext();
-                            document.removeEventListener('click', enableAudio);
-                            document.removeEventListener('keydown', enableAudio);
-                        };
-                        document.addEventListener('click', enableAudio);
-                        document.addEventListener('keydown', enableAudio);
-                    }
-                    
-                    // Debug mode toggle
-                    document.addEventListener('keydown', (e) => {
-                        if (e.key.toLowerCase() === 'd' && engine.toggleDebug) {
-                            engine.toggleDebug();
-                        }
-                    });
-                } else {
-                    console.error('[Fireworks] Failed to initialize engine');
-                }
-            } catch (error) {
-                console.error('[Fireworks] Engine initialization error:', error);
-            }
-        })();
-    </script>
 </body>
 </html>
