@@ -659,7 +659,7 @@ function setupEventListeners() {
     if (backgroundColorHex) {
         backgroundColorHex.addEventListener('input', function() {
             const color = this.value;
-            if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
+            if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(color)) {
                 config.overlayBackgroundColor = color;
                 if (backgroundColorPicker) {
                     backgroundColorPicker.value = color;
