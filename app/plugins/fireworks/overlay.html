@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="only light">
     <title>Fireworks Overlay - TikTok Stream Tool</title>
     <style>
         * {
@@ -21,6 +22,10 @@
             background-color: transparent;
             overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            /* OBS Browser Source compatibility */
+            position: relative;
+            margin: 0;
+            padding: 0;
         }
 
         #fireworks-container {
@@ -32,6 +37,8 @@
             pointer-events: none;
             background: transparent;
             background-color: transparent;
+            /* OBS Browser Source compatibility */
+            z-index: 1;
         }
 
         #fireworks-canvas {
@@ -47,6 +54,9 @@
             will-change: transform;
             transform: translate3d(0, 0, 0);
             backface-visibility: hidden;
+            /* OBS Browser Source compatibility - critical for transparency */
+            image-rendering: auto;
+            -webkit-transform: translateZ(0);
         }
         
         /* Classes for dynamic background control via JavaScript */

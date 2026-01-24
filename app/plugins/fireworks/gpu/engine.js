@@ -1566,6 +1566,9 @@ class FireworksEngine {
             willReadFrequently: false    // Hint: only writing, no reading
         });
         
+        // Set composite operation for proper transparency (especially important for OBS)
+        this.ctx.globalCompositeOperation = 'source-over';
+        
         this.fireworks = [];
         this.audioManager = new AudioManager();
         
