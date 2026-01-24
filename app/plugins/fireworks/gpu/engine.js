@@ -243,7 +243,7 @@ class Particle {
         if (this.isDespawning) {
             const despawnDuration = CONFIG.despawnFadeDuration * 1000; // Convert to ms
             // Quick Win #7: Use cached timestamp
-            const now = window.FireworksEngine?.frameTimestamp || performance.now();
+            const now = window.fireworksEngine?.frameTimestamp || performance.now();
             const elapsed = now - this.despawnStartTime;
             const fadeProgress = Math.min(elapsed / despawnDuration, 1.0);
             
@@ -297,7 +297,7 @@ class Particle {
         }
         
         // Quick Win #3: Dynamic trail length based on performance
-        const engine = window.FireworksEngine;
+        const engine = window.fireworksEngine;
         const maxTrailLength = !engine ? CONFIG.trailLength :
                               engine.fps > 50 ? CONFIG.trailLength :
                               engine.fps > 35 ? Math.floor(CONFIG.trailLength * 0.6) :
@@ -336,7 +336,7 @@ class Particle {
         
         // Use canvas dimensions for accurate culling on ALL edges
         // This is critical: particles can go off top/left/right edges, not just bottom!
-        const engine = window.FireworksEngine;
+        const engine = window.fireworksEngine;
         if (!engine) {
             // Fallback: only check bottom edge if engine not available yet
             return this.y > window.innerHeight + 200;
@@ -358,7 +358,7 @@ class Particle {
         if (!this.isDespawning) {
             this.isDespawning = true;
             // Quick Win #7: Use cached timestamp
-            this.despawnStartTime = window.FireworksEngine?.frameTimestamp || performance.now();
+            this.despawnStartTime = window.fireworksEngine?.frameTimestamp || performance.now();
         }
     }
     
@@ -764,7 +764,7 @@ class Firework {
             p.update(deltaTime);
             
             // Quick Win #7: Use cached timestamp for burst checks
-            const now = window.FireworksEngine?.frameTimestamp || performance.now();
+            const now = window.fireworksEngine?.frameTimestamp || performance.now();
             
             // Check for secondary mini-burst (burst shape)
             if (p.willBurst && !p.hasBurst && now - p.burstTime >= p.burstDelay) {
