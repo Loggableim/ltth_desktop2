@@ -359,18 +359,13 @@
                 element.volume = validVolume;
                 element.autoplay = true;
             } else {
-                // Fallback - try video with autoplay fix
+                // Fallback - try video with autoplay fix (same logic as main video path)
                 element = document.createElement('video');
                 element.src = url;
                 element.volume = validVolume;
                 element.muted = true; // Start muted for autoplay
                 element.autoplay = true;
                 element.playsInline = true;
-                
-                // Apply same unmuting logic as main video path
-                if (validVolume > 0) {
-                    // Will be handled in event listener setup below
-                }
             }
 
             // Create wrapper div
@@ -399,7 +394,7 @@
                     } else {
                         element.addEventListener('loadedmetadata', () => {
                             duration = element.duration * 1000;
-                        }, { signal });
+                        }, { signal, once: true });
                     }
 
                     element.addEventListener('ended', cleanup, { signal, once: true });
