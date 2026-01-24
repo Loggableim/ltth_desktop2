@@ -139,6 +139,11 @@ class FireworksPlugin {
                     }
                 });
                 
+                // Listen for config requests
+                socket.on('fireworks:request-config', () => {
+                    socket.emit('fireworks:config', { config: this.config });
+                });
+                
                 // Clean up on disconnect
                 socket.on('disconnect', () => {
                     this.connectedSockets.delete(socket);
@@ -289,6 +294,10 @@ class FireworksPlugin {
             // Gift popup
             giftPopupEnabled: true, // Show gift animation text
             giftPopupPosition: 'bottom', // 'top', 'middle', 'bottom', 'none'
+            
+            // Overlay background
+            overlayBackgroundMode: 'transparent', // 'transparent' or 'color'
+            overlayBackgroundColor: '#000000', // Background color when mode is 'color'
             
             // Queue system - Lag prevention through rate limiting
             queueEnabled: false, // Enable queue system to limit fireworks per second

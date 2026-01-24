@@ -734,6 +734,48 @@
                     </div>
                 </div>
 
+                <!-- Overlay Background Settings -->
+                <div class="card rounded-xl p-6 border-2 border-purple-500/30">
+                    <h2 class="section-title text-xl font-bold mb-4">🎨 Overlay Background</h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block mb-2"><strong>Background Mode</strong></label>
+                            <select id="overlay-background-mode" class="w-full bg-black/30 rounded-lg px-4 py-2" data-config="overlayBackgroundMode">
+                                <option value="transparent">Transparent (Default)</option>
+                                <option value="color">Custom Color</option>
+                            </select>
+                            <p class="text-xs text-gray-400 mt-1">
+                                Choose transparent for OBS chroma key or custom color for testing
+                            </p>
+                        </div>
+                        
+                        <div id="background-color-container" style="display: none;">
+                            <label class="block mb-2"><strong>Background Color</strong></label>
+                            <div class="flex gap-2 items-center">
+                                <input type="color" id="overlay-background-color" class="h-10 w-20 bg-black/30 rounded-lg cursor-pointer" value="#000000" data-config="overlayBackgroundColor">
+                                <input type="text" id="overlay-background-color-hex" class="flex-1 bg-black/30 rounded-lg px-4 py-2" value="#000000" placeholder="#000000">
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1">
+                                Select a custom background color for the overlay
+                            </p>
+                        </div>
+                        
+                        <div class="bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
+                            <strong class="text-purple-400">💡 Background Info:</strong>
+                            <div class="mt-2 space-y-1 text-sm text-gray-300">
+                                <div>• Transparent: Best for OBS with chroma key or transparency</div>
+                                <div>• Custom Color: Use for testing or special effects</div>
+                                <div>• Changes apply immediately to the overlay</div>
+                            </div>
+                        </div>
+                        
+                        <p class="text-xs text-gray-400 text-center">
+                            Background changes apply immediately to the overlay
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Queue System (Lag Prevention) -->
                 <div class="card rounded-xl p-6">
                     <h2 class="section-title text-xl font-bold mb-4">⏱️ Queue System (Lag Prevention)</h2>

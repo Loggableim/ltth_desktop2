@@ -757,6 +757,55 @@
                 console.error('[Fireworks] Engine initialization error:', error);
             }
         })();
+        
+        // Connect to socket.io and listen for config updates
+        const socket = io();
+        
+        // Function to apply background configuration
+        function applyBackgroundConfig(config) {
+            const body = document.body;
+            const html = document.documentElement;
+            const container = document.getElementById('fireworks-container');
+            const canvas = document.getElementById('fireworks-canvas');
+            
+            if (config.overlayBackgroundMode === 'color') {
+                const color = config.overlayBackgroundColor || '#000000';
+                console.log('[Fireworks Overlay] Applying background color:', color);
+                
+                // Apply color to all elements
+                html.style.backgroundColor = color;
+                body.style.backgroundColor = color;
+                if (container) container.style.backgroundColor = color;
+                if (canvas) canvas.style.backgroundColor = color;
+            } else {
+                console.log('[Fireworks Overlay] Applying transparent background');
+                
+                // Apply transparent to all elements
+                html.style.backgroundColor = 'transparent';
+                body.style.backgroundColor = 'transparent';
+                if (container) container.style.backgroundColor = 'transparent';
+                if (canvas) canvas.style.backgroundColor = 'transparent';
+            }
+        }
+        
+        // Listen for config updates
+        socket.on('fireworks:config-update', (data) => {
+            if (data && data.config) {
+                console.log('[Fireworks Overlay] Config update received');
+                applyBackgroundConfig(data.config);
+            }
+        });
+        
+        // Request initial config
+        socket.emit('fireworks:request-config');
+        
+        // Also listen for direct config request response
+        socket.on('fireworks:config', (data) => {
+            if (data && data.config) {
+                console.log('[Fireworks Overlay] Initial config received');
+                applyBackgroundConfig(data.config);
+            }
+        });
     </script>
 </body>
 </html>

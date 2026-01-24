@@ -309,6 +309,26 @@ function updateUI() {
     // Update resolution info display
     updateResolutionInfo(config.resolutionPreset || '1080p', config.orientation || 'landscape');
     
+    // Overlay background settings
+    const backgroundModeSelect = document.getElementById('overlay-background-mode');
+    if (backgroundModeSelect) {
+        backgroundModeSelect.value = config.overlayBackgroundMode || 'transparent';
+    }
+    
+    const backgroundColorPicker = document.getElementById('overlay-background-color');
+    const backgroundColorHex = document.getElementById('overlay-background-color-hex');
+    const backgroundColorContainer = document.getElementById('background-color-container');
+    
+    if (backgroundColorPicker) {
+        backgroundColorPicker.value = config.overlayBackgroundColor || '#000000';
+    }
+    if (backgroundColorHex) {
+        backgroundColorHex.value = config.overlayBackgroundColor || '#000000';
+    }
+    if (backgroundColorContainer) {
+        backgroundColorContainer.style.display = (config.overlayBackgroundMode === 'color') ? 'block' : 'none';
+    }
+    
     const targetFps = config.targetFps || 60;
     const targetFpsSlider = document.getElementById('target-fps');
     const targetFpsValue = document.getElementById('target-fps-value');
@@ -608,6 +628,46 @@ function setupEventListeners() {
     document.getElementById('color-mode').addEventListener('change', function() {
         config.colorMode = this.value;
     });
+    
+    // Overlay background mode
+    const backgroundModeSelect = document.getElementById('overlay-background-mode');
+    const backgroundColorContainer = document.getElementById('background-color-container');
+    const backgroundColorPicker = document.getElementById('overlay-background-color');
+    const backgroundColorHex = document.getElementById('overlay-background-color-hex');
+    
+    if (backgroundModeSelect) {
+        backgroundModeSelect.addEventListener('change', function() {
+            config.overlayBackgroundMode = this.value;
+            // Show/hide color picker based on mode
+            if (backgroundColorContainer) {
+                backgroundColorContainer.style.display = this.value === 'color' ? 'block' : 'none';
+            }
+            saveConfig();
+        });
+    }
+    
+    if (backgroundColorPicker) {
+        backgroundColorPicker.addEventListener('input', function() {
+            config.overlayBackgroundColor = this.value;
+            if (backgroundColorHex) {
+                backgroundColorHex.value = this.value;
+            }
+            saveConfig();
+        });
+    }
+    
+    if (backgroundColorHex) {
+        backgroundColorHex.addEventListener('input', function() {
+            const color = this.value;
+            if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
+                config.overlayBackgroundColor = color;
+                if (backgroundColorPicker) {
+                    backgroundColorPicker.value = color;
+                }
+                saveConfig();
+            }
+        });
+    }
     
     // Overlay buttons
     document.getElementById('copy-overlay-url').addEventListener('click', () => {
