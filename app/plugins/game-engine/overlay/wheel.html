@@ -1416,13 +1416,11 @@
 
       // CRITICAL FIX: Reset wheel to starting position (0°) BEFORE spin begins
       // The server calculates totalRotation assuming the wheel starts at 0° (segment 0 at top)
-      // If the wheel is still at the previous landing position, we need to reset it
+      // ALWAYS reset to ensure proper synchronization, even if already at 0°
       // This ensures the visual matches the calculation starting point
-      if (currentRotation !== 0) {
-        console.log(`🔄 Resetting wheel from ${(currentRotation % 360).toFixed(1)}° to 0° before spin`);
-        currentRotation = 0;
-        drawWheel(0);
-      }
+      console.log(`🔄 Resetting wheel from ${(currentRotation % 360).toFixed(1)}° to 0° before spin`);
+      currentRotation = 0;
+      drawWheel(0);
 
       // Show player info
       showPlayerInfo(data.nickname, data.profilePictureUrl, data.giftName);

@@ -322,6 +322,12 @@ class WheelGame {
   async startSpin(spinData) {
     const { spinId, username, nickname, profilePictureUrl, giftName, wheelId, wheelName, segmentCount } = spinData;
     
+    // Prevent race condition: if already spinning a different spin, reject
+    if (this.isSpinning && this.currentSpin?.spinId !== spinData.spinId) {
+      this.logger.warn(`Cannot start spin ${spinId}: already spinning ${this.currentSpin.spinId}`);
+      return { success: false, error: 'Already spinning' };
+    }
+    
     this.isSpinning = true;
     this.currentSpin = spinData;
     

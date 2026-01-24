@@ -1771,6 +1771,7 @@ class GameEnginePlugin {
     if (matchingWheel) {
       this.logger.info(`[WHEEL TRIGGER] Gift ${giftName} (ID: ${giftId}) matched Wheel "${matchingWheel.name}" (ID: ${matchingWheel.id}) - triggering spin`);
       this.handleWheelGiftTrigger(uniqueId, nickname, profilePictureUrl, giftName, matchingWheel.id);
+      // CRITICAL: Return immediately to prevent double triggers - wheel has its own queue system
       return;
     }
     
@@ -1805,6 +1806,7 @@ class GameEnginePlugin {
     if (matchingTrigger.game_type === 'wheel') {
       this.logger.info(`[LEGACY WHEEL TRIGGER] Gift ${giftName} (ID: ${giftId}) matched legacy trigger - triggering spin`);
       this.handleWheelGiftTrigger(uniqueId, nickname, profilePictureUrl, giftName, null);
+      // CRITICAL: Return immediately to prevent double triggers - wheel has its own queue system
       return;
     }
 
