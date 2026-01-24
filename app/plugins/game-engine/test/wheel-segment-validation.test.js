@@ -187,7 +187,7 @@ describe('Wheel Segment Validation and Synchronization', () => {
       expect(result.error).toContain('invalid');
     });
 
-    test('should warn if segment count changed during queue', async () => {
+    test('should reject spin if segment count changed during queue', async () => {
       const config = wheelGame.getConfig();
       const originalSegmentCount = config.segments.length;
       
@@ -209,13 +209,19 @@ describe('Wheel Segment Validation and Synchronization', () => {
       ];
       wheelGame.updateConfig(config.id, newSegments, config.settings);
       
-      // Start spin
+      // Start spin - should be REJECTED due to segment count mismatch
       const result = await wheelGame.startSpin(spinData);
       
-      expect(result.success).toBe(true);
-      expect(mockAPI.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Segment count changed')
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Segment count changed');
+      expect(mockAPI.error).toHaveBeenCalledWith(
+        expect.stringContaining('Segment count changed during queue')
       );
+      
+      // Verify error event was emitted
+      const errorEvent = mockAPI.emittedEvents.find(e => e.event === 'wheel:spin-error');
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent.data.error).toBe('Segment count changed');
     });
 
     test('should validate winning segment index is within bounds', async () => {
@@ -476,7 +482,7 @@ describe('Wheel Segment Validation and Synchronization', () => {
       expect(spinStartEvent.data.winningSegment.text).toBe(originalSegments[winningIndex].text);
     });
 
-    test('should handle config update during queued spin', async () => {
+    test('should reject spin if config updated during queue with segment count change', async () => {
       const config = wheelGame.getConfig();
       const originalSegments = [...config.segments];
       
@@ -488,7 +494,7 @@ describe('Wheel Segment Validation and Synchronization', () => {
       const spin2 = await wheelGame.triggerSpin('user2', 'User 2', '', 'gift2');
       expect(spin2.queued).toBe(true);
       
-      // Update config while spin is queued
+      // Update config with DIFFERENT segment count while spin is queued
       const newSegments = [
         { text: 'Updated Prize', color: '#FFFF00', weight: 10, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0, shockType: 'shock', shockDevices: [] }
       ];
@@ -499,17 +505,15 @@ describe('Wheel Segment Validation and Synchronization', () => {
       wheelGame.currentSpin = null;
       await wheelGame.processNextSpin();
       
-      // Get second spin-start event
-      const spin2Events = mockAPI.emittedEvents.filter(e => e.event === 'wheel:spin-start');
-      const spin2StartEvent = spin2Events[spin2Events.length - 1];
+      // Second spin should have been REJECTED due to segment count change
+      const errorEvent = mockAPI.emittedEvents.find(e => e.event === 'wheel:spin-error');
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent.data.error).toBe('Segment count changed');
+      expect(errorEvent.data.username).toBe('user2');
       
-      // Should use NEW config
-      expect(spin2StartEvent.data.segments).toEqual(newSegments);
-      expect(spin2StartEvent.data.numSegments).toBe(1);
-      
-      // Should have logged warning about segment count change
-      expect(mockAPI.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Segment count changed')
+      // Should have logged error about segment count change
+      expect(mockAPI.error).toHaveBeenCalledWith(
+        expect.stringContaining('Segment count changed during queue')
       );
     });
   });
