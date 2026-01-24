@@ -658,9 +658,9 @@
         }
     </style>
 </head>
-<body>
-    <div id="fireworks-container">
-        <canvas id="fireworks-canvas"></canvas>
+<body class="overlay-bg-transparent">
+    <div id="fireworks-container" class="overlay-bg-transparent">
+        <canvas id="fireworks-canvas" class="overlay-bg-transparent"></canvas>
     </div>
     <div id="debug-panel">
         <div>FPS: <span id="fps">0</span></div>
@@ -687,6 +687,9 @@
     <!-- Load engine files in order: Canvas 2D (base), Manager (selector) -->
     <!-- First, expose a flag to prevent auto-initialization -->
     <script>
+        // Apply transparent background class immediately to html element
+        document.documentElement.classList.add('overlay-bg-transparent');
+        
         // Signal that engine-manager will handle initialization
         window.FireworksEngineManager = true;
     </script>
