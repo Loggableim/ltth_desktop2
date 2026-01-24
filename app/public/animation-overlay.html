@@ -366,6 +366,11 @@
                 element.muted = true; // Start muted for autoplay
                 element.autoplay = true;
                 element.playsInline = true;
+                
+                // Apply same unmuting logic as main video path
+                if (validVolume > 0) {
+                    // Will be handled in event listener setup below
+                }
             }
 
             // Create wrapper div
@@ -384,9 +389,18 @@
                 
                 if (detectedType === 'video') {
                     // For videos, wait for the video to end
-                    element.addEventListener('loadedmetadata', () => {
-                        duration = element.duration * 1000;
-                    }, { signal });
+                    // Unmute after loading if volume is not zero
+                    if (validVolume > 0) {
+                        element.addEventListener('loadedmetadata', () => {
+                            element.muted = false;
+                            element.volume = validVolume;
+                            duration = element.duration * 1000;
+                        }, { signal, once: true });
+                    } else {
+                        element.addEventListener('loadedmetadata', () => {
+                            duration = element.duration * 1000;
+                        }, { signal });
+                    }
 
                     element.addEventListener('ended', cleanup, { signal, once: true });
 
@@ -404,7 +418,10 @@
                             updateDebug('Autoplay blocked - user interaction needed');
                             // Try to play muted as fallback
                             element.muted = true;
-                            element.play().catch(() => cleanup());
+                            element.play().catch(fallbackErr => {
+                                console.error('Fallback autoplay also failed:', fallbackErr);
+                                cleanup();
+                            });
                         });
                     }
                 } else if (detectedType === 'audio') {
