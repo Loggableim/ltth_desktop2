@@ -214,8 +214,8 @@ class FireworksEngineManager {
         if (DEBUG) console.log('[Engine Manager] Initializing Canvas 2D backend...');
         
         // Import Canvas 2D backend (renamed from engine.js)
-        // Check if FireworksEngine exists globally (loaded by overlay.html)
-        if (typeof FireworksEngine !== 'undefined') {
+        // Check if FireworksEngine class exists globally (loaded by overlay.html)
+        if (typeof FireworksEngine !== 'undefined' && typeof FireworksEngine === 'function') {
             this.backend = new FireworksEngine(this.canvasId);
             
             // Apply config
@@ -225,7 +225,7 @@ class FireworksEngineManager {
             
             this.backendType = 'canvas2d';
         } else {
-            console.error('[Engine Manager] FireworksEngine not loaded. Ensure engine.js is loaded before engine-manager.js');
+            console.error('[Engine Manager] FireworksEngine class not loaded. Ensure engine.js is loaded before engine-manager.js');
             throw new Error('Canvas 2D engine not available');
         }
     }

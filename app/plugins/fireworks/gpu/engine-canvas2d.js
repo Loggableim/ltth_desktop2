@@ -2677,9 +2677,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (DEBUG) console.log('[Fireworks] Advanced engine ready');
 });
 
-// Only expose engine after initialization
+// Expose FireworksEngine class immediately so engine-manager.js can use it
 if (typeof window !== 'undefined') {
-    Object.defineProperty(window, 'FireworksEngine', {
+    window.FireworksEngine = FireworksEngine;
+}
+
+// Also expose the initialized engine instance for backwards compatibility
+if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'fireworksEngine', {
         get: () => engine,
         configurable: false,
         enumerable: true
