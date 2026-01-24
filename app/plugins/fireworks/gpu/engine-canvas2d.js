@@ -2612,6 +2612,13 @@ class FireworksEngine {
 let engine = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Skip auto-initialization if engine-manager is being used
+    // engine-manager will handle initialization and audio preloading
+    if (window.FireworksEngineManager) {
+        if (DEBUG) console.log('[Fireworks] Skipping auto-init (engine-manager detected)');
+        return;
+    }
+    
     const canvas = document.getElementById('fireworks-canvas');
     if (!canvas) {
         console.error('[Fireworks] Canvas element not found');
