@@ -12,13 +12,13 @@
         }
 
         html {
-            background: transparent !important;
-            background-color: transparent !important;
+            background: transparent;
+            background-color: transparent;
         }
 
         body {
-            background: transparent !important;
-            background-color: transparent !important;
+            background: transparent;
+            background-color: transparent;
             overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
@@ -30,8 +30,8 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            background: transparent !important;
-            background-color: transparent !important;
+            background: transparent;
+            background-color: transparent;
         }
 
         #fireworks-canvas {
@@ -41,12 +41,21 @@
             width: 100%;
             height: 100%;
             display: block;
-            background: transparent !important;
-            background-color: transparent !important;
+            background: transparent;
+            background-color: transparent;
             /* Force GPU rendering for canvas */
             will-change: transform;
             transform: translate3d(0, 0, 0);
             backface-visibility: hidden;
+        }
+        
+        /* Classes for dynamic background control via JavaScript */
+        html.overlay-bg-transparent,
+        body.overlay-bg-transparent,
+        #fireworks-container.overlay-bg-transparent,
+        #fireworks-canvas.overlay-bg-transparent {
+            background: transparent !important;
+            background-color: transparent !important;
         }
 
         /* Gift info popup */
@@ -772,19 +781,25 @@
                 const color = config.overlayBackgroundColor || '#000000';
                 console.log('[Fireworks Overlay] Applying background color:', color);
                 
-                // Apply color to all elements
-                html.style.backgroundColor = color;
-                body.style.backgroundColor = color;
-                if (container) container.style.backgroundColor = color;
-                if (canvas) canvas.style.backgroundColor = color;
+                // Remove transparent class
+                html.classList.remove('overlay-bg-transparent');
+                body.classList.remove('overlay-bg-transparent');
+                if (container) container.classList.remove('overlay-bg-transparent');
+                if (canvas) canvas.classList.remove('overlay-bg-transparent');
+                
+                // Apply color via inline styles
+                html.style.setProperty('background-color', color, 'important');
+                body.style.setProperty('background-color', color, 'important');
+                if (container) container.style.setProperty('background-color', color, 'important');
+                if (canvas) canvas.style.setProperty('background-color', color, 'important');
             } else {
                 console.log('[Fireworks Overlay] Applying transparent background');
                 
-                // Apply transparent to all elements
-                html.style.backgroundColor = 'transparent';
-                body.style.backgroundColor = 'transparent';
-                if (container) container.style.backgroundColor = 'transparent';
-                if (canvas) canvas.style.backgroundColor = 'transparent';
+                // Add transparent class (with !important in CSS)
+                html.classList.add('overlay-bg-transparent');
+                body.classList.add('overlay-bg-transparent');
+                if (container) container.classList.add('overlay-bg-transparent');
+                if (canvas) canvas.classList.add('overlay-bg-transparent');
             }
         }
         
