@@ -2606,6 +2606,15 @@ class FireworksEngine {
 }
 
 // ============================================================================
+// EXPOSE FIREWORKS ENGINE CLASS
+// ============================================================================
+
+// Expose FireworksEngine class immediately so engine-manager.js can use it
+if (typeof window !== 'undefined') {
+    window.FireworksEngine = FireworksEngine;
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -2683,11 +2692,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (DEBUG) console.log('[Fireworks] Advanced engine ready');
 });
-
-// Expose FireworksEngine class immediately so engine-manager.js can use it
-if (typeof window !== 'undefined') {
-    window.FireworksEngine = FireworksEngine;
-}
 
 // Also expose the initialized engine instance for backwards compatibility
 if (typeof window !== 'undefined') {
