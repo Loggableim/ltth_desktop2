@@ -229,22 +229,11 @@
             // Cleanup function to remove element and abort listeners
             const cleanup = () => {
                 abortController.abort(); // Remove all event listeners automatically
+                clearTimeout(safetyTimeout); // Clear timeout
                 if (audio.parentNode) {
                     audio.parentNode.removeChild(audio);
                 }
             };
-            
-            // Add event listeners with signal for automatic cleanup
-            audio.addEventListener('ended', () => {
-                console.log(`✅ Soundboard audio finished: ${label}`);
-                cleanup();
-            }, { signal });
-
-            audio.addEventListener('error', (e) => {
-                console.error('Soundboard audio error:', e);
-                updateDebug(`Audio error: ${url}`);
-                cleanup();
-            }, { signal });
             
             // Safety timeout to prevent stuck audio elements (max 5 minutes)
             const safetyTimeout = setTimeout(() => {
@@ -252,9 +241,17 @@
                 cleanup();
             }, 300000);
             
-            // Clear safety timeout when audio ends naturally
-            audio.addEventListener('ended', () => clearTimeout(safetyTimeout), { signal, once: true });
-            audio.addEventListener('error', () => clearTimeout(safetyTimeout), { signal, once: true });
+            // Add event listeners with signal for automatic cleanup
+            audio.addEventListener('ended', () => {
+                console.log(`✅ Soundboard audio finished: ${label}`);
+                cleanup();
+            }, { signal, once: true });
+
+            audio.addEventListener('error', (e) => {
+                console.error('Soundboard audio error:', e);
+                updateDebug(`Audio error: ${url}`);
+                cleanup();
+            }, { signal, once: true });
             
             // Append to DOM only after listeners are set up
             document.body.appendChild(audio);
@@ -384,18 +381,15 @@
                 
                 if (detectedType === 'video') {
                     // For videos, wait for the video to end
-                    // Unmute after loading if volume is not zero
-                    if (validVolume > 0) {
-                        element.addEventListener('loadedmetadata', () => {
+                    // Single listener to handle both unmuting and duration
+                    element.addEventListener('loadedmetadata', () => {
+                        duration = element.duration * 1000;
+                        // Unmute after loading if volume is not zero
+                        if (validVolume > 0) {
                             element.muted = false;
                             element.volume = validVolume;
-                            duration = element.duration * 1000;
-                        }, { signal, once: true });
-                    } else {
-                        element.addEventListener('loadedmetadata', () => {
-                            duration = element.duration * 1000;
-                        }, { signal, once: true });
-                    }
+                        }
+                    }, { signal, once: true });
 
                     element.addEventListener('ended', cleanup, { signal, once: true });
 
