@@ -2606,12 +2606,28 @@ class FireworksEngine {
 }
 
 // ============================================================================
+// EXPOSE FIREWORKS ENGINE CLASS
+// ============================================================================
+
+// Expose FireworksEngine class immediately so engine-manager.js can use it
+if (typeof window !== 'undefined') {
+    window.FireworksEngine = FireworksEngine;
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
 let engine = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Skip auto-initialization if engine-manager is being used
+    // engine-manager will handle initialization and audio preloading
+    if (window.FireworksEngineManager) {
+        if (DEBUG) console.log('[Fireworks] Skipping auto-init (engine-manager detected)');
+        return;
+    }
+    
     const canvas = document.getElementById('fireworks-canvas');
     if (!canvas) {
         console.error('[Fireworks] Canvas element not found');
@@ -2677,9 +2693,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (DEBUG) console.log('[Fireworks] Advanced engine ready');
 });
 
-// Only expose engine after initialization
+// Also expose the initialized engine instance for backwards compatibility
 if (typeof window !== 'undefined') {
-    Object.defineProperty(window, 'FireworksEngine', {
+    Object.defineProperty(window, 'fireworksEngine', {
         get: () => engine,
         configurable: false,
         enumerable: true
