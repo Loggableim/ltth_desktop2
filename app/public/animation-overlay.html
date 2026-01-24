@@ -110,6 +110,10 @@
         let animationQueue = [];
         let isPlaying = false;
 
+        // Memory tracking for debug mode
+        let totalAnimationsPlayed = 0;
+        let totalAudioElementsCreated = 0;
+
         // Debug mode (can be enabled via URL parameter)
         const urlParams = new URLSearchParams(window.location.search);
         const debugMode = urlParams.get('debug') === 'true';
@@ -117,6 +121,13 @@
         if (debugMode) {
             debugInfo.classList.add('visible');
             updateDebug('Animation overlay loaded (debug mode)');
+            
+            // Periodic memory monitoring in debug mode
+            setInterval(() => {
+                const activeElements = container.querySelectorAll('.animation-item').length;
+                const audioElements = document.querySelectorAll('audio').length;
+                updateDebug(`Stats: Animations: ${totalAnimationsPlayed}, Active: ${activeElements}, Audio: ${audioElements}/${totalAudioElementsCreated}`);
+            }, 30000); // Every 30 seconds
         }
 
         function updateDebug(message) {
@@ -174,6 +185,11 @@
             }
         });
 
+        // Cleanup on page unload to prevent memory leaks
+        window.addEventListener('beforeunload', () => {
+            socket.disconnect();
+        });
+
         function queueAnimation(data) {
             animationQueue.push(data);
             if (!isPlaying) {
@@ -184,6 +200,7 @@
         /**
          * Play soundboard audio immediately (not queued)
          * This plays audio from soundboard events alongside gift animations
+         * Fixed: Properly cleanup event listeners to prevent memory leaks
          */
         function playSoundboardAudio(data) {
             const { url, volume, label } = data;
@@ -197,31 +214,57 @@
             // Validate and clamp volume between 0 and 1
             const validVolume = Math.max(0, Math.min(1, volume || 1.0));
 
+            // Track audio element creation
+            totalAudioElementsCreated++;
+
             // Create audio element
             const audio = document.createElement('audio');
             audio.src = url;
             audio.volume = validVolume;
+            
+            // Use AbortController for automatic listener cleanup
+            const abortController = new AbortController();
+            const signal = abortController.signal;
+            
+            // Cleanup function to remove element and abort listeners
+            const cleanup = () => {
+                abortController.abort(); // Remove all event listeners automatically
+                clearTimeout(safetyTimeout); // Clear timeout
+                if (audio.parentNode) {
+                    audio.parentNode.removeChild(audio);
+                }
+            };
+            
+            // Safety timeout to prevent stuck audio elements (max 5 minutes)
+            const safetyTimeout = setTimeout(() => {
+                console.warn(`⚠️ Soundboard audio exceeded timeout: ${label}`);
+                cleanup();
+            }, 300000);
+            
+            // Add event listeners with signal for automatic cleanup
+            audio.addEventListener('ended', () => {
+                console.log(`✅ Soundboard audio finished: ${label}`);
+                cleanup();
+            }, { signal, once: true });
+
+            audio.addEventListener('error', (e) => {
+                console.error('Soundboard audio error:', e);
+                updateDebug(`Audio error: ${url}`);
+                cleanup();
+            }, { signal, once: true });
+            
+            // Append to DOM only after listeners are set up
             document.body.appendChild(audio);
             
-            // Play audio
+            // Play audio with proper error handling
             audio.play().then(() => {
                 updateDebug(`Playing audio: ${label} (vol: ${validVolume})`);
                 console.log(`✅ Soundboard audio started: ${label}`);
             }).catch(err => {
                 console.error('Soundboard audio playback error:', err);
                 updateDebug(`Audio error: ${err.message}`);
-            });
-
-            // Clean up after playback
-            audio.addEventListener('ended', () => {
-                console.log(`✅ Soundboard audio finished: ${label}`);
-                audio.remove();
-            });
-
-            audio.addEventListener('error', (e) => {
-                console.error('Soundboard audio error:', e);
-                updateDebug(`Audio error: ${url}`);
-                audio.remove();
+                clearTimeout(safetyTimeout);
+                cleanup();
             });
         }
 
@@ -253,6 +296,7 @@
                 return;
             }
 
+            totalAnimationsPlayed++;
             updateDebug(`Playing: ${url} (type: ${type || 'auto'})`);
 
             // Validate and clamp volume between 0 and 1
@@ -280,13 +324,20 @@
             let duration = 5000; // Default duration for images/gifs in milliseconds
             const MAX_ANIMATION_DURATION = 30000; // Maximum 30 seconds
 
+            // Use AbortController for automatic event listener cleanup
+            const abortController = new AbortController();
+            const signal = abortController.signal;
+
             if (detectedType === 'video') {
                 element = document.createElement('video');
                 element.src = url;
                 element.volume = validVolume;
-                element.autoplay = true;
                 element.playsInline = true;
-                element.muted = validVolume === 0;
+                // CRITICAL FIX: Always start muted for autoplay compatibility
+                // Browsers block autoplay of unmuted videos after a period without user interaction
+                element.muted = true;
+                element.autoplay = true;
+                // Note: Unmuting happens in loadedmetadata listener below
             } else if (detectedType === 'gif' || detectedType === 'image') {
                 element = document.createElement('img');
                 element.src = url;
@@ -298,10 +349,11 @@
                 element.volume = validVolume;
                 element.autoplay = true;
             } else {
-                // Fallback - try video
+                // Fallback - try video with autoplay fix (same logic as main video path)
                 element = document.createElement('video');
                 element.src = url;
                 element.volume = validVolume;
+                element.muted = true; // Start muted for autoplay
                 element.autoplay = true;
                 element.playsInline = true;
             }
@@ -314,63 +366,83 @@
 
             // Return a promise that resolves when animation is complete
             return new Promise((resolve) => {
+                // Cleanup function
+                const cleanup = () => {
+                    abortController.abort(); // Remove all event listeners
+                    fadeOutAndRemove(wrapper, resolve);
+                };
+                
                 if (detectedType === 'video') {
                     // For videos, wait for the video to end
+                    // Single listener to handle both unmuting and duration
                     element.addEventListener('loadedmetadata', () => {
                         duration = element.duration * 1000;
-                    });
+                        // Unmute after loading if volume is not zero
+                        if (validVolume > 0) {
+                            element.muted = false;
+                            element.volume = validVolume;
+                        }
+                    }, { signal, once: true });
 
-                    element.addEventListener('ended', () => {
-                        fadeOutAndRemove(wrapper, resolve);
-                    });
+                    element.addEventListener('ended', cleanup, { signal, once: true });
 
                     element.addEventListener('error', (e) => {
                         console.error('Video error:', e);
                         updateDebug(`Video error: ${url}`);
-                        fadeOutAndRemove(wrapper, resolve);
-                    });
+                        cleanup();
+                    }, { signal, once: true });
+                    
+                    // Handle play failure (autoplay blocked)
+                    const playPromise = element.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(err => {
+                            console.warn('Video autoplay blocked:', err);
+                            updateDebug('Autoplay blocked - user interaction needed');
+                            // Try to play muted as fallback
+                            element.muted = true;
+                            element.play().catch(fallbackErr => {
+                                console.error('Fallback autoplay also failed:', fallbackErr);
+                                cleanup();
+                            });
+                        });
+                    }
                 } else if (detectedType === 'audio') {
                     // For audio, wait for it to end
                     element.addEventListener('loadedmetadata', () => {
                         duration = element.duration * 1000;
-                    });
+                    }, { signal, once: true });
 
-                    element.addEventListener('ended', () => {
-                        fadeOutAndRemove(wrapper, resolve);
-                    });
+                    element.addEventListener('ended', cleanup, { signal, once: true });
 
                     element.addEventListener('error', (e) => {
                         console.error('Audio error:', e);
                         updateDebug(`Audio error: ${url}`);
-                        fadeOutAndRemove(wrapper, resolve);
-                    });
+                        cleanup();
+                    }, { signal, once: true });
                 } else if (detectedType === 'gif' || detectedType === 'image') {
                     // For images/GIFs, show for a fixed duration
                     element.addEventListener('load', () => {
                         updateDebug(`Image loaded: ${url}`);
-                    });
+                    }, { signal, once: true });
                     
                     element.addEventListener('error', (e) => {
                         console.error('Image error:', e);
                         updateDebug(`Image error: ${url}`);
-                        fadeOutAndRemove(wrapper, resolve);
-                    });
+                        cleanup();
+                    }, { signal, once: true });
 
                     // Remove after duration
-                    setTimeout(() => {
-                        fadeOutAndRemove(wrapper, resolve);
-                    }, duration);
+                    setTimeout(cleanup, duration);
                 } else {
                     // Fallback: remove after default duration
-                    setTimeout(() => {
-                        fadeOutAndRemove(wrapper, resolve);
-                    }, duration);
+                    setTimeout(cleanup, duration);
                 }
 
                 // Safety timeout to prevent stuck animations
                 setTimeout(() => {
                     if (container.contains(wrapper)) {
-                        fadeOutAndRemove(wrapper, resolve);
+                        console.warn(`⚠️ Animation exceeded max duration: ${url}`);
+                        cleanup();
                     }
                 }, MAX_ANIMATION_DURATION);
             });
