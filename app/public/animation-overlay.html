@@ -337,14 +337,7 @@
                 // Browsers block autoplay of unmuted videos after a period without user interaction
                 element.muted = true;
                 element.autoplay = true;
-                
-                // Unmute after loading if volume is not zero
-                if (validVolume > 0) {
-                    element.addEventListener('loadedmetadata', () => {
-                        element.muted = false;
-                        element.volume = validVolume;
-                    }, { signal, once: true });
-                }
+                // Note: Unmuting happens in loadedmetadata listener below
             } else if (detectedType === 'gif' || detectedType === 'image') {
                 element = document.createElement('img');
                 element.src = url;
@@ -417,7 +410,7 @@
                     // For audio, wait for it to end
                     element.addEventListener('loadedmetadata', () => {
                         duration = element.duration * 1000;
-                    }, { signal });
+                    }, { signal, once: true });
 
                     element.addEventListener('ended', cleanup, { signal, once: true });
 
