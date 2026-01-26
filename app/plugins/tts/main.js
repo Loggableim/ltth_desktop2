@@ -582,7 +582,9 @@ class TTSPlugin {
             // Format: { 'voice-id': { name: 'Voice Name', reference_id: 'abc123...', lang: 'en', gender: 'female' } }
             customFishVoices: {},
             // Message prefix filter - ignore messages starting with these prefixes
-            messagePrefixFilter: [] // e.g., ['!', '/', '.'] - messages starting with these will be ignored
+            messagePrefixFilter: [], // e.g., ['!', '/', '.'] - messages starting with these will be ignored
+            // Username announcement - prepend "[username] sagt:" before TTS message
+            announceUsername: false // Enable username announcement before reading chat messages
         };
 
         // Try to load from database
@@ -2142,6 +2144,31 @@ class TTSPlugin {
                     truncatedLength: this.config.maxTextLength
                 });
                 this.logger.warn(`TTS text truncated for ${username}: ${textToProcess.length} -> ${this.config.maxTextLength}`);
+            }
+
+            // Step 3b: Prepend username announcement if enabled (only for chat messages)
+            if (this.config.announceUsername && source === 'chat' && username) {
+                const usernameAnnouncement = `${username} sagt: `;
+                finalText = usernameAnnouncement + finalText;
+                
+                // Re-check length after prepending username to ensure we don't exceed maxTextLength
+                if (finalText.length > this.config.maxTextLength) {
+                    finalText = finalText.substring(0, this.config.maxTextLength) + '...';
+                    this._logDebug('SPEAK_STEP3B', 'Text re-truncated after username announcement', {
+                        username,
+                        finalLength: finalText.length,
+                        maxLength: this.config.maxTextLength
+                    });
+                    this.logger.warn(`TTS text re-truncated after username announcement for ${username}`);
+                }
+                
+                this._logDebug('SPEAK_STEP3B', 'Username announcement prepended', {
+                    username,
+                    announcement: usernameAnnouncement,
+                    originalText: processedText.trim(),
+                    finalText: finalText.substring(0, 100)
+                });
+                this.logger.info(`TTS: Prepending username announcement for ${username}`);
             }
 
             // Step 4: Determine voice and engine

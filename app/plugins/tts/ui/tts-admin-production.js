@@ -454,6 +454,7 @@ function populateConfig(config) {
     setValue('autoLanguageDetection', config.autoLanguageDetection !== false);
     setValue('enableAutoFallback', config.enableAutoFallback !== false);
     setValue('stripEmojis', config.stripEmojis || false);
+    setValue('announceUsername', config.announceUsername || false);
     
     // Message prefix filter - convert array to space-separated string
     const prefixFilterValue = (config.messagePrefixFilter && Array.isArray(config.messagePrefixFilter)) 
@@ -523,6 +524,7 @@ async function saveConfig() {
             autoLanguageDetection: document.getElementById('autoLanguageDetection').checked,
             enableAutoFallback: document.getElementById('enableAutoFallback').checked,
             stripEmojis: document.getElementById('stripEmojis').checked,
+            announceUsername: document.getElementById('announceUsername').checked,
             // Message prefix filter - convert space-separated string to array
             messagePrefixFilter: document.getElementById('messagePrefixFilter').value
                 .split(/\s+/)
