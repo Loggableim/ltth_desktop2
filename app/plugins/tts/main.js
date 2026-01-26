@@ -2150,6 +2150,18 @@ class TTSPlugin {
             if (this.config.announceUsername && source === 'chat' && username) {
                 const usernameAnnouncement = `${username} sagt: `;
                 finalText = usernameAnnouncement + finalText;
+                
+                // Re-check length after prepending username to ensure we don't exceed maxTextLength
+                if (finalText.length > this.config.maxTextLength) {
+                    finalText = finalText.substring(0, this.config.maxTextLength) + '...';
+                    this._logDebug('SPEAK_STEP3B', 'Text re-truncated after username announcement', {
+                        username,
+                        finalLength: finalText.length,
+                        maxLength: this.config.maxTextLength
+                    });
+                    this.logger.warn(`TTS text re-truncated after username announcement for ${username}`);
+                }
+                
                 this._logDebug('SPEAK_STEP3B', 'Username announcement prepended', {
                     username,
                     announcement: usernameAnnouncement,

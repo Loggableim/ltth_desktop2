@@ -9,12 +9,12 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 
-// Mock logger
+// Mock logger - silent to avoid cluttering test output
 const mockLogger = {
-    info: (msg) => console.log(`[INFO] ${msg}`),
-    warn: (msg) => console.log(`[WARN] ${msg}`),
-    error: (msg) => console.log(`[ERROR] ${msg}`),
-    debug: (msg) => console.log(`[DEBUG] ${msg}`)
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    debug: () => {}
 };
 
 // Mock API
@@ -104,6 +104,32 @@ describe('TTS Username Announcement', () => {
     let mockDb;
     let dbPath;
     let db;
+    let capturedText;
+
+    // Helper function to setup mocks for TTS testing
+    function setupTTSMocks() {
+        capturedText = null;
+        
+        // Mock the queue manager
+        ttsPlugin.queueManager = {
+            enqueue: (item) => {
+                capturedText = item.text;
+                return {
+                    success: true,
+                    position: 0,
+                    queueSize: 1,
+                    estimatedWaitMs: 0
+                };
+            }
+        };
+        
+        // Mock the TikTok engine
+        ttsPlugin.engines.tiktok = {
+            synthesize: async (text) => {
+                return Buffer.from('mock-audio-data');
+            }
+        };
+    }
 
     beforeEach(async () => {
         // Create test database
@@ -137,26 +163,8 @@ describe('TTS Username Announcement', () => {
         // Enable username announcement
         ttsPlugin.config.announceUsername = true;
         
-        // Mock the synthesis and queue to capture the final text
-        let capturedText = null;
-        ttsPlugin.queueManager = {
-            enqueue: (item) => {
-                capturedText = item.text;
-                return {
-                    success: true,
-                    position: 0,
-                    queueSize: 1,
-                    estimatedWaitMs: 0
-                };
-            }
-        };
-        
-        // Mock the TikTok engine
-        ttsPlugin.engines.tiktok = {
-            synthesize: async (text) => {
-                return Buffer.from('mock-audio-data');
-            }
-        };
+        // Setup mocks
+        setupTTSMocks();
         
         // Call speak with chat source
         const result = await ttsPlugin.speak({
@@ -177,26 +185,8 @@ describe('TTS Username Announcement', () => {
         // Disable username announcement
         ttsPlugin.config.announceUsername = false;
         
-        // Mock the synthesis and queue to capture the final text
-        let capturedText = null;
-        ttsPlugin.queueManager = {
-            enqueue: (item) => {
-                capturedText = item.text;
-                return {
-                    success: true,
-                    position: 0,
-                    queueSize: 1,
-                    estimatedWaitMs: 0
-                };
-            }
-        };
-        
-        // Mock the TikTok engine
-        ttsPlugin.engines.tiktok = {
-            synthesize: async (text) => {
-                return Buffer.from('mock-audio-data');
-            }
-        };
+        // Setup mocks
+        setupTTSMocks();
         
         // Call speak with chat source
         const result = await ttsPlugin.speak({
@@ -217,26 +207,8 @@ describe('TTS Username Announcement', () => {
         // Enable username announcement
         ttsPlugin.config.announceUsername = true;
         
-        // Mock the synthesis and queue to capture the final text
-        let capturedText = null;
-        ttsPlugin.queueManager = {
-            enqueue: (item) => {
-                capturedText = item.text;
-                return {
-                    success: true,
-                    position: 0,
-                    queueSize: 1,
-                    estimatedWaitMs: 0
-                };
-            }
-        };
-        
-        // Mock the TikTok engine
-        ttsPlugin.engines.tiktok = {
-            synthesize: async (text) => {
-                return Buffer.from('mock-audio-data');
-            }
-        };
+        // Setup mocks
+        setupTTSMocks();
         
         // Call speak with manual source (not chat)
         const result = await ttsPlugin.speak({
@@ -257,26 +229,8 @@ describe('TTS Username Announcement', () => {
         // Enable username announcement
         ttsPlugin.config.announceUsername = true;
         
-        // Mock the synthesis and queue to capture the final text
-        let capturedText = null;
-        ttsPlugin.queueManager = {
-            enqueue: (item) => {
-                capturedText = item.text;
-                return {
-                    success: true,
-                    position: 0,
-                    queueSize: 1,
-                    estimatedWaitMs: 0
-                };
-            }
-        };
-        
-        // Mock the TikTok engine
-        ttsPlugin.engines.tiktok = {
-            synthesize: async (text) => {
-                return Buffer.from('mock-audio-data');
-            }
-        };
+        // Setup mocks
+        setupTTSMocks();
         
         // Call speak without username
         const result = await ttsPlugin.speak({
