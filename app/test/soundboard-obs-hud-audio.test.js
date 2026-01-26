@@ -19,6 +19,10 @@ describe('Soundboard OBS HUD Audio Playback', () => {
     });
 
     test('should remove soundboard audio element after playback', () => {
-        expect(overlayHtml).toContain('audio.remove()');
+        // Check for proper cleanup using either .remove() or .removeChild()
+        const hasRemove = overlayHtml.includes('audio.remove()');
+        const hasRemoveChild = overlayHtml.includes('removeChild(audio)') || 
+                               overlayHtml.includes('audio.parentNode.removeChild');
+        expect(hasRemove || hasRemoveChild).toBe(true);
     });
 });
