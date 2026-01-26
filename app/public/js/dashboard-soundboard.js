@@ -1,10 +1,12 @@
 /**
  * Soundboard UI JavaScript
- * Standalone version for /soundboard/ui page
+ * Works both as standalone version for /soundboard/ui page and when included in main dashboard
  */
 
 // Socket connection
-const socket = io();
+// Reuse existing socket from dashboard.js (window.socket) if available,
+// otherwise create new connection for standalone /soundboard/ui page
+const socket = window.socket || io();
 
 // Add connection status logging
 socket.on('connect', () => {

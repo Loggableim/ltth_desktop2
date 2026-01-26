@@ -50,7 +50,8 @@ class AlertManager {
                     const soundboardPlugin = this.pluginLoader.getPluginInstance('soundboard');
                     if (soundboardPlugin && soundboardPlugin.soundboard) {
                         const soundboardDb = this.db;
-                        const soundboardEnabled = soundboardDb.getSetting('soundboard_enabled') === 'true';
+                        // Use same check as soundboard plugin: enabled if NOT explicitly set to 'false'
+                        const soundboardEnabled = soundboardDb.getSetting('soundboard_enabled') !== 'false';
 
                         if (soundboardEnabled) {
                             let soundboardHasSound = false;

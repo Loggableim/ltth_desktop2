@@ -22,15 +22,42 @@ describe('Soundboard DOM Append Fix', () => {
         
         test('should have cleanup function to remove audio from DOM', () => {
             expect(dashboardSoundboardJs).toContain('const cleanup = () => {');
-            expect(dashboardSoundboardJs).toContain('audio.parentNode.removeChild(audio)');
+            // Accept both .remove() and .removeChild() patterns
+            const hasRemove = dashboardSoundboardJs.includes('audio.remove()');
+            const hasRemoveChild = dashboardSoundboardJs.includes('audio.parentNode.removeChild(audio)');
+            expect(hasRemove || hasRemoveChild).toBe(true);
         });
         
         test('should call cleanup in all error and completion handlers', () => {
-            // Check that cleanup is called in catch block
-            const playSoundFunction = dashboardSoundboardJs.match(/function playSound\([^)]*\)[\s\S]*?\n\s*}/);
-            expect(playSoundFunction).toBeTruthy();
+            // Find the playSound function - it should have cleanup() called in:
+            // 1. catch block of audio.play()
+            // 2. audio.onended handler
+            // 3. audio.onerror handler
             
-            const functionText = playSoundFunction[0];
+            // Look for the playSound function definition
+            const playSoundMatch = dashboardSoundboardJs.match(/function playSound\([^)]*\)\s*\{/);
+            expect(playSoundMatch).toBeTruthy();
+            
+            const startIndex = playSoundMatch.index;
+            // Find the end of the function by counting braces
+            let braceCount = 0;
+            let endIndex = startIndex;
+            let inFunction = false;
+            
+            for (let i = startIndex; i < dashboardSoundboardJs.length; i++) {
+                if (dashboardSoundboardJs[i] === '{') {
+                    braceCount++;
+                    inFunction = true;
+                } else if (dashboardSoundboardJs[i] === '}') {
+                    braceCount--;
+                    if (inFunction && braceCount === 0) {
+                        endIndex = i + 1;
+                        break;
+                    }
+                }
+            }
+            
+            const functionText = dashboardSoundboardJs.substring(startIndex, endIndex);
             
             // Count occurrences of cleanup() - should be at least 3 (catch, onended, onerror)
             const cleanupCalls = (functionText.match(/cleanup\(\)/g) || []).length;
