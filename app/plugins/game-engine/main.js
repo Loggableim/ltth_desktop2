@@ -1920,7 +1920,6 @@ class GameEnginePlugin {
     const matchingWheel = this.wheelGame.findWheelByGiftTrigger(giftIdStr || giftName);
     if (matchingWheel) {
       // Record this gift event AFTER verifying it matches a trigger
-      const dedupKey = `${uniqueId}_${giftName}_${giftId || 'noId'}`;
       this.recentGiftEvents.set(dedupKey, now);
       
       this.logger.info(`[WHEEL TRIGGER] Gift ${giftName} (ID: ${giftId}) matched Wheel "${matchingWheel.name}" (ID: ${matchingWheel.id}) - triggering spin`);
@@ -1949,7 +1948,6 @@ class GameEnginePlugin {
     }
     
     // Record this gift event AFTER verifying it matches a trigger
-    const dedupKey = `${uniqueId}_${giftName}_${giftId || 'noId'}`;
     this.recentGiftEvents.set(dedupKey, now);
 
     this.logger.debug(`Gift trigger matched: ${giftName} (ID: ${giftId}) -> ${matchingTrigger.game_type}`);
