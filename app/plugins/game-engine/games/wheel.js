@@ -293,6 +293,18 @@ class WheelGame {
       
       const queueResult = this.unifiedQueue.queueWheel(spinData);
       
+      // Check if queue was full
+      if (!queueResult.queued && queueResult.error) {
+        this.logger.warn(`🎡 Wheel queue full, cannot queue spin for ${username} on "${config.name}"`);
+        this.activeSpins.delete(spinId); // Clean up active spin
+        return { 
+          success: false, 
+          error: queueResult.error, 
+          wheelId: actualWheelId, 
+          wheelName: config.name 
+        };
+      }
+      
       this.logger.info(`🎡 Wheel spin ${willStartImmediately ? 'starting' : 'queued'} via unified queue: ${username} on "${config.name}" (spinId: ${spinId}, position: ${queueResult.position}, segments: ${config.segments.length})`);
       
       return { 

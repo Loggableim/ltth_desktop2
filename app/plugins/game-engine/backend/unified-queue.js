@@ -28,6 +28,10 @@ class UnifiedQueueManager {
     // Processing timeout (for safety)
     this.processingTimeout = null;
     this.MAX_PROCESSING_TIME = 180000; // 3 minutes max per item
+    
+    // Queue size limits (prevent memory exhaustion from rapid triggers)
+    this.MAX_QUEUE_SIZE = 50; // Maximum items in queue
+    this.QUEUE_WARNING_SIZE = 40; // Warning threshold
   }
 
   /**
@@ -48,9 +52,22 @@ class UnifiedQueueManager {
   /**
    * Add Plinko drop to queue
    * @param {Object} dropData - Plinko drop data
-   * @returns {Object} { queued: boolean, position: number }
+   * @returns {Object} { queued: boolean, position: number, error?: string }
    */
   queuePlinko(dropData) {
+    // Check queue size limit
+    if (this.queue.length >= this.MAX_QUEUE_SIZE) {
+      this.logger.warn(`⚠️ [UNIFIED QUEUE] Plinko queue full (${this.queue.length}/${this.MAX_QUEUE_SIZE}), rejecting ${dropData.username}`);
+      this.io.emit('unified-queue:queue-full', {
+        type: 'plinko',
+        username: dropData.username,
+        nickname: this.getDisplayName(dropData),
+        queueLength: this.queue.length,
+        maxSize: this.MAX_QUEUE_SIZE
+      });
+      return { queued: false, position: 0, error: 'Queue is full' };
+    }
+    
     const item = {
       type: 'plinko',
       data: dropData,
@@ -59,6 +76,11 @@ class UnifiedQueueManager {
     
     this.queue.push(item);
     const position = this.queue.length;
+    
+    // Warning if queue is getting large
+    if (this.queue.length >= this.QUEUE_WARNING_SIZE) {
+      this.logger.warn(`⚠️ [UNIFIED QUEUE] Queue size warning: ${this.queue.length}/${this.MAX_QUEUE_SIZE}`);
+    }
     
     this.logger.info(`🎰 [UNIFIED QUEUE] Plinko queued for ${dropData.username} (position: ${position})`);
     
@@ -80,9 +102,23 @@ class UnifiedQueueManager {
   /**
    * Add Wheel spin to queue
    * @param {Object} spinData - Wheel spin data
-   * @returns {Object} { queued: boolean, position: number }
+   * @returns {Object} { queued: boolean, position: number, error?: string }
    */
   queueWheel(spinData) {
+    // Check queue size limit
+    if (this.queue.length >= this.MAX_QUEUE_SIZE) {
+      this.logger.warn(`⚠️ [UNIFIED QUEUE] Wheel queue full (${this.queue.length}/${this.MAX_QUEUE_SIZE}), rejecting ${spinData.username}`);
+      this.io.emit('unified-queue:queue-full', {
+        type: 'wheel',
+        username: spinData.username,
+        nickname: this.getDisplayName(spinData),
+        spinId: spinData.spinId,
+        queueLength: this.queue.length,
+        maxSize: this.MAX_QUEUE_SIZE
+      });
+      return { queued: false, position: 0, error: 'Queue is full' };
+    }
+    
     const item = {
       type: 'wheel',
       data: spinData,
@@ -91,6 +127,11 @@ class UnifiedQueueManager {
     
     this.queue.push(item);
     const position = this.queue.length;
+    
+    // Warning if queue is getting large
+    if (this.queue.length >= this.QUEUE_WARNING_SIZE) {
+      this.logger.warn(`⚠️ [UNIFIED QUEUE] Queue size warning: ${this.queue.length}/${this.MAX_QUEUE_SIZE}`);
+    }
     
     this.logger.info(`🎡 [UNIFIED QUEUE] Wheel queued for ${spinData.username} (position: ${position})`);
     
@@ -112,9 +153,22 @@ class UnifiedQueueManager {
   /**
    * Add Connect4 game to queue
    * @param {Object} gameData - Connect4 game data
-   * @returns {Object} { queued: boolean, position: number }
+   * @returns {Object} { queued: boolean, position: number, error?: string }
    */
   queueConnect4(gameData) {
+    // Check queue size limit
+    if (this.queue.length >= this.MAX_QUEUE_SIZE) {
+      this.logger.warn(`⚠️ [UNIFIED QUEUE] Connect4 queue full (${this.queue.length}/${this.MAX_QUEUE_SIZE}), rejecting ${gameData.viewerUsername}`);
+      this.io.emit('unified-queue:queue-full', {
+        type: 'connect4',
+        username: gameData.viewerUsername,
+        nickname: gameData.viewerNickname,
+        queueLength: this.queue.length,
+        maxSize: this.MAX_QUEUE_SIZE
+      });
+      return { queued: false, position: 0, error: 'Queue is full' };
+    }
+    
     const item = {
       type: 'connect4',
       data: gameData,
@@ -123,6 +177,11 @@ class UnifiedQueueManager {
     
     this.queue.push(item);
     const position = this.queue.length;
+    
+    // Warning if queue is getting large
+    if (this.queue.length >= this.QUEUE_WARNING_SIZE) {
+      this.logger.warn(`⚠️ [UNIFIED QUEUE] Queue size warning: ${this.queue.length}/${this.MAX_QUEUE_SIZE}`);
+    }
     
     this.logger.info(`🎮 [UNIFIED QUEUE] Connect4 queued for ${gameData.viewerUsername} (position: ${position})`);
     
@@ -144,9 +203,22 @@ class UnifiedQueueManager {
   /**
    * Add Chess game to queue
    * @param {Object} gameData - Chess game data
-   * @returns {Object} { queued: boolean, position: number }
+   * @returns {Object} { queued: boolean, position: number, error?: string }
    */
   queueChess(gameData) {
+    // Check queue size limit
+    if (this.queue.length >= this.MAX_QUEUE_SIZE) {
+      this.logger.warn(`⚠️ [UNIFIED QUEUE] Chess queue full (${this.queue.length}/${this.MAX_QUEUE_SIZE}), rejecting ${gameData.viewerUsername}`);
+      this.io.emit('unified-queue:queue-full', {
+        type: 'chess',
+        username: gameData.viewerUsername,
+        nickname: gameData.viewerNickname,
+        queueLength: this.queue.length,
+        maxSize: this.MAX_QUEUE_SIZE
+      });
+      return { queued: false, position: 0, error: 'Queue is full' };
+    }
+    
     const item = {
       type: 'chess',
       data: gameData,
@@ -155,6 +227,11 @@ class UnifiedQueueManager {
     
     this.queue.push(item);
     const position = this.queue.length;
+    
+    // Warning if queue is getting large
+    if (this.queue.length >= this.QUEUE_WARNING_SIZE) {
+      this.logger.warn(`⚠️ [UNIFIED QUEUE] Queue size warning: ${this.queue.length}/${this.MAX_QUEUE_SIZE}`);
+    }
     
     this.logger.info(`♟️ [UNIFIED QUEUE] Chess queued for ${gameData.viewerUsername} (position: ${position})`);
     

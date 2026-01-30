@@ -65,6 +65,11 @@ class GameEnginePlugin {
     this.gcceRetryInterval = null;
     this.gcceRetryCount = 0;
     
+    // Gift event deduplication (prevent double triggers from rapid/duplicate events)
+    this.recentGiftEvents = new Map(); // key: `${username}_${giftName}_${giftId}` -> timestamp
+    this.GIFT_DEDUP_WINDOW_MS = 1000; // 1 second deduplication window
+    this.giftDedupCleanupInterval = null;
+    
     // Default configurations
     this.defaultConfigs = {
       connect4: {
@@ -167,6 +172,24 @@ class GameEnginePlugin {
 
       // Register TikTok events
       this.registerTikTokEvents();
+      
+      // Start gift deduplication cleanup (runs every 5 seconds for better memory efficiency)
+      this.giftDedupCleanupInterval = setInterval(() => {
+        const now = Date.now();
+        const oldSize = this.recentGiftEvents.size;
+        
+        // Remove entries older than dedup window
+        for (const [key, timestamp] of this.recentGiftEvents.entries()) {
+          if (now - timestamp > this.GIFT_DEDUP_WINDOW_MS) {
+            this.recentGiftEvents.delete(key);
+          }
+        }
+        
+        if (this.recentGiftEvents.size < oldSize) {
+          this.logger.debug(`[GIFT DEDUP] Cleaned ${oldSize - this.recentGiftEvents.size} old gift events (${this.recentGiftEvents.size} remaining)`);
+        }
+      }, 5000); // Run every 5 seconds
+
 
       // Register GCCE commands (attempt immediately)
       // If GCCE is not loaded yet, we'll retry when it becomes available
@@ -212,6 +235,13 @@ class GameEnginePlugin {
       clearInterval(this.gcceRetryInterval);
       this.gcceRetryInterval = null;
     }
+    
+    // Clear gift deduplication cleanup interval and map
+    if (this.giftDedupCleanupInterval) {
+      clearInterval(this.giftDedupCleanupInterval);
+      this.giftDedupCleanupInterval = null;
+    }
+    this.recentGiftEvents.clear();
     
     // Unregister GCCE commands
     this.unregisterGCCECommands();
@@ -1762,6 +1792,17 @@ class GameEnginePlugin {
       return;
     }
     
+    // Deduplication check: Prevent same user + gift from being processed multiple times
+    // within a short timeframe (e.g., due to network issues, duplicate events, or rapid clicks)
+    const dedupKey = `${uniqueId}_${giftName}_${giftId || 'noId'}`;
+    const now = Date.now();
+    const lastEventTime = this.recentGiftEvents.get(dedupKey);
+    
+    if (lastEventTime && (now - lastEventTime) < this.GIFT_DEDUP_WINDOW_MS) {
+      this.logger.warn(`[GIFT DEDUP] Duplicate gift event blocked: ${giftName} from ${uniqueId} (${now - lastEventTime}ms since last event)`);
+      return;
+    }
+    
     // Normalize gift ID for consistent comparisons (Bug #4 fix)
     const giftIdStr = this.normalizeGiftId(giftId);
     const giftNameLower = (giftName || '').toLowerCase().trim();
@@ -1769,6 +1810,10 @@ class GameEnginePlugin {
     // Check for Wheel (Glücksrad) gift triggers across ALL wheels
     const matchingWheel = this.wheelGame.findWheelByGiftTrigger(giftIdStr || giftName);
     if (matchingWheel) {
+      // Record this gift event AFTER verifying it matches a trigger
+      const dedupKey = `${uniqueId}_${giftName}_${giftId || 'noId'}`;
+      this.recentGiftEvents.set(dedupKey, now);
+      
       this.logger.info(`[WHEEL TRIGGER] Gift ${giftName} (ID: ${giftId}) matched Wheel "${matchingWheel.name}" (ID: ${matchingWheel.id}) - triggering spin`);
       this.handleWheelGiftTrigger(uniqueId, nickname, profilePictureUrl, giftName, matchingWheel.id);
       // CRITICAL: Return immediately to prevent double triggers - wheel has its own queue system
@@ -1793,6 +1838,10 @@ class GameEnginePlugin {
     if (!matchingTrigger) {
       return;
     }
+    
+    // Record this gift event AFTER verifying it matches a trigger
+    const dedupKey = `${uniqueId}_${giftName}_${giftId || 'noId'}`;
+    this.recentGiftEvents.set(dedupKey, now);
 
     this.logger.debug(`Gift trigger matched: ${giftName} (ID: ${giftId}) -> ${matchingTrigger.game_type}`);
 
