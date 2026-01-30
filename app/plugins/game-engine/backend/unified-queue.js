@@ -292,7 +292,7 @@ class UnifiedQueueManager {
       );
       
       // Check if spawnBalls returned a failure response (not an exception)
-      if (result && result.success === false) {
+      if (!result || result.success === false) {
         this.logger.warn(`⚠️ [UNIFIED QUEUE] Plinko spawnBalls returned failure: ${result?.error || 'unknown'}`);
         this.completeProcessing();
         return;
@@ -356,7 +356,7 @@ class UnifiedQueueManager {
       );
       
       // Check if startGameFromQueue returned a failure response (not an exception)
-      if (result && result.success === false) {
+      if (!result || result.success === false) {
         this.logger.warn(`⚠️ [UNIFIED QUEUE] Connect4 startGameFromQueue returned failure: ${result?.error || 'unknown'}`);
         this.completeProcessing();
         return;
@@ -391,7 +391,7 @@ class UnifiedQueueManager {
       );
       
       // Check if startGameFromQueue returned a failure response (not an exception)
-      if (result && result.success === false) {
+      if (!result || result.success === false) {
         this.logger.warn(`⚠️ [UNIFIED QUEUE] Chess startGameFromQueue returned failure: ${result?.error || 'unknown'}`);
         this.completeProcessing();
         return;
