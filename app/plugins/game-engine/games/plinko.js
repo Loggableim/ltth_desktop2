@@ -68,10 +68,20 @@ class PlinkoGame {
   }
 
   /**
-   * Get Plinko configuration
+   * Get all plinko boards
+   * @returns {Array} List of all plinko board configurations
    */
-  getConfig() {
-    if (this.cachedConfig) {
+  getAllBoards() {
+    return this.db.getAllPlinkoBoards();
+  }
+
+  /**
+   * Get Plinko configuration by ID
+   * @param {number} boardId - Plinko board ID (optional, defaults to first board)
+   */
+  getConfig(boardId = null) {
+    // For backward compatibility, use cached config if no boardId specified
+    if (boardId === null && this.cachedConfig) {
       return this.cachedConfig;
     }
 
@@ -88,7 +98,7 @@ class PlinkoGame {
         { multiplier: 10, label: '10x', color: '#FFD700' }
       ],
       physicsSettings: {
-        gravity: 2.5, // Increased for better visual physics
+        gravity: 2.5,
         ballRestitution: 0.6,
         pegRestitution: 0.8,
         pegRows: 12,
@@ -100,41 +110,155 @@ class PlinkoGame {
       giftMappings: {}
     };
 
-    const cfg = this.db.getPlinkoConfig() || defaults;
+    const cfg = this.db.getPlinkoConfig(boardId) || defaults;
     const physicsSettings = { ...defaults.physicsSettings, ...(cfg.physicsSettings || {}) };
-    this.cachedConfig = {
+    const config = {
+      id: cfg.id,
+      name: cfg.name || 'Unnamed Plinko',
       slots: cfg.slots || defaults.slots,
       physicsSettings,
-      giftMappings: cfg.giftMappings || {}
+      giftMappings: cfg.giftMappings || {},
+      chatCommand: cfg.chatCommand || null,
+      enabled: cfg.enabled !== undefined ? cfg.enabled : true
     };
 
-    if (!this.slotHitCounts.length && this.cachedConfig.slots.length > 0) {
-      this.slotHitCounts = new Array(this.cachedConfig.slots.length).fill(0);
+    // Cache first board config for backward compatibility
+    if (boardId === null) {
+      this.cachedConfig = config;
     }
 
-    return this.cachedConfig;
+    if (!this.slotHitCounts.length && config.slots.length > 0) {
+      this.slotHitCounts = new Array(config.slots.length).fill(0);
+    }
+
+    return config;
+  }
+
+  /**
+   * Create a new plinko board
+   * @param {string} name - Name of the board
+   * @param {Array} slots - Initial slots (optional)
+   * @param {Object} physicsSettings - Initial physics settings (optional)
+   * @returns {number} New board ID
+   */
+  createBoard(name, slots = null, physicsSettings = null) {
+    const defaultSlots = slots || [
+      { multiplier: 10, label: '10x', color: '#FFD700', openshockReward: { enabled: false } },
+      { multiplier: 5, label: '5x', color: '#FF6B6B', openshockReward: { enabled: false } },
+      { multiplier: 2, label: '2x', color: '#4ECDC4', openshockReward: { enabled: false } },
+      { multiplier: 1, label: '1x', color: '#95E1D3', openshockReward: { enabled: false } },
+      { multiplier: 0.5, label: '0.5x', color: '#F38181', openshockReward: { enabled: false } },
+      { multiplier: 1, label: '1x', color: '#95E1D3', openshockReward: { enabled: false } },
+      { multiplier: 2, label: '2x', color: '#4ECDC4', openshockReward: { enabled: false } },
+      { multiplier: 5, label: '5x', color: '#FF6B6B', openshockReward: { enabled: false } },
+      { multiplier: 10, label: '10x', color: '#FFD700', openshockReward: { enabled: false } }
+    ];
+    
+    const defaultPhysicsSettings = physicsSettings || {
+      gravity: 2.5,
+      ballRestitution: 0.6,
+      pegRestitution: 0.8,
+      pegRows: 12,
+      pegSpacing: 60,
+      testModeEnabled: false,
+      maxSimultaneousBalls: 5,
+      rateLimitMs: 800
+    };
+    
+    const boardId = this.db.createPlinkoBoard(name, defaultSlots, defaultPhysicsSettings, {}, null);
+    this.logger.info(`🎰 Created new plinko board: ${name} (ID: ${boardId})`);
+    
+    return boardId;
   }
 
   /**
    * Update Plinko configuration
+   * @param {number} boardId - Plinko board ID
+   * @param {Array} slots - Plinko slots
+   * @param {Object} physicsSettings - Physics settings
+   * @param {Object} giftMappings - Gift mappings (optional)
    */
-  updateConfig(slots, physicsSettings, giftMappings) {
-    this.db.updatePlinkoConfig(slots, physicsSettings, giftMappings);
-    this.cachedConfig = {
-      slots,
-      physicsSettings,
-      giftMappings: giftMappings || {}
-    };
+  updateConfig(boardId, slots, physicsSettings, giftMappings) {
+    this.db.updatePlinkoConfig(boardId, slots, physicsSettings, giftMappings);
+    
+    // Clear cached config if updating the first/default board
+    if (this.cachedConfig && this.cachedConfig.id === boardId) {
+      this.cachedConfig = {
+        id: boardId,
+        slots,
+        physicsSettings,
+        giftMappings: giftMappings || {}
+      };
+    }
+    
     this.slotHitCounts = new Array(slots.length || 0).fill(0);
     
     // Emit config update to overlays
     this.io.emit('plinko:config-updated', {
+      boardId,
       slots,
       physicsSettings,
       giftMappings
     });
     
-    this.logger.info('✅ Plinko configuration updated');
+    this.logger.info(`✅ Plinko configuration updated (Board ID: ${boardId})`);
+  }
+
+  /**
+   * Update plinko board name
+   */
+  updateBoardName(boardId, name) {
+    this.db.updatePlinkoName(boardId, name);
+    this.logger.info(`✅ Plinko board name updated: ${name} (ID: ${boardId})`);
+  }
+
+  /**
+   * Update plinko board chat command
+   */
+  updateBoardChatCommand(boardId, chatCommand) {
+    this.db.updatePlinkoChatCommand(boardId, chatCommand);
+    this.logger.info(`✅ Plinko board chat command updated: ${chatCommand || 'disabled'} (ID: ${boardId})`);
+  }
+
+  /**
+   * Update plinko board enabled status
+   */
+  updateBoardEnabled(boardId, enabled) {
+    this.db.updatePlinkoEnabled(boardId, enabled);
+    this.logger.info(`✅ Plinko board ${enabled ? 'enabled' : 'disabled'} (ID: ${boardId})`);
+  }
+
+  /**
+   * Delete a plinko board
+   */
+  deleteBoard(boardId) {
+    const result = this.db.deletePlinkoBoard(boardId);
+    if (result) {
+      this.logger.info(`✅ Plinko board deleted (ID: ${boardId})`);
+      // Clear cache if deleting the cached board
+      if (this.cachedConfig && this.cachedConfig.id === boardId) {
+        this.cachedConfig = null;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Find plinko board by gift trigger
+   * @param {string} giftIdentifier - Gift name or ID
+   * @returns {Object|null} Board config if found
+   */
+  findBoardByGiftTrigger(giftIdentifier) {
+    return this.db.findPlinkoBoardByGiftTrigger(giftIdentifier);
+  }
+
+  /**
+   * Find plinko board by chat command
+   * @param {string} command - Chat command
+   * @returns {Object|null} Board config if found
+   */
+  findBoardByChatCommand(command) {
+    return this.db.findPlinkoBoardByChatCommand(command);
   }
 
   /**
