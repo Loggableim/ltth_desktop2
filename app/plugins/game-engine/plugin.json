@@ -5,7 +5,7 @@
   "description": "Interactive game engine for TikTok LIVE streams with viewer participation via chat commands and gifts. Includes Connect4, Chess, Plinko, and Glücksrad (Wheel of Fortune)!",
   "author": "Pup Cid",
   "entry": "main.js",
-  "enabled": false,
+  "enabled": true,
   "type": "overlay",
   "devStatus": "stable",
   "permissions": [
