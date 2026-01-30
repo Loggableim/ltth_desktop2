@@ -285,20 +285,20 @@ class WheelGame {
     // This fixes the bug where subsequent gifts were lost because the first spin
     // bypassed the queue and set isSpinning=true without notifying the unified queue.
     if (this.unifiedQueue) {
-      // Check state BEFORE adding to queue to determine if this will be immediate
-      const wasIdle = !this.unifiedQueue.isProcessing && this.unifiedQueue.queue.length === 0;
+      // Determine if this spin will start immediately by checking state BEFORE queueing.
+      // JavaScript is single-threaded, so no race condition between check and queueWheel().
+      // If queue is empty and not processing, queueWheel() will trigger processNext()
+      // which will start processing THIS item immediately.
+      const willStartImmediately = !this.unifiedQueue.isProcessing && this.unifiedQueue.queue.length === 0;
       
       const queueResult = this.unifiedQueue.queueWheel(spinData);
       
-      // If the queue was idle before adding, this spin will start immediately
-      const isImmediate = wasIdle;
-      
-      this.logger.info(`🎡 Wheel spin ${isImmediate ? 'starting' : 'queued'} via unified queue: ${username} on "${config.name}" (spinId: ${spinId}, position: ${queueResult.position}, segments: ${config.segments.length})`);
+      this.logger.info(`🎡 Wheel spin ${willStartImmediately ? 'starting' : 'queued'} via unified queue: ${username} on "${config.name}" (spinId: ${spinId}, position: ${queueResult.position}, segments: ${config.segments.length})`);
       
       return { 
         success: true, 
         spinId, 
-        queued: !isImmediate,
+        queued: !willStartImmediately,
         position: queueResult.position, 
         wheelId: actualWheelId, 
         wheelName: config.name 

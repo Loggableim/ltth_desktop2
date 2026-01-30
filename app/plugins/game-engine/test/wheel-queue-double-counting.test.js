@@ -82,8 +82,8 @@ describe('Wheel Queue Double-Counting Bug', () => {
     test('should always use unified queue when available - first spin starts immediately', async () => {
       // Setup: First spin, queue empty, unified queue available
       wheelGame.isSpinning = false;
-      mockUnifiedQueue.shouldQueue.mockReturnValue(false);
       mockUnifiedQueue.isProcessing = false;
+      mockUnifiedQueue.queue = []; // Empty queue
 
       // Trigger a spin
       const result = await wheelGame.triggerSpin('testuser', 'Test User', null, 'Rose', 1);
@@ -92,7 +92,7 @@ describe('Wheel Queue Double-Counting Bug', () => {
       // First spin starts immediately (position 1, queued false because immediate)
       expect(result.success).toBe(true);
       expect(result.position).toBe(1);
-      // When position is 1 and queue is not processing, queued should be false (immediate start)
+      // When queue was empty and not processing, queued should be false (immediate start)
       expect(result.queued).toBe(false);
 
       // Should add to unified queue (which triggers immediate processing)
@@ -111,11 +111,11 @@ describe('Wheel Queue Double-Counting Bug', () => {
       expect(startLogs.length).toBe(1);
     });
 
-    test('should use unified queue when shouldQueue() returns true (something processing)', async () => {
-      // Setup: Unified queue says "should queue" (something is already processing)
+    test('should queue spin when something is already processing', async () => {
+      // Setup: Unified queue is already processing something
       wheelGame.isSpinning = false;
-      mockUnifiedQueue.shouldQueue.mockReturnValue(true);
       mockUnifiedQueue.isProcessing = true; // Something is already processing
+      mockUnifiedQueue.queue = []; // But queue is empty (current item being processed)
 
       // Trigger a spin
       const result = await wheelGame.triggerSpin('testuser', 'Test User', null, 'Rose', 1);
@@ -138,11 +138,11 @@ describe('Wheel Queue Double-Counting Bug', () => {
       expect(queuedLogs.length).toBe(1);
     });
 
-    test('should use unified queue when isSpinning is true', async () => {
-      // Setup: Currently spinning
+    test('should queue spin when there are already items in queue', async () => {
+      // Setup: Queue already has items waiting
       wheelGame.isSpinning = true;
-      mockUnifiedQueue.shouldQueue.mockReturnValue(false);
-      mockUnifiedQueue.isProcessing = true; // Something is processing
+      mockUnifiedQueue.isProcessing = true;
+      mockUnifiedQueue.queue = [{ type: 'wheel', data: { username: 'other' } }]; // One item waiting
 
       // Trigger a spin
       const result = await wheelGame.triggerSpin('testuser', 'Test User', null, 'Rose', 1);
