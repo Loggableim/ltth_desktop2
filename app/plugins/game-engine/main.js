@@ -65,6 +65,11 @@ class GameEnginePlugin {
     this.gcceRetryInterval = null;
     this.gcceRetryCount = 0;
     
+    // Gift event deduplication (prevent double triggers from rapid/duplicate events)
+    this.recentGiftEvents = new Map(); // key: `${username}_${giftName}` -> timestamp
+    this.GIFT_DEDUP_WINDOW_MS = 1000; // 1 second deduplication window
+    this.giftDedupCleanupInterval = null;
+    
     // Default configurations
     this.defaultConfigs = {
       connect4: {
@@ -167,6 +172,24 @@ class GameEnginePlugin {
 
       // Register TikTok events
       this.registerTikTokEvents();
+      
+      // Start gift deduplication cleanup (runs every 30 seconds)
+      this.giftDedupCleanupInterval = setInterval(() => {
+        const now = Date.now();
+        const oldSize = this.recentGiftEvents.size;
+        
+        // Remove entries older than dedup window
+        for (const [key, timestamp] of this.recentGiftEvents.entries()) {
+          if (now - timestamp > this.GIFT_DEDUP_WINDOW_MS) {
+            this.recentGiftEvents.delete(key);
+          }
+        }
+        
+        if (this.recentGiftEvents.size < oldSize) {
+          this.logger.debug(`[GIFT DEDUP] Cleaned ${oldSize - this.recentGiftEvents.size} old gift events (${this.recentGiftEvents.size} remaining)`);
+        }
+      }, 30000);
+
 
       // Register GCCE commands (attempt immediately)
       // If GCCE is not loaded yet, we'll retry when it becomes available
@@ -211,6 +234,12 @@ class GameEnginePlugin {
     if (this.gcceRetryInterval) {
       clearInterval(this.gcceRetryInterval);
       this.gcceRetryInterval = null;
+    }
+    
+    // Clear gift deduplication cleanup interval
+    if (this.giftDedupCleanupInterval) {
+      clearInterval(this.giftDedupCleanupInterval);
+      this.giftDedupCleanupInterval = null;
     }
     
     // Unregister GCCE commands
@@ -1761,6 +1790,20 @@ class GameEnginePlugin {
       this.logger.debug(`[GIFT TRIGGER] Gift ${giftName} (ID: ${giftId}) is part of a streak, waiting for repeatEnd`);
       return;
     }
+    
+    // Deduplication check: Prevent same user + gift from being processed multiple times
+    // within a short timeframe (e.g., due to network issues, duplicate events, or rapid clicks)
+    const dedupKey = `${uniqueId}_${giftName}_${giftId || 'noId'}`;
+    const now = Date.now();
+    const lastEventTime = this.recentGiftEvents.get(dedupKey);
+    
+    if (lastEventTime && (now - lastEventTime) < this.GIFT_DEDUP_WINDOW_MS) {
+      this.logger.warn(`[GIFT DEDUP] Duplicate gift event blocked: ${giftName} from ${uniqueId} (${now - lastEventTime}ms since last event)`);
+      return;
+    }
+    
+    // Record this gift event
+    this.recentGiftEvents.set(dedupKey, now);
     
     // Normalize gift ID for consistent comparisons (Bug #4 fix)
     const giftIdStr = this.normalizeGiftId(giftId);
