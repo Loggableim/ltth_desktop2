@@ -1019,10 +1019,88 @@ class GameEnginePlugin {
 
     // === PLINKO API ROUTES ===
 
-    // API: Get Plinko configuration
+    // API: Get all plinko boards
+    this.api.registerRoute('GET', '/api/game-engine/plinko/boards', (req, res) => {
+      try {
+        const boards = this.plinkoGame.getAllBoards();
+        res.json(boards);
+      } catch (error) {
+        this.logger.error(`Error getting plinko boards: ${error.message}`);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // API: Create a new plinko board
+    this.api.registerRoute('POST', '/api/game-engine/plinko/boards', (req, res) => {
+      try {
+        const { name, slots, physicsSettings } = req.body;
+        const boardId = this.plinkoGame.createBoard(name || 'New Plinko', slots, physicsSettings);
+        res.json({ success: true, boardId });
+      } catch (error) {
+        this.logger.error(`Error creating plinko board: ${error.message}`);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // API: Delete a plinko board
+    this.api.registerRoute('DELETE', '/api/game-engine/plinko/boards/:boardId', (req, res) => {
+      try {
+        const { boardId } = req.params;
+        const result = this.plinkoGame.deleteBoard(parseInt(boardId));
+        if (!result) {
+          return res.status(400).json({ success: false, error: 'Cannot delete the last plinko board' });
+        }
+        res.json({ success: true });
+      } catch (error) {
+        this.logger.error(`Error deleting plinko board: ${error.message}`);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // API: Update plinko board name
+    this.api.registerRoute('PUT', '/api/game-engine/plinko/boards/:boardId/name', (req, res) => {
+      try {
+        const { boardId } = req.params;
+        const { name } = req.body;
+        this.plinkoGame.updateBoardName(parseInt(boardId), name);
+        res.json({ success: true });
+      } catch (error) {
+        this.logger.error(`Error updating plinko board name: ${error.message}`);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // API: Update plinko board chat command
+    this.api.registerRoute('PUT', '/api/game-engine/plinko/boards/:boardId/chat-command', (req, res) => {
+      try {
+        const { boardId } = req.params;
+        const { chatCommand } = req.body;
+        this.plinkoGame.updateBoardChatCommand(parseInt(boardId), chatCommand || null);
+        res.json({ success: true });
+      } catch (error) {
+        this.logger.error(`Error updating plinko board chat command: ${error.message}`);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // API: Update plinko board enabled status
+    this.api.registerRoute('PUT', '/api/game-engine/plinko/boards/:boardId/enabled', (req, res) => {
+      try {
+        const { boardId } = req.params;
+        const { enabled } = req.body;
+        this.plinkoGame.updateBoardEnabled(parseInt(boardId), enabled);
+        res.json({ success: true });
+      } catch (error) {
+        this.logger.error(`Error updating plinko board enabled status: ${error.message}`);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // API: Get Plinko configuration (supports boardId parameter for specific board)
     this.api.registerRoute('GET', '/api/game-engine/plinko/config', (req, res) => {
       try {
-        const config = this.plinkoGame.getConfig();
+        const boardId = req.query.boardId ? parseInt(req.query.boardId) : null;
+        const config = this.plinkoGame.getConfig(boardId);
         res.json(config);
       } catch (error) {
         this.logger.error(`Error getting Plinko config: ${error.message}`);
@@ -1030,14 +1108,45 @@ class GameEnginePlugin {
       }
     });
 
-    // API: Update Plinko configuration
+    // API: Update Plinko configuration (supports boardId in body)
     this.api.registerRoute('POST', '/api/game-engine/plinko/config', (req, res) => {
       try {
-        const { slots, physicsSettings, giftMappings } = req.body;
-        this.plinkoGame.updateConfig(slots, physicsSettings, giftMappings);
+        const { boardId, slots, physicsSettings, giftMappings } = req.body;
+        // Use boardId if provided, otherwise get first board's ID
+        let actualBoardId = boardId;
+        if (!actualBoardId) {
+          const config = this.plinkoGame.getConfig();
+          actualBoardId = config?.id || 1;
+        }
+        this.plinkoGame.updateConfig(actualBoardId, slots, physicsSettings, giftMappings);
         res.json({ success: true });
       } catch (error) {
         this.logger.error(`Error updating Plinko config: ${error.message}`);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // API: Update Plinko gift mappings (supports boardId)
+    this.api.registerRoute('POST', '/api/game-engine/plinko/gift-mappings', (req, res) => {
+      try {
+        const { giftMappings, boardId } = req.body;
+        // Use boardId if provided
+        let actualBoardId = boardId ? parseInt(boardId) : null;
+        if (!actualBoardId) {
+          const config = this.plinkoGame.getConfig();
+          actualBoardId = config?.id || 1;
+        }
+        this.db.updatePlinkoGiftMappings(actualBoardId, giftMappings);
+        
+        // Emit update event
+        this.io.emit('plinko:gift-mappings-updated', {
+          boardId: actualBoardId,
+          giftMappings
+        });
+        
+        res.json({ success: true });
+      } catch (error) {
+        this.logger.error(`Error updating Plinko gift mappings: ${error.message}`);
         res.status(500).json({ error: error.message });
       }
     });

@@ -1189,6 +1189,47 @@
     <!-- Plinko Tab -->
     <div class="tab-content" id="tab-plinko">
       <div class="card">
+        <h2>🎰 Plinko Board Verwaltung</h2>
+        <p>Verwalte mehrere Plinko-Boards mit individuellen Konfigurationen</p>
+        
+        <div class="form-group">
+          <label>Aktives Plinko-Board:</label>
+          <select id="plinko-board-selector" style="width: 100%; margin-bottom: 10px;">
+            <!-- Boards will be loaded here -->
+          </select>
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+          <button id="createPlinkoBoardBtn" class="secondary">➕ Neues Board erstellen</button>
+          <button id="deletePlinkoBoardBtn" class="danger">🗑️ Board löschen</button>
+        </div>
+        
+        <div class="form-group">
+          <label>Board-Name:</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="text" id="plinko-board-name" placeholder="Board-Name eingeben...">
+            <button id="updatePlinkoBoardNameBtn" class="secondary">💾 Name speichern</button>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label>Chat-Befehl (optional):</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="text" id="plinko-board-chat-command" placeholder="z.B. /plinko">
+            <button id="updatePlinkoBoardChatCommandBtn" class="secondary">💾 Befehl speichern</button>
+          </div>
+          <small style="color: #888;">Zuschauer können diesen Befehl nutzen, um Drops auf diesem Board zu triggern.</small>
+        </div>
+        
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="plinko-board-enabled">
+            Board aktiviert
+          </label>
+        </div>
+      </div>
+      
+      <div class="card">
         <h2>🎰 Plinko Einstellungen</h2>
         <p>Konfiguriere das physikbasierte Plinko-Spiel für TikTok LIVE Streams</p>
 
@@ -1273,7 +1314,10 @@
           <!-- Gift mappings will be dynamically loaded here -->
         </div>
 
-        <button id="addPlinkoGiftMappingBtn" class="secondary">➕ Geschenk-Mapping hinzufügen</button>
+        <div style="display: flex; gap: 10px;">
+          <button id="addPlinkoGiftMappingBtn" class="secondary">➕ Geschenk-Mapping hinzufügen</button>
+          <button id="openPlinkoGiftCatalogBtn" style="margin-left: auto;">📦 Geschenk-Katalog öffnen</button>
+        </div>
       </div>
 
       <div class="card">
@@ -3681,12 +3725,53 @@
 
     // === PLINKO FUNCTIONS ===
 
-    let plinkoConfig = null;
+    let allPlinkoBoards = []; // Array of all plinko boards
+    let currentPlinkoBoardId = null; // Currently selected board ID
+    let plinkoConfig = null; // Currently selected board config
+    let plinkoGiftSelectionMode = false; // Module-scoped state for gift catalog integration
 
-    async function loadPlinkoConfig() {
+    async function loadAllPlinkoBoards() {
       try {
-        const res = await fetch('/api/game-engine/plinko/config');
+        const res = await fetch('/api/game-engine/plinko/boards');
+        allPlinkoBoards = await res.json();
+        
+        // Update board selector dropdown
+        const selector = document.getElementById('plinko-board-selector');
+        selector.innerHTML = '';
+        
+        allPlinkoBoards.forEach(board => {
+          const option = document.createElement('option');
+          option.value = board.id;
+          option.textContent = `${board.name}${board.enabled ? '' : ' (deaktiviert)'}`;
+          selector.appendChild(option);
+        });
+        
+        // Set current board to first board if not set
+        if (allPlinkoBoards.length > 0 && !currentPlinkoBoardId) {
+          currentPlinkoBoardId = allPlinkoBoards[0].id;
+          selector.value = currentPlinkoBoardId;
+        }
+        
+        // Load config for current board
+        if (currentPlinkoBoardId) {
+          await loadPlinkoBoardConfig(currentPlinkoBoardId);
+        }
+      } catch (error) {
+        console.error('Error loading plinko boards:', error);
+        showMessage('Fehler beim Laden der Plinko-Boards', 'error');
+      }
+    }
+
+    async function loadPlinkoBoardConfig(boardId) {
+      try {
+        const res = await fetch(`/api/game-engine/plinko/config?boardId=${boardId}`);
         plinkoConfig = await res.json();
+        currentPlinkoBoardId = boardId;
+        
+        // Update board name and settings
+        document.getElementById('plinko-board-name').value = plinkoConfig.name || '';
+        document.getElementById('plinko-board-chat-command').value = plinkoConfig.chatCommand || '';
+        document.getElementById('plinko-board-enabled').checked = plinkoConfig.enabled;
         
         // Load slots
         renderPlinkoSlots();
@@ -3703,9 +3788,14 @@
         // Load gift mappings
         renderPlinkoGiftMappings();
       } catch (error) {
-        console.error('Error loading Plinko config:', error);
-        showMessage('Fehler beim Laden der Plinko-Konfiguration', 'error');
+        console.error('Error loading plinko board config:', error);
+        showMessage('Fehler beim Laden der Board-Konfiguration', 'error');
       }
+    }
+
+    async function loadPlinkoConfig() {
+      // This is kept for backward compatibility but now uses multi-board system
+      await loadAllPlinkoBoards();
     }
 
     function renderPlinkoSlots() {
@@ -3821,6 +3911,11 @@
 
     async function savePlinkoSettings() {
       try {
+        if (!currentPlinkoBoardId) {
+          showMessage('Kein Board ausgewählt', 'error');
+          return;
+        }
+        
         // Collect slots with OpenShock rewards
         const slots = [];
         document.querySelectorAll('.plinko-slot-multiplier').forEach((input, index) => {
@@ -3872,7 +3967,7 @@
         const res = await fetch('/api/game-engine/plinko/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slots, physicsSettings, giftMappings })
+          body: JSON.stringify({ boardId: currentPlinkoBoardId, slots, physicsSettings, giftMappings })
         });
         
         if (res.ok) {
@@ -3882,7 +3977,7 @@
             ? `Plinko-Einstellungen gespeichert! ⚡ ${osEnabledCount} Slot(s) mit OpenShock Belohnungen.`
             : 'Plinko-Einstellungen gespeichert!';
           showMessage(message);
-          plinkoConfig = { slots, physicsSettings, giftMappings };
+          plinkoConfig = { ...plinkoConfig, slots, physicsSettings, giftMappings };
           renderPlinkoSlots();
           renderPlinkoGiftMappings();
         } else {
@@ -3913,6 +4008,143 @@
     // Plinko event listeners
     document.getElementById('savePlinkoSettingsBtn').addEventListener('click', savePlinkoSettings);
     document.getElementById('refreshPlinkoStatsBtn').addEventListener('click', loadPlinkoStats);
+    
+    // Plinko board selector
+    document.getElementById('plinko-board-selector')?.addEventListener('change', async (e) => {
+      const boardId = parseInt(e.target.value);
+      await loadPlinkoBoardConfig(boardId);
+    });
+    
+    // Create new plinko board
+    document.getElementById('createPlinkoBoardBtn')?.addEventListener('click', async () => {
+      const name = prompt('Name für das neue Plinko-Board:');
+      if (name && name.trim()) {
+        try {
+          const res = await fetch('/api/game-engine/plinko/boards', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name.trim() })
+          });
+          const result = await res.json();
+          if (result.success) {
+            showMessage(`Plinko-Board "${name}" erstellt!`);
+            await loadAllPlinkoBoards();
+            currentPlinkoBoardId = result.boardId;
+            document.getElementById('plinko-board-selector').value = result.boardId;
+            await loadPlinkoBoardConfig(result.boardId);
+          } else {
+            showMessage('Fehler beim Erstellen des Boards', 'error');
+          }
+        } catch (error) {
+          showMessage('Fehler: ' + error.message, 'error');
+        }
+      }
+    });
+    
+    // Delete plinko board
+    document.getElementById('deletePlinkoBoardBtn')?.addEventListener('click', async () => {
+      if (!currentPlinkoBoardId) return;
+      
+      const boardName = plinkoConfig?.name || 'dieses Board';
+      if (confirm(`Board "${boardName}" wirklich löschen?`)) {
+        try {
+          const res = await fetch(`/api/game-engine/plinko/boards/${currentPlinkoBoardId}`, {
+            method: 'DELETE'
+          });
+          const result = await res.json();
+          if (result.success) {
+            showMessage('Board gelöscht');
+            await loadAllPlinkoBoards();
+          } else {
+            showMessage(result.error || 'Fehler beim Löschen', 'error');
+          }
+        } catch (error) {
+          showMessage('Fehler: ' + error.message, 'error');
+        }
+      }
+    });
+    
+    // Update plinko board name
+    document.getElementById('updatePlinkoBoardNameBtn')?.addEventListener('click', async () => {
+      if (!currentPlinkoBoardId) return;
+      
+      const name = document.getElementById('plinko-board-name').value.trim();
+      if (!name) {
+        showMessage('Bitte einen Namen eingeben', 'error');
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/game-engine/plinko/boards/${currentPlinkoBoardId}/name`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        if (res.ok) {
+          showMessage('Board-Name aktualisiert');
+          await loadAllPlinkoBoards();
+        } else {
+          showMessage('Fehler beim Aktualisieren', 'error');
+        }
+      } catch (error) {
+        showMessage('Fehler: ' + error.message, 'error');
+      }
+    });
+    
+    // Update plinko board chat command
+    document.getElementById('updatePlinkoBoardChatCommandBtn')?.addEventListener('click', async () => {
+      if (!currentPlinkoBoardId) return;
+      
+      const chatCommand = document.getElementById('plinko-board-chat-command').value.trim() || null;
+      
+      try {
+        const res = await fetch(`/api/game-engine/plinko/boards/${currentPlinkoBoardId}/chat-command`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatCommand })
+        });
+        if (res.ok) {
+          showMessage('Chat-Befehl aktualisiert');
+          await loadAllPlinkoBoards();
+        } else {
+          showMessage('Fehler beim Aktualisieren', 'error');
+        }
+      } catch (error) {
+        showMessage('Fehler: ' + error.message, 'error');
+      }
+    });
+    
+    // Update plinko board enabled status
+    document.getElementById('plinko-board-enabled')?.addEventListener('change', async (e) => {
+      if (!currentPlinkoBoardId) return;
+      
+      const enabled = e.target.checked;
+      try {
+        const res = await fetch(`/api/game-engine/plinko/boards/${currentPlinkoBoardId}/enabled`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+        if (res.ok) {
+          showMessage(`Board ${enabled ? 'aktiviert' : 'deaktiviert'}`);
+          await loadAllPlinkoBoards();
+        } else {
+          showMessage('Fehler beim Aktualisieren', 'error');
+          e.target.checked = !enabled; // Revert on error
+        }
+      } catch (error) {
+        showMessage('Fehler: ' + error.message, 'error');
+        e.target.checked = !enabled; // Revert on error
+      }
+    });
+    
+    // Open plinko gift catalog
+    document.getElementById('openPlinkoGiftCatalogBtn')?.addEventListener('click', () => {
+      // Reuse the existing gift catalog modal
+      openGiftCatalog();
+      // Set up handler for plinko gift selection
+      plinkoGiftSelectionMode = true;
+    });
     
     document.getElementById('addPlinkoSlotBtn').addEventListener('click', () => {
       plinkoConfig.slots.push({ multiplier: 1.0, color: '#4CAF50' });
@@ -3962,6 +4194,54 @@
       const url = document.getElementById('plinko-overlay-url').value;
       window.open(url, '_blank');
     });
+    
+    // Handler for plinko gift selection from catalog
+    async function handlePlinkoGiftSelection(gift) {
+      if (!currentPlinkoBoardId) {
+        showMessage('Kein Plinko-Board ausgewählt', 'error');
+        plinkoGiftSelectionMode = false;
+        closeGiftCatalog();
+        return;
+      }
+      
+      if (!plinkoConfig.giftMappings) plinkoConfig.giftMappings = {};
+      const giftKey = String(gift.id);
+      plinkoConfig.giftMappings[giftKey] = {
+        name: gift.name,
+        betAmount: 100,
+        ballType: 'standard',
+        multiplier: 1.0
+      };
+      
+      try {
+        await fetch('/api/game-engine/plinko/gift-mappings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ giftMappings: plinkoConfig.giftMappings, boardId: currentPlinkoBoardId })
+        });
+        
+        renderPlinkoGiftMappings();
+        showMessage(`Geschenk "${gift.name}" zum Plinko-Board "${plinkoConfig.name}" hinzugefügt`);
+      } catch (error) {
+        showMessage('Fehler beim Speichern', 'error');
+      }
+      
+      plinkoGiftSelectionMode = false;
+      closeGiftCatalog();
+    }
+    
+    // Override click handler on gift grid when in plinko mode
+    document.getElementById('gift-grid')?.addEventListener('click', async (e) => {
+      const giftCard = e.target.closest('.gift-card');
+      if (giftCard && plinkoGiftSelectionMode) {
+        e.stopPropagation();
+        const gift = {
+          id: giftCard.dataset.giftId,
+          name: giftCard.dataset.giftName
+        };
+        await handlePlinkoGiftSelection(gift);
+      }
+    }, true); // Use capture phase to intercept before original handler
     
     // Load Plinko config and stats on page load
     loadPlinkoConfig();
