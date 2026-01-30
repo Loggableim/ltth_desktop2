@@ -185,19 +185,107 @@ class GameEngineDatabase {
       )
     `);
 
-    // Plinko configuration table
+    // Plinko configuration table - migrate to multi-board support
+    // Check if the old single-board table exists with CHECK constraint
+    try {
+      const tableInfo = this.db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='game_plinko_config'`).get();
+      if (tableInfo && tableInfo.sql && tableInfo.sql.includes('CHECK')) {
+        // Old table with CHECK constraint - need to migrate
+        this.logger.info('Migrating game_plinko_config table to multi-board support...');
+        
+        // Get existing data
+        const existingData = this.db.prepare('SELECT * FROM game_plinko_config').all();
+        
+        // Drop old table
+        this.db.exec('DROP TABLE game_plinko_config');
+        
+        // Create new table without CHECK constraint
+        this.db.exec(`
+          CREATE TABLE game_plinko_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL DEFAULT 'Standard Plinko',
+            slots TEXT NOT NULL,
+            physics_settings TEXT NOT NULL,
+            gift_mappings TEXT,
+            chat_command TEXT,
+            enabled INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        
+        // Re-insert data
+        if (existingData.length > 0) {
+          const insertStmt = this.db.prepare(`
+            INSERT INTO game_plinko_config (id, name, slots, physics_settings, gift_mappings, chat_command, enabled, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          for (const row of existingData) {
+            insertStmt.run(
+              row.id,
+              'Standard Plinko',
+              row.slots,
+              row.physics_settings,
+              row.gift_mappings || '{}',
+              null,
+              1,
+              row.updated_at || new Date().toISOString()
+            );
+          }
+        }
+        
+        this.logger.info('Migration complete - multi-board plinko support enabled');
+      }
+    } catch (error) {
+      // Table doesn't exist yet or migration failed, will be created below
+    }
+    
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS game_plinko_config (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL DEFAULT 'Standard Plinko',
         slots TEXT NOT NULL,
         physics_settings TEXT NOT NULL,
         gift_mappings TEXT,
+        chat_command TEXT,
+        enabled INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    
+    // Add new columns for multi-board support if they don't exist (for existing databases)
+    const plinkoColumns = ['name', 'chat_command', 'enabled', 'created_at'];
+    for (const column of plinkoColumns) {
+      try {
+        if (column === 'name') {
+          this.db.exec(`ALTER TABLE game_plinko_config ADD COLUMN name TEXT NOT NULL DEFAULT 'Standard Plinko'`);
+        } else if (column === 'chat_command') {
+          this.db.exec(`ALTER TABLE game_plinko_config ADD COLUMN chat_command TEXT`);
+        } else if (column === 'enabled') {
+          this.db.exec(`ALTER TABLE game_plinko_config ADD COLUMN enabled INTEGER DEFAULT 1`);
+        } else if (column === 'created_at') {
+          this.db.exec(`ALTER TABLE game_plinko_config ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP`);
+        }
+      } catch (error) {
+        // Column already exists, ignore error
+      }
+    }
+    
+    // Migrate legacy database: ensure legacy single-board entry has proper name
+    try {
+      // Check if there's a row with id=1 (legacy format)
+      const legacyCheck = this.db.prepare('SELECT id FROM game_plinko_config WHERE id = 1').get();
+      if (legacyCheck) {
+        // Update the legacy row to have a proper name if it has default/empty name
+        this.db.prepare(`UPDATE game_plinko_config SET name = 'Standard Plinko' WHERE id = 1 AND (name IS NULL OR name = '')`).run();
+      }
+    } catch (error) {
+      // Ignore errors during migration
+    }
 
-    // Initialize default Plinko config if not exists
-    const plinkoConfigExists = this.db.prepare('SELECT COUNT(*) as count FROM game_plinko_config WHERE id = 1').get();
+    // Initialize default Plinko config if no boards exist
+    const plinkoConfigExists = this.db.prepare('SELECT COUNT(*) as count FROM game_plinko_config').get();
     if (plinkoConfigExists.count === 0) {
       const defaultSlots = [
         { multiplier: 0.2, color: '#FF6B6B' },
@@ -217,14 +305,17 @@ class GameEngineDatabase {
         ballRestitution: 0.6,
         pegRestitution: 0.8,
         pegRows: 12,
-        pegSpacing: 60
+        pegSpacing: 60,
+        testModeEnabled: false,
+        maxSimultaneousBalls: 5,
+        rateLimitMs: 800
       };
       const defaultGiftMappings = {};
       
       this.db.prepare(`
-        INSERT INTO game_plinko_config (id, slots, physics_settings, gift_mappings)
-        VALUES (1, ?, ?, ?)
-      `).run(JSON.stringify(defaultSlots), JSON.stringify(defaultPhysics), JSON.stringify(defaultGiftMappings));
+        INSERT INTO game_plinko_config (name, slots, physics_settings, gift_mappings, chat_command, enabled)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('Standard Plinko', JSON.stringify(defaultSlots), JSON.stringify(defaultPhysics), JSON.stringify(defaultGiftMappings), null, 1);
     }
 
     // Wheel (Glücksrad) configuration table - supports multiple wheels
@@ -1060,31 +1151,175 @@ class GameEngineDatabase {
   }
 
   /**
-   * Get Plinko configuration
+   * Get all plinko boards
+   * @returns {Array} List of all plinko board configurations
    */
-  getPlinkoConfig() {
-    const config = this.db.prepare('SELECT * FROM game_plinko_config WHERE id = 1').get();
+  getAllPlinkoBoards() {
+    const boards = this.db.prepare('SELECT * FROM game_plinko_config ORDER BY id ASC').all();
+    return boards.map(board => ({
+      id: board.id,
+      name: board.name || 'Unnamed Plinko',
+      slots: JSON.parse(board.slots),
+      physicsSettings: JSON.parse(board.physics_settings),
+      giftMappings: board.gift_mappings ? JSON.parse(board.gift_mappings) : {},
+      chatCommand: board.chat_command || null,
+      enabled: board.enabled === 1,
+      createdAt: board.created_at,
+      updatedAt: board.updated_at
+    }));
+  }
+
+  /**
+   * Get Plinko configuration by ID (or first board if no ID provided for backward compatibility)
+   * @param {number} boardId - Plinko board ID (optional, defaults to first board)
+   */
+  getPlinkoConfig(boardId = null) {
+    let config;
+    if (boardId !== null) {
+      config = this.db.prepare('SELECT * FROM game_plinko_config WHERE id = ?').get(boardId);
+    } else {
+      // Backward compatibility: get first board
+      config = this.db.prepare('SELECT * FROM game_plinko_config ORDER BY id ASC LIMIT 1').get();
+    }
     if (!config) return null;
     
     return {
+      id: config.id,
+      name: config.name || 'Unnamed Plinko',
       slots: JSON.parse(config.slots),
       physicsSettings: JSON.parse(config.physics_settings),
-      giftMappings: config.gift_mappings ? JSON.parse(config.gift_mappings) : {}
+      giftMappings: config.gift_mappings ? JSON.parse(config.gift_mappings) : {},
+      chatCommand: config.chat_command || null,
+      enabled: config.enabled === 1
     };
   }
 
   /**
-   * Update Plinko configuration
+   * Create a new plinko board
+   * @param {string} name - Name of the board
+   * @param {Array} slots - Plinko slots
+   * @param {Object} physicsSettings - Physics settings
+   * @param {Object} giftMappings - Gift mappings for this board
+   * @param {string} chatCommand - Chat command to trigger this board (optional)
+   * @returns {number} New board ID
    */
-  updatePlinkoConfig(slots, physicsSettings, giftMappings) {
+  createPlinkoBoard(name, slots, physicsSettings, giftMappings = {}, chatCommand = null) {
+    const result = this.db.prepare(`
+      INSERT INTO game_plinko_config (name, slots, physics_settings, gift_mappings, chat_command, enabled)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(name, JSON.stringify(slots), JSON.stringify(physicsSettings), JSON.stringify(giftMappings), chatCommand);
+    
+    return result.lastInsertRowid;
+  }
+
+  /**
+   * Update Plinko configuration
+   * @param {number} boardId - Plinko board ID
+   * @param {Array} slots - Plinko slots
+   * @param {Object} physicsSettings - Physics settings
+   * @param {Object} giftMappings - Gift mappings (optional)
+   */
+  updatePlinkoConfig(boardId, slots, physicsSettings, giftMappings = null) {
+    const existingConfig = this.getPlinkoConfig(boardId);
+    const newGiftMappings = giftMappings !== null ? giftMappings : (existingConfig?.giftMappings || {});
+    
     this.db.prepare(`
       UPDATE game_plinko_config 
       SET slots = ?, 
           physics_settings = ?, 
           gift_mappings = ?,
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = 1
-    `).run(JSON.stringify(slots), JSON.stringify(physicsSettings), JSON.stringify(giftMappings || {}));
+      WHERE id = ?
+    `).run(JSON.stringify(slots), JSON.stringify(physicsSettings), JSON.stringify(newGiftMappings), boardId);
+  }
+
+  /**
+   * Update plinko board name
+   */
+  updatePlinkoName(boardId, name) {
+    this.db.prepare(`UPDATE game_plinko_config SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(name, boardId);
+  }
+
+  /**
+   * Update plinko board chat command
+   */
+  updatePlinkoChatCommand(boardId, chatCommand) {
+    this.db.prepare(`UPDATE game_plinko_config SET chat_command = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(chatCommand, boardId);
+  }
+
+  /**
+   * Update plinko board enabled status
+   */
+  updatePlinkoEnabled(boardId, enabled) {
+    this.db.prepare(`UPDATE game_plinko_config SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(enabled ? 1 : 0, boardId);
+  }
+
+  /**
+   * Update plinko gift mappings
+   */
+  updatePlinkoGiftMappings(boardId, giftMappings) {
+    this.db.prepare(`
+      UPDATE game_plinko_config 
+      SET gift_mappings = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(JSON.stringify(giftMappings || {}), boardId);
+  }
+
+  /**
+   * Delete a plinko board
+   */
+  deletePlinkoBoard(boardId) {
+    // Prevent deletion if it's the only board
+    const boardCount = this.db.prepare('SELECT COUNT(*) as count FROM game_plinko_config').get();
+    if (boardCount.count <= 1) {
+      return false;
+    }
+    
+    this.db.prepare('DELETE FROM game_plinko_config WHERE id = ?').run(boardId);
+    return true;
+  }
+
+  /**
+   * Find plinko board by gift trigger
+   * @param {string} giftIdentifier - Gift name or ID
+   * @returns {Object|null} Board config if found
+   */
+  findPlinkoBoardByGiftTrigger(giftIdentifier) {
+    const boards = this.getAllPlinkoBoards();
+    
+    for (const board of boards) {
+      if (!board.enabled) continue;
+      if (!board.giftMappings) continue;
+      
+      // Check both by gift ID and gift name
+      if (board.giftMappings[giftIdentifier] || board.giftMappings[String(giftIdentifier)]) {
+        return board;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Find plinko board by chat command
+   * @param {string} command - Chat command
+   * @returns {Object|null} Board config if found
+   */
+  findPlinkoBoardByChatCommand(command) {
+    const boards = this.getAllPlinkoBoards();
+    const normalizedCommand = command.toLowerCase().trim();
+    
+    for (const board of boards) {
+      if (!board.enabled) continue;
+      if (!board.chatCommand) continue;
+      
+      if (board.chatCommand.toLowerCase().trim() === normalizedCommand) {
+        return board;
+      }
+    }
+    
+    return null;
   }
 
   /**
