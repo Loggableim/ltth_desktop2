@@ -278,7 +278,7 @@ class UnifiedQueueManager {
     }
 
     try {
-      await this.plinkoGame.spawnBalls(
+      const result = await this.plinkoGame.spawnBalls(
         dropData.username,
         dropData.nickname,
         dropData.profilePictureUrl,
@@ -290,6 +290,13 @@ class UnifiedQueueManager {
           forceStart: true // Skip queue check since we're already in unified queue
         }
       );
+      
+      // Check if spawnBalls returned a failure response (not an exception)
+      if (result && result.success === false) {
+        this.logger.warn(`⚠️ [UNIFIED QUEUE] Plinko spawnBalls returned failure: ${result?.error || 'unknown'}`);
+        this.completeProcessing();
+        return;
+      }
       
       // Note: completeProcessing() will be called by Plinko when batch is complete
       // or after a timeout
@@ -310,7 +317,15 @@ class UnifiedQueueManager {
     }
 
     try {
-      await this.wheelGame.startSpin(spinData);
+      const result = await this.wheelGame.startSpin(spinData);
+      
+      // Check if startSpin returned a failure response (not an exception)
+      // This happens when wheel is already spinning or config is invalid
+      if (!result || !result.success) {
+        this.logger.warn(`⚠️ [UNIFIED QUEUE] Wheel startSpin returned failure: ${result?.error || 'unknown'}`);
+        this.completeProcessing();
+        return;
+      }
       
       // Note: completeProcessing() will be called by Wheel when spin is complete
     } catch (error) {
@@ -331,7 +346,7 @@ class UnifiedQueueManager {
 
     try {
       // Start Connect4 game without queuing (since we're already in the queue)
-      await this.gameEnginePlugin.startGameFromQueue(
+      const result = await this.gameEnginePlugin.startGameFromQueue(
         'connect4',
         gameData.viewerUsername,
         gameData.viewerNickname,
@@ -339,6 +354,13 @@ class UnifiedQueueManager {
         gameData.triggerValue,
         gameData.giftPictureUrl
       );
+      
+      // Check if startGameFromQueue returned a failure response (not an exception)
+      if (result && result.success === false) {
+        this.logger.warn(`⚠️ [UNIFIED QUEUE] Connect4 startGameFromQueue returned failure: ${result?.error || 'unknown'}`);
+        this.completeProcessing();
+        return;
+      }
       
       // Note: completeProcessing() will be called by game engine when game ends
     } catch (error) {
@@ -359,7 +381,7 @@ class UnifiedQueueManager {
 
     try {
       // Start Chess game without queuing (since we're already in the queue)
-      await this.gameEnginePlugin.startGameFromQueue(
+      const result = await this.gameEnginePlugin.startGameFromQueue(
         'chess',
         gameData.viewerUsername,
         gameData.viewerNickname,
@@ -367,6 +389,13 @@ class UnifiedQueueManager {
         gameData.triggerValue,
         gameData.giftPictureUrl
       );
+      
+      // Check if startGameFromQueue returned a failure response (not an exception)
+      if (result && result.success === false) {
+        this.logger.warn(`⚠️ [UNIFIED QUEUE] Chess startGameFromQueue returned failure: ${result?.error || 'unknown'}`);
+        this.completeProcessing();
+        return;
+      }
       
       // Note: completeProcessing() will be called by game engine when game ends
     } catch (error) {
