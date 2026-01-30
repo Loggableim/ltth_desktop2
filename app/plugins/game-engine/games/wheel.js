@@ -278,22 +278,27 @@ class WheelGame {
     // Store spin data
     this.activeSpins.set(spinId, spinData);
 
-    // If already spinning, add to queue
-    if (this.isSpinning || (this.unifiedQueue && this.unifiedQueue.shouldQueue())) {
-      // Use unified queue if available
-      if (this.unifiedQueue) {
+    // === FIX: Exclusive Queue Logic ===
+    // Use unified queue if available, otherwise fall back to legacy queue
+    // NEVER use both at the same time
+    if (this.unifiedQueue) {
+      // Unified queue path - check if we should queue
+      if (this.unifiedQueue.shouldQueue() || this.isSpinning) {
         const queueResult = this.unifiedQueue.queueWheel(spinData);
         
         this.logger.info(`🎡 Wheel spin queued via unified queue: ${username} on "${config.name}" (spinId: ${spinId}, position: ${queueResult.position}, segments: ${config.segments.length})`);
         
         return { success: true, spinId, queued: true, position: queueResult.position, wheelId: actualWheelId, wheelName: config.name };
-      } else {
-        // Legacy queue
+      }
+      // If shouldQueue() is false and not spinning, fall through to immediate spin
+    } else {
+      // Legacy queue fallback (only used if unified queue is not available)
+      if (this.isSpinning || this.spinQueue.length > 0) {
         this.spinQueue.push(spinData);
         
         const position = this.spinQueue.length;
         
-        this.logger.info(`🎡 Wheel spin queued: ${username} on "${config.name}" (spinId: ${spinId}, position: ${position}, segments: ${config.segments.length})`);
+        this.logger.info(`🎡 Wheel spin queued (legacy): ${username} on "${config.name}" (spinId: ${spinId}, position: ${position}, segments: ${config.segments.length})`);
         
         // Emit queue event with validated segment information
         this.io.emit('wheel:spin-queued', {
@@ -310,9 +315,10 @@ class WheelGame {
 
         return { success: true, spinId, queued: true, position, wheelId: actualWheelId, wheelName: config.name };
       }
+      // If queue is empty and not spinning, fall through to immediate spin
     }
 
-    // Start spin immediately
+    // Start spin immediately (queue was empty or not needed)
     return await this.startSpin(spinData);
   }
 
