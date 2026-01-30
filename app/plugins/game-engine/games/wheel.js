@@ -278,19 +278,31 @@ class WheelGame {
     // Store spin data
     this.activeSpins.set(spinId, spinData);
 
-    // === FIX: Exclusive Queue Logic ===
-    // Use unified queue if available, otherwise fall back to legacy queue
-    // NEVER use both at the same time
+    // === FIX: Always use unified queue when available ===
+    // All spins MUST go through the unified queue to ensure proper state tracking.
+    // When queue is empty and nothing is processing, the spin will start immediately
+    // via processNext() being called from queueWheel().
+    // This fixes the bug where subsequent gifts were lost because the first spin
+    // bypassed the queue and set isSpinning=true without notifying the unified queue.
     if (this.unifiedQueue) {
-      // Unified queue path - check if we should queue
-      if (this.unifiedQueue.shouldQueue() || this.isSpinning) {
-        const queueResult = this.unifiedQueue.queueWheel(spinData);
-        
-        this.logger.info(`🎡 Wheel spin queued via unified queue: ${username} on "${config.name}" (spinId: ${spinId}, position: ${queueResult.position}, segments: ${config.segments.length})`);
-        
-        return { success: true, spinId, queued: true, position: queueResult.position, wheelId: actualWheelId, wheelName: config.name };
-      }
-      // If shouldQueue() is false and not spinning, fall through to immediate spin
+      // Check state BEFORE adding to queue to determine if this will be immediate
+      const wasIdle = !this.unifiedQueue.isProcessing && this.unifiedQueue.queue.length === 0;
+      
+      const queueResult = this.unifiedQueue.queueWheel(spinData);
+      
+      // If the queue was idle before adding, this spin will start immediately
+      const isImmediate = wasIdle;
+      
+      this.logger.info(`🎡 Wheel spin ${isImmediate ? 'starting' : 'queued'} via unified queue: ${username} on "${config.name}" (spinId: ${spinId}, position: ${queueResult.position}, segments: ${config.segments.length})`);
+      
+      return { 
+        success: true, 
+        spinId, 
+        queued: !isImmediate,
+        position: queueResult.position, 
+        wheelId: actualWheelId, 
+        wheelName: config.name 
+      };
     } else {
       // Legacy queue fallback (only used if unified queue is not available)
       if (this.isSpinning || this.spinQueue.length > 0) {
@@ -318,7 +330,7 @@ class WheelGame {
       // If queue is empty and not spinning, fall through to immediate spin
     }
 
-    // Start spin immediately (queue was empty or not needed)
+    // Start spin immediately (legacy mode only - when queue is empty)
     return await this.startSpin(spinData);
   }
 

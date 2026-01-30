@@ -685,8 +685,10 @@ class TikTokConnector extends EventEmitter {
                 timestamp: new Date().toISOString()
             };
 
-            this.handleEvent('chat', eventData);
-            this.db.logEvent('chat', eventData.username, eventData);
+            // Only log to database if event was not a duplicate
+            if (this.handleEvent('chat', eventData)) {
+                this.db.logEvent('chat', eventData.username, eventData);
+            }
         });
 
         // ========== GIFT ==========
@@ -801,8 +803,10 @@ class TikTokConnector extends EventEmitter {
 
                 this.logger.info(`✅ [GIFT COUNTED] Total coins now: ${this.stats.totalCoins}`);
 
-                this.handleEvent('gift', eventData);
-                this.db.logEvent('gift', eventData.username, eventData);
+                // Only log to database if event was not a duplicate
+                if (this.handleEvent('gift', eventData)) {
+                    this.db.logEvent('gift', eventData.username, eventData);
+                }
                 this.broadcastStats();
             } else {
                 this.logger.info(`⏳ [STREAK RUNNING] ${giftData.giftName || 'Unknown Gift'} x${repeatCount} (${coins} coins, not counted yet)`);
@@ -859,8 +863,10 @@ class TikTokConnector extends EventEmitter {
                 };
 
                 this.logger.info(`👤 [FOLLOW] New follower: ${eventData.username || eventData.nickname}`);
-                this.handleEvent('follow', eventData);
-                this.db.logEvent('follow', eventData.username, eventData);
+                // Only log to database if event was not a duplicate
+                if (this.handleEvent('follow', eventData)) {
+                    this.db.logEvent('follow', eventData.username, eventData);
+                }
                 this.broadcastStats();
             } else if (isShare) {
                 // Handle share events from WebcastSocialMessage (action === 2)
@@ -879,8 +885,10 @@ class TikTokConnector extends EventEmitter {
                 };
 
                 this.logger.info(`📢 [SHARE] User shared stream: ${eventData.username || eventData.nickname}`);
-                this.handleEvent('share', eventData);
-                this.db.logEvent('share', eventData.username, eventData);
+                // Only log to database if event was not a duplicate
+                if (this.handleEvent('share', eventData)) {
+                    this.db.logEvent('share', eventData.username, eventData);
+                }
                 this.broadcastStats();
             } else {
                 // Log unrecognized social event types for debugging
@@ -905,8 +913,10 @@ class TikTokConnector extends EventEmitter {
                 timestamp: new Date().toISOString()
             };
 
-            this.handleEvent('share', eventData);
-            this.db.logEvent('share', eventData.username, eventData);
+            // Only log to database if event was not a duplicate
+            if (this.handleEvent('share', eventData)) {
+                this.db.logEvent('share', eventData.username, eventData);
+            }
             this.broadcastStats();
         });
 
@@ -960,8 +970,10 @@ class TikTokConnector extends EventEmitter {
                 timestamp: new Date().toISOString()
             };
 
-            this.handleEvent('like', eventData);
-            this.db.logEvent('like', eventData.username, eventData);
+            // Only log to database if event was not a duplicate
+            if (this.handleEvent('like', eventData)) {
+                this.db.logEvent('like', eventData.username, eventData);
+            }
             this.broadcastStats();
         });
 
@@ -994,8 +1006,10 @@ class TikTokConnector extends EventEmitter {
                 timestamp: new Date().toISOString()
             };
 
-            this.handleEvent('subscribe', eventData);
-            this.db.logEvent('subscribe', eventData.username, eventData);
+            // Only log to database if event was not a duplicate
+            if (this.handleEvent('subscribe', eventData)) {
+                this.db.logEvent('subscribe', eventData.username, eventData);
+            }
         });
 
         // ========== MEMBER (JOIN) ==========
@@ -1017,8 +1031,10 @@ class TikTokConnector extends EventEmitter {
 
             this.logger.info(`👋 User joined: ${userData.username || userData.nickname}`);
             
-            this.handleEvent('join', eventData);
-            this.db.logEvent('join', eventData.username, eventData);
+            // Only log to database if event was not a duplicate
+            if (this.handleEvent('join', eventData)) {
+                this.db.logEvent('join', eventData.username, eventData);
+            }
         });
 
         // ========== EMOTE (STICKER) ==========
@@ -1044,8 +1060,10 @@ class TikTokConnector extends EventEmitter {
 
             this.logger.info(`🎭 Sticker sent: ${emoteData.emoteName || emoteData.emoteId} by ${userData.username || userData.nickname}`);
             
-            this.handleEvent('emote', eventData);
-            this.db.logEvent('emote', eventData.username, eventData);
+            // Only log to database if event was not a duplicate
+            if (this.handleEvent('emote', eventData)) {
+                this.db.logEvent('emote', eventData.username, eventData);
+            }
         });
     }
 
@@ -1788,7 +1806,7 @@ class TikTokConnector extends EventEmitter {
         // Check for duplicate events
         if (this._isDuplicateEvent(eventType, data)) {
             this.logger.info(`⚠️  Duplicate ${eventType} event ignored`);
-            return;
+            return false; // Return false to indicate event was not processed
         }
 
         // Forward event to server modules
@@ -1799,6 +1817,8 @@ class TikTokConnector extends EventEmitter {
             type: eventType,
             data: data
         });
+        
+        return true; // Return true to indicate event was processed
     }
 
     broadcastStatus(status, data = {}) {
