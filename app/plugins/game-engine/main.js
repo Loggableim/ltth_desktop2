@@ -1046,7 +1046,14 @@ class GameEnginePlugin {
     this.api.registerRoute('DELETE', '/api/game-engine/plinko/boards/:boardId', (req, res) => {
       try {
         const { boardId } = req.params;
-        const result = this.plinkoGame.deleteBoard(parseInt(boardId));
+        
+        // Validate boardId
+        const parsedBoardId = parseInt(boardId);
+        if (isNaN(parsedBoardId) || parsedBoardId <= 0) {
+          return res.status(400).json({ success: false, error: 'Invalid board ID' });
+        }
+        
+        const result = this.plinkoGame.deleteBoard(parsedBoardId);
         if (!result) {
           return res.status(400).json({ success: false, error: 'Cannot delete the last plinko board' });
         }
@@ -1062,7 +1069,19 @@ class GameEnginePlugin {
       try {
         const { boardId } = req.params;
         const { name } = req.body;
-        this.plinkoGame.updateBoardName(parseInt(boardId), name);
+        
+        // Validate boardId
+        const parsedBoardId = parseInt(boardId);
+        if (isNaN(parsedBoardId) || parsedBoardId <= 0) {
+          return res.status(400).json({ success: false, error: 'Invalid board ID' });
+        }
+        
+        // Validate name
+        if (!name || typeof name !== 'string' || name.trim().length === 0) {
+          return res.status(400).json({ success: false, error: 'Board name is required and must be non-empty' });
+        }
+        
+        this.plinkoGame.updateBoardName(parsedBoardId, name);
         res.json({ success: true });
       } catch (error) {
         this.logger.error(`Error updating plinko board name: ${error.message}`);
@@ -1075,7 +1094,14 @@ class GameEnginePlugin {
       try {
         const { boardId } = req.params;
         const { chatCommand } = req.body;
-        this.plinkoGame.updateBoardChatCommand(parseInt(boardId), chatCommand || null);
+        
+        // Validate boardId
+        const parsedBoardId = parseInt(boardId);
+        if (isNaN(parsedBoardId) || parsedBoardId <= 0) {
+          return res.status(400).json({ success: false, error: 'Invalid board ID' });
+        }
+        
+        this.plinkoGame.updateBoardChatCommand(parsedBoardId, chatCommand || null);
         res.json({ success: true });
       } catch (error) {
         this.logger.error(`Error updating plinko board chat command: ${error.message}`);
@@ -1088,7 +1114,19 @@ class GameEnginePlugin {
       try {
         const { boardId } = req.params;
         const { enabled } = req.body;
-        this.plinkoGame.updateBoardEnabled(parseInt(boardId), enabled);
+        
+        // Validate boardId
+        const parsedBoardId = parseInt(boardId);
+        if (isNaN(parsedBoardId) || parsedBoardId <= 0) {
+          return res.status(400).json({ success: false, error: 'Invalid board ID' });
+        }
+        
+        // Validate enabled is boolean
+        if (typeof enabled !== 'boolean') {
+          return res.status(400).json({ success: false, error: 'Enabled must be a boolean value' });
+        }
+        
+        this.plinkoGame.updateBoardEnabled(parsedBoardId, enabled);
         res.json({ success: true });
       } catch (error) {
         this.logger.error(`Error updating plinko board enabled status: ${error.message}`);
@@ -1115,8 +1153,12 @@ class GameEnginePlugin {
         // Use boardId if provided, otherwise get first board's ID
         let actualBoardId = boardId;
         if (!actualBoardId) {
-          const config = this.plinkoGame.getConfig();
-          actualBoardId = config?.id || 1;
+          const boards = this.plinkoGame.getAllBoards();
+          if (boards && boards.length > 0) {
+            actualBoardId = boards[0].id;
+          } else {
+            return res.status(400).json({ success: false, error: 'No plinko boards found' });
+          }
         }
         this.plinkoGame.updateConfig(actualBoardId, slots, physicsSettings, giftMappings);
         res.json({ success: true });
@@ -1133,8 +1175,12 @@ class GameEnginePlugin {
         // Use boardId if provided
         let actualBoardId = boardId ? parseInt(boardId) : null;
         if (!actualBoardId) {
-          const config = this.plinkoGame.getConfig();
-          actualBoardId = config?.id || 1;
+          const boards = this.plinkoGame.getAllBoards();
+          if (boards && boards.length > 0) {
+            actualBoardId = boards[0].id;
+          } else {
+            return res.status(400).json({ success: false, error: 'No plinko boards found' });
+          }
         }
         this.db.updatePlinkoGiftMappings(actualBoardId, giftMappings);
         

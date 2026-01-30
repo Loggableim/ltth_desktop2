@@ -4204,6 +4204,19 @@
         return;
       }
       
+      if (!plinkoConfig) {
+        showMessage('Board-Konfiguration nicht geladen', 'error');
+        plinkoGiftSelectionMode = false;
+        closeGiftCatalog();
+        return;
+      }
+      
+      // Validate gift data
+      if (!gift || !gift.id || !gift.name) {
+        showMessage('Ungültige Geschenkdaten', 'error');
+        return;
+      }
+      
       if (!plinkoConfig.giftMappings) plinkoConfig.giftMappings = {};
       const giftKey = String(gift.id);
       plinkoConfig.giftMappings[giftKey] = {
@@ -4214,16 +4227,20 @@
       };
       
       try {
-        await fetch('/api/game-engine/plinko/gift-mappings', {
+        const response = await fetch('/api/game-engine/plinko/gift-mappings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ giftMappings: plinkoConfig.giftMappings, boardId: currentPlinkoBoardId })
         });
         
+        if (!response.ok) {
+          throw new Error('Fehler beim Speichern');
+        }
+        
         renderPlinkoGiftMappings();
         showMessage(`Geschenk "${gift.name}" zum Plinko-Board "${plinkoConfig.name}" hinzugefügt`);
       } catch (error) {
-        showMessage('Fehler beim Speichern', 'error');
+        showMessage('Fehler beim Speichern: ' + error.message, 'error');
       }
       
       plinkoGiftSelectionMode = false;
@@ -4232,9 +4249,13 @@
     
     // Override click handler on gift grid when in plinko mode
     document.getElementById('gift-grid')?.addEventListener('click', async (e) => {
+      // Only process if in plinko mode
+      if (!plinkoGiftSelectionMode) return;
+      
       const giftCard = e.target.closest('.gift-card');
-      if (giftCard && plinkoGiftSelectionMode) {
+      if (giftCard) {
         e.stopPropagation();
+        e.preventDefault();
         const gift = {
           id: giftCard.dataset.giftId,
           name: giftCard.dataset.giftName
