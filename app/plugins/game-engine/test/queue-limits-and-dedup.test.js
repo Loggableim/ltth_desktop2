@@ -58,7 +58,8 @@ describe('Queue Size Limits and Gift Deduplication', () => {
           { text: 'Niete', color: '#607D8B', weight: 15, isNiete: true }
         ]
       })),
-      findWheelByGiftTrigger: jest.fn(() => ({ id: 1, name: 'Test Wheel' }))
+      findWheelByGiftTrigger: jest.fn(() => ({ id: 1, name: 'Test Wheel' })),
+      getTriggers: jest.fn(() => [])
     };
 
     // Create UnifiedQueueManager instance
@@ -69,6 +70,12 @@ describe('Queue Size Limits and Gift Deduplication', () => {
     const GameEnginePlugin = require('../main.js');
     gameEnginePlugin = new GameEnginePlugin(mockApi);
     gameEnginePlugin.db = mockDb;
+    
+    // Mock wheelGame
+    gameEnginePlugin.wheelGame = {
+      findWheelByGiftTrigger: mockDb.findWheelByGiftTrigger,
+      triggerSpin: jest.fn(() => ({ success: true, queued: false, spinId: 'test_spin' }))
+    };
   });
 
   describe('Queue Size Limits', () => {
@@ -274,18 +281,18 @@ describe('Queue Size Limits and Gift Deduplication', () => {
 
       // First event
       gameEnginePlugin.handleGiftTrigger(giftData);
-      const firstEventCallCount = mockDb.findWheelByGiftTrigger.mock.calls.length;
+      const firstEventCallCount = gameEnginePlugin.wheelGame.triggerSpin.mock.calls.length;
 
-      // Wait for dedup window to expire (1 second + buffer)
+      // Wait for dedup window to expire (1200ms for safety margin)
       setTimeout(() => {
         // Second event after window
         gameEnginePlugin.handleGiftTrigger(giftData);
-        const secondEventCallCount = mockDb.findWheelByGiftTrigger.mock.calls.length;
+        const secondEventCallCount = gameEnginePlugin.wheelGame.triggerSpin.mock.calls.length;
 
         // Second event should be processed
         expect(secondEventCallCount).toBeGreaterThan(firstEventCallCount);
         done();
-      }, 1100);
+      }, 1200);
     }, 2000);
 
     test('should allow different users with same gift', () => {
@@ -306,10 +313,10 @@ describe('Queue Size Limits and Gift Deduplication', () => {
       };
 
       gameEnginePlugin.handleGiftTrigger(giftData1);
-      const firstCallCount = mockDb.findWheelByGiftTrigger.mock.calls.length;
+      const firstCallCount = gameEnginePlugin.wheelGame.triggerSpin.mock.calls.length;
 
       gameEnginePlugin.handleGiftTrigger(giftData2);
-      const secondCallCount = mockDb.findWheelByGiftTrigger.mock.calls.length;
+      const secondCallCount = gameEnginePlugin.wheelGame.triggerSpin.mock.calls.length;
 
       // Both should be processed
       expect(secondCallCount).toBeGreaterThan(firstCallCount);
@@ -334,10 +341,10 @@ describe('Queue Size Limits and Gift Deduplication', () => {
       };
 
       gameEnginePlugin.handleGiftTrigger(giftData1);
-      const firstCallCount = mockDb.findWheelByGiftTrigger.mock.calls.length;
+      const firstCallCount = gameEnginePlugin.wheelGame.triggerSpin.mock.calls.length;
 
       gameEnginePlugin.handleGiftTrigger(giftData2);
-      const secondCallCount = mockDb.findWheelByGiftTrigger.mock.calls.length;
+      const secondCallCount = gameEnginePlugin.wheelGame.triggerSpin.mock.calls.length;
 
       // Both should be processed
       expect(secondCallCount).toBeGreaterThan(firstCallCount);
@@ -377,7 +384,7 @@ describe('Queue Size Limits and Gift Deduplication', () => {
       gameEnginePlugin.handleGiftTrigger(giftData);
 
       // Should not process (early return)
-      expect(mockDb.findWheelByGiftTrigger.mock.calls.length).toBe(0);
+      expect(gameEnginePlugin.wheelGame.triggerSpin.mock.calls.length).toBe(0);
       // Should not add to dedup map (because it was not processed)
       expect(gameEnginePlugin.recentGiftEvents.size).toBe(0);
     });
@@ -403,11 +410,10 @@ describe('Queue Size Limits and Gift Deduplication', () => {
         repeatEnd: true
       };
 
+      // Update wheelGame mock to return queue full error
+      gameEnginePlugin.wheelGame.triggerSpin = jest.fn(() => ({ success: false, error: 'Queue is full' }));
+      
       // First attempt (would hit queue limit)
-      gameEnginePlugin.wheelGame = {
-        findWheelByGiftTrigger: mockDb.findWheelByGiftTrigger,
-        triggerSpin: jest.fn(() => ({ success: false, error: 'Queue is full' }))
-      };
       gameEnginePlugin.handleGiftTrigger(giftData);
 
       // Second immediate attempt (should be blocked by dedup before reaching queue)
