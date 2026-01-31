@@ -788,52 +788,84 @@ class PlinkoGame {
         return false;
       }
 
-      const { duration, intensity, type, deviceId } = reward;
+      const { duration, intensity, type, deviceIds, deviceId } = reward;
       
       // Validate reward parameters consistently
       const isValidParam = (val) => val != null && val !== '';
       const isValidNumber = (val) => typeof val === 'number' && !isNaN(val);
       
-      if (!isValidParam(type) || !isValidParam(deviceId) || !isValidNumber(duration) || !isValidNumber(intensity)) {
+      if (!isValidParam(type) || !isValidNumber(duration) || !isValidNumber(intensity)) {
         this.logger.warn('Invalid OpenShock reward configuration - missing required fields');
         return false;
       }
 
-      // Build command for queue with safety limits
-      const command = {
-        deviceId: deviceId,
-        type: type, // 'Shock', 'Vibrate', or 'Sound'
-        intensity: Math.min(Math.max(OPENSHOCK_MIN_INTENSITY, intensity), OPENSHOCK_MAX_INTENSITY), // Clamp to safety range
-        duration: Math.min(Math.max(OPENSHOCK_MIN_DURATION_MS, duration), OPENSHOCK_MAX_DURATION_MS) // Clamp to safety range
-      };
+      // Support both old (deviceId) and new (deviceIds) format
+      let targetDeviceIds = [];
+      if (Array.isArray(deviceIds) && deviceIds.length > 0) {
+        targetDeviceIds = deviceIds;
+      } else if (deviceId && deviceId !== '') {
+        // Backward compatibility with old single deviceId format
+        targetDeviceIds = [deviceId];
+      }
 
-      // Queue OpenShock command via QueueManager
-      const result = await openshockPlugin.instance.queueManager.enqueue(
-        command,
-        username,
-        'plinko-reward',
-        { 
-          slotIndex: slotIndex, // Pass actual slot index from handleBallLanded
-          reward: reward 
-        },
-        5 // Medium priority
-      );
+      if (targetDeviceIds.length === 0) {
+        this.logger.warn('No device IDs configured for OpenShock reward');
+        return false;
+      }
 
-      if (result.success) {
-        this.logger.info(`⚡ OpenShock ${type} queued for ${username}: ${intensity}% for ${duration}ms (Queue ID: ${result.queueId})`);
-        
-        // Emit event for overlay notification
+      // Trigger for all selected devices in parallel
+      let successCount = 0;
+      const queuePromises = targetDeviceIds.map(targetDeviceId => {
+        // Build command for queue with safety limits
+        const command = {
+          deviceId: targetDeviceId,
+          type: type, // 'Shock', 'Vibrate', or 'Sound'
+          intensity: Math.min(Math.max(OPENSHOCK_MIN_INTENSITY, intensity), OPENSHOCK_MAX_INTENSITY), // Clamp to safety range
+          duration: Math.min(Math.max(OPENSHOCK_MIN_DURATION_MS, duration), OPENSHOCK_MAX_DURATION_MS) // Clamp to safety range
+        };
+
+        // Queue OpenShock command via QueueManager
+        return openshockPlugin.instance.queueManager.enqueue(
+          command,
+          username,
+          'plinko-reward',
+          { 
+            slotIndex: slotIndex, // Pass actual slot index from handleBallLanded
+            reward: reward 
+          },
+          5 // Medium priority
+        ).then(result => ({ targetDeviceId, result }));
+      });
+
+      // Wait for all queue operations to complete
+      const results = await Promise.allSettled(queuePromises);
+
+      // Process results
+      results.forEach(({ status, value, reason }) => {
+        if (status === 'fulfilled' && value.result.success) {
+          successCount++;
+          this.logger.info(`⚡ OpenShock ${type} queued for ${username} on device ${value.targetDeviceId}: ${intensity}% for ${duration}ms (Queue ID: ${value.result.queueId})`);
+        } else {
+          const deviceId = status === 'fulfilled' ? value.targetDeviceId : 'unknown';
+          const message = status === 'fulfilled' ? value.result.message : reason?.message || 'Unknown error';
+          this.logger.warn(`Failed to queue OpenShock command for device ${deviceId}: ${message}`);
+        }
+      });
+
+      // Emit event for overlay notification if at least one succeeded
+      if (successCount > 0) {
         this.io.emit('plinko:openshock-triggered', {
           username,
           type,
           duration,
           intensity,
-          queuePosition: result.position
+          deviceCount: successCount,
+          totalDevices: targetDeviceIds.length
         });
         
         return true;
       } else {
-        this.logger.warn(`Failed to queue OpenShock command: ${result.message}`);
+        this.logger.warn('All OpenShock commands failed to queue');
         return false;
       }
     } catch (error) {
