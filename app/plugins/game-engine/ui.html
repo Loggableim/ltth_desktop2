@@ -4185,25 +4185,33 @@
       }
       
       if (!plinkoConfig.giftMappings) plinkoConfig.giftMappings = {};
-      plinkoConfig.giftMappings[giftInput] = {
-        betAmount: 100,
-        ballType: 'standard',
-        multiplier: 1.0
-      };
       
-      // Save to server
+      // Save to server first, then update local state
       try {
-        await fetch('/api/game-engine/plinko/gift-mappings', {
+        const tempMappings = { ...plinkoConfig.giftMappings };
+        tempMappings[giftInput] = {
+          betAmount: 100,
+          ballType: 'standard',
+          multiplier: 1.0
+        };
+        
+        const response = await fetch('/api/game-engine/plinko/gift-mappings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ giftMappings: plinkoConfig.giftMappings, boardId: currentPlinkoBoardId })
+          body: JSON.stringify({ giftMappings: tempMappings, boardId: currentPlinkoBoardId })
         });
         
+        if (!response.ok) {
+          throw new Error('Fehler beim Speichern');
+        }
+        
+        // Only update local state if save was successful
+        plinkoConfig.giftMappings = tempMappings;
         giftInputEl.value = '';
         renderPlinkoGiftMappings();
         showMessage(`Geschenk "${giftInput}" hinzugefügt`);
       } catch (error) {
-        showMessage('Fehler beim Speichern', 'error');
+        showMessage('Fehler beim Speichern: ' + error.message, 'error');
       }
     });
     
