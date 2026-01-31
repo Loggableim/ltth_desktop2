@@ -4511,7 +4511,7 @@
         const bet = parseInt(btn.dataset.bet);
         const count = parseInt(btn.dataset.count);
         document.getElementById('test-bet-amount').value = bet;
-        document.getElementById('test-bet-slider').value = Math.min(1000, bet);
+        document.getElementById('test-bet-slider').value = bet;
         document.getElementById('test-ball-count').value = count;
         // Auto-trigger spawn
         document.getElementById('test-spawn-single-btn').click();
