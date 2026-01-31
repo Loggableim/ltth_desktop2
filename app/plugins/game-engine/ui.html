@@ -1314,9 +1314,15 @@
           <!-- Gift mappings will be dynamically loaded here -->
         </div>
 
-        <div style="display: flex; gap: 10px;">
-          <button id="openPlinkoGiftCatalogBtn">📦 Geschenk-Katalog öffnen</button>
+        <div class="form-group" style="display: flex; gap: 10px; align-items: flex-end;">
+          <div style="flex: 1;">
+            <label>Geschenk-Name oder ID:</label>
+            <input type="text" id="plinko-new-gift-mapping" placeholder="z.B. Rose oder 5655">
+          </div>
+          <button id="addPlinkoGiftMappingBtn" class="secondary">➕ Geschenk hinzufügen</button>
         </div>
+        
+        <button id="openPlinkoGiftCatalogBtn" style="margin-top: 10px;">📦 Geschenk-Katalog öffnen</button>
       </div>
 
       <div class="card">
@@ -4156,6 +4162,48 @@
         renderPlinkoSlots();
       } else {
         showMessage('Mindestens 3 Slots erforderlich!', 'error');
+      }
+    });
+    
+    // Add plinko gift mapping with text input (like wheel pattern)
+    document.getElementById('addPlinkoGiftMappingBtn')?.addEventListener('click', async () => {
+      if (!currentPlinkoBoardId) {
+        showMessage('Kein Plinko-Board ausgewählt', 'error');
+        return;
+      }
+      
+      const giftInputEl = document.getElementById('plinko-new-gift-mapping');
+      if (!giftInputEl) {
+        console.error('plinko-new-gift-mapping element not found');
+        return;
+      }
+      
+      const giftInput = giftInputEl.value.trim();
+      if (!giftInput) {
+        showMessage('Bitte Geschenk-Name oder ID eingeben', 'error');
+        return;
+      }
+      
+      if (!plinkoConfig.giftMappings) plinkoConfig.giftMappings = {};
+      plinkoConfig.giftMappings[giftInput] = {
+        betAmount: 100,
+        ballType: 'standard',
+        multiplier: 1.0
+      };
+      
+      // Save to server
+      try {
+        await fetch('/api/game-engine/plinko/gift-mappings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ giftMappings: plinkoConfig.giftMappings, boardId: currentPlinkoBoardId })
+        });
+        
+        giftInputEl.value = '';
+        renderPlinkoGiftMappings();
+        showMessage(`Geschenk "${giftInput}" hinzugefügt`);
+      } catch (error) {
+        showMessage('Fehler beim Speichern', 'error');
       }
     });
     
