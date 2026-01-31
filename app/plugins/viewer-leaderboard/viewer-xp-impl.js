@@ -1127,6 +1127,11 @@ class ViewerXPPlugin extends EventEmitter {
       this.eventThrottle.lastLeaderboardEmit = now;
 
       const io = this.api.getSocketIO();
+      if (!io || typeof io.to !== 'function') {
+        // Socket.IO not available, skip emission
+        return;
+      }
+      
       const leaderboard = this.db.getTopViewers(10);
 
       io.to('viewerxp-events').emit('viewerxp:leaderboard-update', {
@@ -2406,6 +2411,11 @@ class ViewerXPPlugin extends EventEmitter {
   emitLevelUp(username, oldLevel, newLevel, rewards) {
     try {
       const io = this.api.getSocketIO();
+      if (!io || typeof io.emit !== 'function') {
+        this.api.log('⚠️  Socket.IO not available, cannot emit level-up event', 'warn');
+        return;
+      }
+      
       const profile = this.db.getViewerProfile(username);
       
       io.emit('viewer-xp:level-up', {
