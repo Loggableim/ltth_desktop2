@@ -985,6 +985,12 @@ class ViewerXPPlugin extends EventEmitter {
   registerWebSocketHandlers() {
     const io = this.api.getSocketIO();
     
+    // Safety check: ensure Socket.IO instance is available
+    if (!io || typeof io.on !== 'function') {
+      this.api.log('⚠️  Socket.IO instance not available, skipping WebSocket handler registration', 'warn');
+      return;
+    }
+    
     io.on('connection', (socket) => {
       // Client requests viewer profile
       socket.on('viewer-xp:get-profile', (username) => {
