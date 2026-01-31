@@ -65,6 +65,16 @@ class MockPluginAPI {
     return {
       emit: (event, data) => {
         this.log(`Emitting socket event: ${event}`, 'debug');
+      },
+      on: (event, callback) => {
+        this.log(`Registering socket event listener: ${event}`, 'debug');
+      },
+      to: (room) => {
+        return {
+          emit: (event, data) => {
+            this.log(`Emitting to room ${room}: ${event}`, 'debug');
+          }
+        };
       }
     };
   }

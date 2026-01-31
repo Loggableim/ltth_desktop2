@@ -987,7 +987,7 @@ class ViewerXPPlugin extends EventEmitter {
     
     // Safety check: ensure Socket.IO instance is available
     if (!io || typeof io.on !== 'function') {
-      this.api.log('⚠️  Socket.IO instance not available, skipping WebSocket handler registration', 'warn');
+      this.api.log('⚠️  Socket.IO not available, cannot register WebSocket handlers', 'warn');
       return;
     }
     
