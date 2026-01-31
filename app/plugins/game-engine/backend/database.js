@@ -194,8 +194,7 @@ class GameEngineDatabase {
         multiplier REAL NOT NULL,
         profit INTEGER NOT NULL,
         slot_index INTEGER NOT NULL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        is_test INTEGER DEFAULT 1
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -1430,8 +1429,8 @@ class GameEngineDatabase {
    */
   recordPlinkoTestTransaction(user, bet, multiplier, profit, slotIndex) {
     this.db.prepare(`
-      INSERT INTO game_plinko_test_transactions (user, bet, multiplier, profit, slot_index, is_test)
-      VALUES (?, ?, ?, ?, ?, 1)
+      INSERT INTO game_plinko_test_transactions (user, bet, multiplier, profit, slot_index)
+      VALUES (?, ?, ?, ?, ?)
     `).run(user, bet, multiplier, profit, slotIndex);
   }
 
