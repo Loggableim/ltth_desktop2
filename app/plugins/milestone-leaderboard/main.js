@@ -1,13 +1,16 @@
 const GiftMilestonePlugin = require('../gift-milestone/main');
-const LeaderboardPlugin = require('../leaderboard/main');
+// Note: The standalone 'leaderboard' plugin does not exist.
+// Use 'viewer-leaderboard' plugin instead for gifter leaderboard functionality.
+// This mega plugin combines gift-milestone with viewer-leaderboard's gifter leaderboard.
+const ViewerLeaderboardPlugin = require('../viewer-leaderboard/main');
 
 class MilestoneLeaderboardPlugin {
   constructor(api) {
     this.api = api;
     this.giftMilestone = null;
-    this.leaderboard = null;
+    this.viewerLeaderboard = null;
     this.giftMilestoneInitialized = false;
-    this.leaderboardInitialized = false;
+    this.viewerLeaderboardInitialized = false;
   }
 
   shouldSkipNestedPlugin(pluginId) {
@@ -20,7 +23,7 @@ class MilestoneLeaderboardPlugin {
   async init() {
     this.api.log('Initializing Milestone Leaderboard mega plugin...', 'info');
     const hasStandaloneGiftMilestone = this.shouldSkipNestedPlugin('gift-milestone');
-    const hasStandaloneLeaderboard = this.shouldSkipNestedPlugin('leaderboard');
+    const hasStandaloneViewerLeaderboard = this.shouldSkipNestedPlugin('viewer-leaderboard');
 
     if (hasStandaloneGiftMilestone) {
       this.api.log('Standalone gift-milestone plugin detected, skipping nested initialization to avoid route conflicts', 'warn');
@@ -36,25 +39,25 @@ class MilestoneLeaderboardPlugin {
       }
     }
 
-    if (hasStandaloneLeaderboard) {
-      this.api.log('Standalone leaderboard plugin detected, skipping nested initialization to avoid route conflicts', 'warn');
+    if (hasStandaloneViewerLeaderboard) {
+      this.api.log('Standalone viewer-leaderboard plugin detected, skipping nested initialization to avoid route conflicts', 'warn');
     } else {
       try {
-        this.leaderboard = new LeaderboardPlugin(this.api);
-        await this.leaderboard.init();
-        this.leaderboardInitialized = true;
+        this.viewerLeaderboard = new ViewerLeaderboardPlugin(this.api);
+        await this.viewerLeaderboard.init();
+        this.viewerLeaderboardInitialized = true;
       } catch (error) {
-        this.api.log(`Failed to initialize nested leaderboard plugin: ${error.message}`, 'error');
+        this.api.log(`Failed to initialize nested viewer-leaderboard plugin: ${error.message}`, 'error');
         if (this.giftMilestoneInitialized && this.giftMilestone?.destroy) {
           try {
             await this.giftMilestone.destroy();
           } catch (cleanupError) {
-            this.api.log(`Cleanup failed for nested gift milestone plugin after leaderboard init error: ${cleanupError.message}`, 'error');
+            this.api.log(`Cleanup failed for nested gift milestone plugin after viewer-leaderboard init error: ${cleanupError.message}`, 'error');
           }
           this.giftMilestoneInitialized = false;
           this.giftMilestone = null;
         }
-        this.leaderboard = null;
+        this.viewerLeaderboard = null;
         throw error;
       }
     }
@@ -64,11 +67,11 @@ class MilestoneLeaderboardPlugin {
 
   async destroy() {
     // Destroy in reverse init order when nested instances were started
-    if (this.leaderboardInitialized && this.leaderboard?.destroy) {
+    if (this.viewerLeaderboardInitialized && this.viewerLeaderboard?.destroy) {
       try {
-        await this.leaderboard.destroy();
+        await this.viewerLeaderboard.destroy();
       } catch (error) {
-        this.api.log(`Failed to destroy nested leaderboard plugin in Milestone Leaderboard: ${error.message}`, 'error');
+        this.api.log(`Failed to destroy nested viewer-leaderboard plugin in Milestone Leaderboard: ${error.message}`, 'error');
       }
     }
 
@@ -82,9 +85,9 @@ class MilestoneLeaderboardPlugin {
 
     this.api.log('Milestone Leaderboard plugin destroyed', 'info');
     this.giftMilestoneInitialized = false;
-    this.leaderboardInitialized = false;
+    this.viewerLeaderboardInitialized = false;
     this.giftMilestone = null;
-    this.leaderboard = null;
+    this.viewerLeaderboard = null;
   }
 }
 
