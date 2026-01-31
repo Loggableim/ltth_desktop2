@@ -1,6 +1,8 @@
 let socket = null;
 let goals = [];
+let multigoals = [];
 let editingGoalId = null;
+let editingMultiGoalId = null;
 let previewUpdateTimer = null;
 
 // Initialize
@@ -10,6 +12,7 @@ function init() {
     socket.on('connect', () => {
         console.log('Connected');
         socket.emit('goals:get-all');
+        socket.emit('multigoals:get-all');
     });
 
     socket.on('goals:all', (data) => {
@@ -574,9 +577,6 @@ function getTemplate(id) {
 // ========================================
 // MULTIGOAL FUNCTIONALITY
 // ========================================
-
-let multigoals = [];
-let editingMultiGoalId = null;
 
 // Tab switching
 document.querySelectorAll('.tab-btn').forEach(btn => {
