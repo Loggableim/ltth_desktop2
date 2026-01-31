@@ -987,7 +987,7 @@ class ViewerXPPlugin extends EventEmitter {
     
     // Safety check: ensure Socket.IO instance is available
     if (!io || typeof io.on !== 'function') {
-      this.api.log('⚠️  Socket.IO not available, cannot register WebSocket handlers', 'warn');
+      this.api.log('⚠️ Socket.IO not available, cannot register WebSocket handlers', 'warn');
       return;
     }
     
@@ -1129,7 +1129,7 @@ class ViewerXPPlugin extends EventEmitter {
       const io = this.api.getSocketIO();
       if (!io || typeof io.to !== 'function') {
         // Socket.IO not available, skip emission
-        this.api.log('⚠️  Socket.IO not available, cannot emit leaderboard update', 'warn');
+        this.api.log('⚠️ Socket.IO not available, cannot emit leaderboard update', 'warn');
         return;
       }
       
@@ -2413,7 +2413,7 @@ class ViewerXPPlugin extends EventEmitter {
     try {
       const io = this.api.getSocketIO();
       if (!io || typeof io.emit !== 'function') {
-        this.api.log('⚠️  Socket.IO not available, cannot emit level-up event', 'warn');
+        this.api.log('⚠️ Socket.IO not available, cannot emit level-up event', 'warn');
         return;
       }
       
