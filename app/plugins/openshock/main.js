@@ -359,19 +359,23 @@ class OpenShockPlugin {
             this.api.getSocketIO().emit('zappiehell:overlay:animate', data);
         });
 
-        // Queue Event-Handler (QueueManager wird später EventEmitter erweitern)
-        // this.queueManager.on('item-processed', (item, success) => {
-        //     this._broadcastQueueUpdate();
-        //     if (success) {
-        //         this.stats.successfulCommands++;
-        //     } else {
-        //         this.stats.failedCommands++;
-        //     }
-        // });
+        // Queue Event-Handler
+        this.queueManager.on('item-processed', (item, success) => {
+            this._broadcastQueueUpdate();
+            if (success) {
+                this.stats.successfulCommands++;
+            } else {
+                this.stats.failedCommands++;
+            }
+        });
 
-        // this.queueManager.on('queue-changed', () => {
-        //     this._broadcastQueueUpdate();
-        // });
+        this.queueManager.on('queue-changed', () => {
+            this._broadcastQueueUpdate();
+        });
+
+        // Ensure queue is ready to process commands
+        // This is critical: without this, the queue may never start processing!
+        this.queueManager.resumeProcessing();
 
         this.api.log('OpenShock helpers initialized', 'info');
 
