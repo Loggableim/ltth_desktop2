@@ -697,6 +697,7 @@
       <button class="tab" data-tab="connect4">Connect4</button>
       <button class="tab" data-tab="chess">♟️ Blitzschach</button>
       <button class="tab" data-tab="plinko">🎰 Plinko</button>
+      <button class="tab" data-tab="plinko-test">🧪 Plinko Test</button>
       <button class="tab" data-tab="wheel">🎡 Glücksrad</button>
       <button class="tab" data-tab="overlays">OBS Overlays</button>
       <button class="tab" data-tab="triggers">Trigger</button>
@@ -1391,6 +1392,97 @@
           <p style="color: #aaa; font-size: 14px; margin: 8px 0 0 20px;">
             Konfiguriere Geschenke im Tab "Trigger" oben, um automatisch Plinko-Bälle zu spawnen, wenn Zuschauer bestimmte Geschenke senden.
           </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Plinko Test Tab -->
+    <div class="tab-content" id="tab-plinko-test">
+      <div class="card">
+        <h2>🧪 Plinko Offline-Testmodus</h2>
+        <p>Spawne Test-Bälle ohne TikTok-Verbindung oder XP-System</p>
+        
+        <div class="form-group">
+          <label>Test-Board:</label>
+          <select id="test-board-selector" style="width: 100%;">
+            <!-- Boards will be loaded dynamically -->
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Spieler-Name:</label>
+          <input type="text" id="test-player-name" value="TestUser" placeholder="Name des Test-Spielers" style="width: 100%;">
+        </div>
+        
+        <div class="form-group">
+          <label>Einsatz (XP):</label>
+          <input type="number" id="test-bet-amount" value="100" min="10" max="10000" step="10" style="width: 100%; margin-bottom: 10px;">
+          <input type="range" id="test-bet-slider" min="10" max="1000" value="100" step="10" style="width: 100%;">
+          <small style="color: #888;">Bereich: 10 - 10.000 XP (Slider max: 1000)</small>
+        </div>
+        
+        <div class="form-group">
+          <label>Anzahl Bälle:</label>
+          <input type="number" id="test-ball-count" value="1" min="1" max="10" step="1" style="width: 100%;">
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
+          <button id="test-spawn-single-btn" class="secondary">🎰 Ball spawnen</button>
+          <button id="test-spawn-batch-btn" class="secondary">🎰🎰 Batch spawnen (mehrere User)</button>
+          <button id="test-clear-history-btn" class="danger">🗑️ Test-History löschen</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>⚡ Schnell-Presets</h3>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button class="test-preset secondary" data-bet="50" data-count="1">50 XP Single</button>
+          <button class="test-preset secondary" data-bet="100" data-count="3">100 XP x3</button>
+          <button class="test-preset secondary" data-bet="500" data-count="5">500 XP x5</button>
+          <button class="test-preset secondary" data-bet="1000" data-count="10">1000 XP x10</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>📊 Test-Session Statistiken</h3>
+        <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+          <div class="stat-card" style="background: rgba(100, 181, 246, 0.1); padding: 20px; border-radius: 8px; text-align: center;">
+            <div class="stat-value" id="test-total-spawns" style="font-size: 32px; font-weight: bold; color: #64B5F6;">0</div>
+            <div class="stat-label" style="color: #aaa; margin-top: 5px;">Balls spawned</div>
+          </div>
+          <div class="stat-card" style="background: rgba(100, 181, 246, 0.1); padding: 20px; border-radius: 8px; text-align: center;">
+            <div class="stat-value" id="test-total-bet" style="font-size: 32px; font-weight: bold; color: #64B5F6;">0 XP</div>
+            <div class="stat-label" style="color: #aaa; margin-top: 5px;">Total bet</div>
+          </div>
+          <div class="stat-card" style="background: rgba(100, 181, 246, 0.1); padding: 20px; border-radius: 8px; text-align: center;">
+            <div class="stat-value" id="test-avg-multiplier" style="font-size: 32px; font-weight: bold; color: #64B5F6;">0.00x</div>
+            <div class="stat-label" style="color: #aaa; margin-top: 5px;">Avg Multiplier</div>
+          </div>
+          <div class="stat-card" style="background: rgba(100, 181, 246, 0.1); padding: 20px; border-radius: 8px; text-align: center;">
+            <div class="stat-value" id="test-rtp" style="font-size: 32px; font-weight: bold; color: #64B5F6;">0%</div>
+            <div class="stat-label" style="color: #aaa; margin-top: 5px;">RTP</div>
+          </div>
+        </div>
+        <button id="test-refresh-stats-btn" class="secondary">🔄 Stats aktualisieren</button>
+      </div>
+
+      <div class="card">
+        <h3>📜 Letzte Test-Drops</h3>
+        <div id="test-history-container" style="max-height: 400px; overflow-y: auto;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: rgba(100, 181, 246, 0.1); border-bottom: 2px solid rgba(100, 181, 246, 0.3);">
+                <th style="padding: 10px; text-align: left;">Zeit</th>
+                <th style="padding: 10px; text-align: left;">Spieler</th>
+                <th style="padding: 10px; text-align: right;">Bet</th>
+                <th style="padding: 10px; text-align: right;">Multiplier</th>
+                <th style="padding: 10px; text-align: right;">Gewinn/Verlust</th>
+              </tr>
+            </thead>
+            <tbody id="test-history-tbody">
+              <!-- Rows will be dynamically added here -->
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -4309,6 +4401,185 @@
     // Load Plinko config and stats on page load
     loadPlinkoConfig();
     loadPlinkoStats();
+
+    // === PLINKO TEST MODE FUNCTIONS ===
+
+    // Load boards for test selector
+    async function loadTestBoards() {
+      try {
+        const res = await fetch('/api/game-engine/plinko/boards');
+        const boards = await res.json();
+        const selector = document.getElementById('test-board-selector');
+        selector.innerHTML = '';
+        boards.forEach(board => {
+          const option = document.createElement('option');
+          option.value = board.id;
+          option.textContent = board.name;
+          selector.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error loading test boards:', error);
+      }
+    }
+
+    // Sync slider and input
+    const testBetAmount = document.getElementById('test-bet-amount');
+    const testBetSlider = document.getElementById('test-bet-slider');
+    
+    testBetAmount?.addEventListener('input', (e) => {
+      const val = Math.min(10000, Math.max(10, parseInt(e.target.value) || 10));
+      testBetAmount.value = val;
+      if (val <= 1000) {
+        testBetSlider.value = val;
+      }
+    });
+    
+    testBetSlider?.addEventListener('input', (e) => {
+      testBetAmount.value = e.target.value;
+    });
+
+    // Spawn single test ball
+    document.getElementById('test-spawn-single-btn')?.addEventListener('click', async () => {
+      const playerName = document.getElementById('test-player-name')?.value || 'TestUser';
+      const betAmount = parseInt(document.getElementById('test-bet-amount')?.value) || 100;
+      const count = parseInt(document.getElementById('test-ball-count')?.value) || 1;
+      const boardId = parseInt(document.getElementById('test-board-selector')?.value);
+      
+      try {
+        const res = await fetch('/api/game-engine/plinko/test/spawn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerName, betAmount, count, boardId })
+        });
+        const result = await res.json();
+        if (result.success) {
+          showMessage(`✅ ${result.count} Test-Ball${result.count > 1 ? 's' : ''} gespawnt für ${playerName}!`);
+          setTimeout(loadTestStats, 500);
+        } else {
+          showMessage('❌ Fehler: ' + result.error, 'error');
+        }
+      } catch (error) {
+        showMessage('❌ Fehler: ' + error.message, 'error');
+      }
+    });
+
+    // Spawn batch with random users
+    document.getElementById('test-spawn-batch-btn')?.addEventListener('click', async () => {
+      const count = parseInt(document.getElementById('test-ball-count')?.value) || 1;
+      const boardId = parseInt(document.getElementById('test-board-selector')?.value);
+      
+      try {
+        for (let i = 0; i < count; i++) {
+          const randomBet = Math.floor(Math.random() * 991) + 10; // 10-1000
+          const playerName = `TestUser${i + 1}`;
+          
+          await fetch('/api/game-engine/plinko/test/spawn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playerName, betAmount: randomBet, count: 1, boardId })
+          });
+          
+          // Small delay between spawns
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        showMessage(`✅ Batch-Spawn: ${count} Bälle mit Random-Daten gespawnt!`);
+        setTimeout(loadTestStats, 500);
+      } catch (error) {
+        showMessage('❌ Fehler: ' + error.message, 'error');
+      }
+    });
+
+    // Clear test history
+    document.getElementById('test-clear-history-btn')?.addEventListener('click', async () => {
+      if (!confirm('Alle Test-Transaktionen löschen?')) return;
+      
+      try {
+        const res = await fetch('/api/game-engine/plinko/test/history', { method: 'DELETE' });
+        const result = await res.json();
+        if (result.success) {
+          showMessage(`✅ ${result.deletedCount} Test-Einträge gelöscht!`);
+          loadTestStats();
+          loadTestHistory();
+        }
+      } catch (error) {
+        showMessage('❌ Fehler: ' + error.message, 'error');
+      }
+    });
+
+    // Preset buttons
+    document.querySelectorAll('.test-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const bet = parseInt(btn.dataset.bet);
+        const count = parseInt(btn.dataset.count);
+        document.getElementById('test-bet-amount').value = bet;
+        document.getElementById('test-bet-slider').value = Math.min(1000, bet);
+        document.getElementById('test-ball-count').value = count;
+        // Auto-trigger spawn
+        document.getElementById('test-spawn-single-btn').click();
+      });
+    });
+
+    // Refresh stats
+    document.getElementById('test-refresh-stats-btn')?.addEventListener('click', () => {
+      loadTestStats();
+      loadTestHistory();
+    });
+
+    // Load test stats
+    async function loadTestStats() {
+      try {
+        const res = await fetch('/api/game-engine/plinko/test/stats');
+        const stats = await res.json();
+        
+        document.getElementById('test-total-spawns').textContent = stats.totalGames || 0;
+        document.getElementById('test-total-bet').textContent = `${stats.totalBet || 0} XP`;
+        document.getElementById('test-avg-multiplier').textContent = `${(stats.avgMultiplier || 0).toFixed(2)}x`;
+        document.getElementById('test-rtp').textContent = `${(stats.rtp || 0).toFixed(1)}%`;
+      } catch (error) {
+        console.error('Error loading test stats:', error);
+      }
+    }
+
+    // Load test history
+    async function loadTestHistory() {
+      try {
+        const res = await fetch('/api/game-engine/plinko/test/history?limit=50');
+        const history = await res.json();
+        
+        const tbody = document.getElementById('test-history-tbody');
+        tbody.innerHTML = '';
+        
+        history.forEach(tx => {
+          const row = document.createElement('tr');
+          row.style.borderBottom = '1px solid rgba(100, 181, 246, 0.1)';
+          
+          const time = new Date(tx.timestamp).toLocaleTimeString('de-DE');
+          const profit = tx.profit;
+          const profitColor = profit >= 0 ? '#4CAF50' : '#f44336';
+          const profitSign = profit >= 0 ? '+' : '';
+          
+          row.innerHTML = `
+            <td style="padding: 10px;">${time}</td>
+            <td style="padding: 10px;">${tx.user}</td>
+            <td style="padding: 10px; text-align: right;">${tx.bet} XP</td>
+            <td style="padding: 10px; text-align: right;">${tx.multiplier.toFixed(2)}x</td>
+            <td style="padding: 10px; text-align: right; color: ${profitColor}; font-weight: bold;">${profitSign}${profit} XP</td>
+          `;
+          tbody.appendChild(row);
+        });
+        
+        if (history.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #888;">Noch keine Test-Drops</td></tr>';
+        }
+      } catch (error) {
+        console.error('Error loading test history:', error);
+      }
+    }
+
+    // Initialize test mode
+    loadTestBoards();
+    loadTestStats();
+    loadTestHistory();
 
     // === WHEEL (GLÜCKSRAD) FUNCTIONS - MULTI-WHEEL SUPPORT ===
 
