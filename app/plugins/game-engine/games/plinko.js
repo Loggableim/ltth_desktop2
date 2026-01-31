@@ -813,11 +813,9 @@ class PlinkoGame {
         return false;
       }
 
-      // Trigger for all selected devices
+      // Trigger for all selected devices in parallel
       let successCount = 0;
-      const results = [];
-
-      for (const targetDeviceId of targetDeviceIds) {
+      const queuePromises = targetDeviceIds.map(targetDeviceId => {
         // Build command for queue with safety limits
         const command = {
           deviceId: targetDeviceId,
@@ -827,7 +825,7 @@ class PlinkoGame {
         };
 
         // Queue OpenShock command via QueueManager
-        const result = await openshockPlugin.instance.queueManager.enqueue(
+        return openshockPlugin.instance.queueManager.enqueue(
           command,
           username,
           'plinko-reward',
@@ -836,17 +834,23 @@ class PlinkoGame {
             reward: reward 
           },
           5 // Medium priority
-        );
+        ).then(result => ({ targetDeviceId, result }));
+      });
 
-        results.push(result);
+      // Wait for all queue operations to complete
+      const results = await Promise.allSettled(queuePromises);
 
-        if (result.success) {
+      // Process results
+      results.forEach(({ status, value, reason }) => {
+        if (status === 'fulfilled' && value.result.success) {
           successCount++;
-          this.logger.info(`⚡ OpenShock ${type} queued for ${username} on device ${targetDeviceId}: ${intensity}% for ${duration}ms (Queue ID: ${result.queueId})`);
+          this.logger.info(`⚡ OpenShock ${type} queued for ${username} on device ${value.targetDeviceId}: ${intensity}% for ${duration}ms (Queue ID: ${value.result.queueId})`);
         } else {
-          this.logger.warn(`Failed to queue OpenShock command for device ${targetDeviceId}: ${result.message}`);
+          const deviceId = status === 'fulfilled' ? value.targetDeviceId : 'unknown';
+          const message = status === 'fulfilled' ? value.result.message : reason?.message || 'Unknown error';
+          this.logger.warn(`Failed to queue OpenShock command for device ${deviceId}: ${message}`);
         }
-      }
+      });
 
       // Emit event for overlay notification if at least one succeeded
       if (successCount > 0) {
