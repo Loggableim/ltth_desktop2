@@ -1315,8 +1315,7 @@
         </div>
 
         <div style="display: flex; gap: 10px;">
-          <button id="addPlinkoGiftMappingBtn" class="secondary">➕ Geschenk-Mapping hinzufügen</button>
-          <button id="openPlinkoGiftCatalogBtn" style="margin-left: auto;">📦 Geschenk-Katalog öffnen</button>
+          <button id="openPlinkoGiftCatalogBtn">📦 Geschenk-Katalog öffnen</button>
         </div>
       </div>
 
@@ -4157,19 +4156,6 @@
         renderPlinkoSlots();
       } else {
         showMessage('Mindestens 3 Slots erforderlich!', 'error');
-      }
-    });
-    
-    document.getElementById('addPlinkoGiftMappingBtn').addEventListener('click', () => {
-      const giftName = prompt('Geschenk-Name:');
-      if (giftName && giftName.trim()) {
-        if (!plinkoConfig.giftMappings) plinkoConfig.giftMappings = {};
-        plinkoConfig.giftMappings[giftName.trim()] = {
-          betAmount: 100,
-          ballType: 'standard',
-          multiplier: 1.0
-        };
-        renderPlinkoGiftMappings();
       }
     });
     
