@@ -20,6 +20,7 @@ class MockPluginAPI {
     this.routes = [];
     this.socketEvents = [];
     this.tiktokEvents = [];
+    this.MAX_SQL_LOG_LENGTH = 100;
   }
 
   log(message, level = 'info') {
@@ -45,12 +46,11 @@ class MockPluginAPI {
   }
 
   getDatabase() {
-    const MAX_SQL_LOG_LENGTH = 100;
     // Mock database with better-sqlite3-like API
     const mockDb = {
       exec: (sql) => {
-        const truncated = sql.length > MAX_SQL_LOG_LENGTH 
-          ? sql.substring(0, MAX_SQL_LOG_LENGTH) + '...' 
+        const truncated = sql.length > this.MAX_SQL_LOG_LENGTH 
+          ? sql.substring(0, this.MAX_SQL_LOG_LENGTH) + '...' 
           : sql;
         this.log(`Executing SQL: ${truncated}`, 'debug');
       },
