@@ -4078,8 +4078,8 @@
           const openshockReward = osEnabled ? {
             enabled: true,
             type: document.querySelector(`.plinko-slot-os-type[data-index="${index}"]`).value,
-            intensity: parseInt(document.querySelector(`.plinko-slot-os-intensity[data-index="${index}"]`).value),
-            duration: parseInt(document.querySelector(`.plinko-slot-os-duration[data-index="${index}"]`).value),
+            intensity: parseInt(document.querySelector(`.plinko-slot-os-intensity[data-index="${index}"]`).value) || 30,
+            duration: parseInt(document.querySelector(`.plinko-slot-os-duration[data-index="${index}"]`).value) || 1000,
             deviceIds: Array.from(document.querySelector(`.plinko-slot-os-devices[data-index="${index}"]`).selectedOptions).map(opt => opt.value)
           } : {
             enabled: false
