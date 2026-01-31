@@ -788,15 +788,34 @@ class PlinkoGame {
         return false;
       }
 
-      const { duration, intensity, type, deviceIds, deviceId } = reward;
+      let { duration, intensity, type, deviceIds, deviceId } = reward;
       
-      // Validate reward parameters consistently
+      // Validate and sanitize reward parameters
       const isValidParam = (val) => val != null && val !== '';
       const isValidNumber = (val) => typeof val === 'number' && !isNaN(val);
       
-      if (!isValidParam(type) || !isValidNumber(duration) || !isValidNumber(intensity)) {
-        this.logger.warn('Invalid OpenShock reward configuration - missing required fields');
+      // Validate type
+      if (!isValidParam(type)) {
+        this.logger.warn('Invalid OpenShock reward configuration - missing type field');
         return false;
+      }
+      
+      // Check if intensity and duration exist at all
+      if (intensity === undefined || duration === undefined) {
+        this.logger.warn('Invalid OpenShock reward configuration - missing intensity or duration field');
+        return false;
+      }
+      
+      // Validate and sanitize intensity and duration (handle NaN from invalid input)
+      // This handles the case where parseInt() returns NaN from invalid form input
+      if (!isValidNumber(intensity)) {
+        this.logger.warn(`Invalid OpenShock reward intensity value (${intensity}), using default value of 30`);
+        intensity = 30;
+      }
+      
+      if (!isValidNumber(duration)) {
+        this.logger.warn(`Invalid OpenShock reward duration value (${duration}), using default value of 1000ms`);
+        duration = 1000;
       }
 
       // Support both old (deviceId) and new (deviceIds) format

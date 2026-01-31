@@ -248,6 +248,42 @@ describe('Plinko OpenShock Multi-Device Integration', () => {
         expect(queuedCommands).toHaveLength(0);
       }
     });
+
+    test('should handle NaN values from invalid form inputs with defaults', async () => {
+      const rewardWithNaN = {
+        enabled: true,
+        type: 'Vibrate',
+        intensity: NaN,  // Invalid form input resulted in NaN
+        duration: 1000,
+        deviceIds: ['device-1']
+      };
+
+      const result = await plinkoGame.triggerOpenshockReward('testuser', rewardWithNaN, 0);
+
+      expect(result).toBe(true);  // Should succeed with default value
+      expect(queuedCommands).toHaveLength(1);
+      expect(queuedCommands[0].command.intensity).toBe(30);  // Default value
+      expect(queuedCommands[0].command.duration).toBe(1000);
+    });
+
+    test('should handle both NaN intensity and duration with defaults', async () => {
+      const rewardWithBothNaN = {
+        enabled: true,
+        type: 'Shock',
+        intensity: NaN,  // Invalid form input
+        duration: NaN,   // Invalid form input
+        deviceIds: ['device-1', 'device-2']
+      };
+
+      const result = await plinkoGame.triggerOpenshockReward('testuser', rewardWithBothNaN, 0);
+
+      expect(result).toBe(true);
+      expect(queuedCommands).toHaveLength(2);
+      expect(queuedCommands[0].command.intensity).toBe(30);   // Default value
+      expect(queuedCommands[0].command.duration).toBe(1000);  // Default value
+      expect(queuedCommands[1].command.intensity).toBe(30);
+      expect(queuedCommands[1].command.duration).toBe(1000);
+    });
   });
 
   describe('handleBallLanded - OpenShock Integration', () => {
