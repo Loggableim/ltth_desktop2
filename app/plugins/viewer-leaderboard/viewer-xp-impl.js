@@ -104,6 +104,19 @@ class ViewerXPPlugin extends EventEmitter {
   }
 
   /**
+   * Helper method to check if Socket.IO is available
+   * @param {string} methodName - The Socket.IO method to check (e.g., 'on', 'emit', 'to')
+   * @returns {Object|null} - Returns io instance if available, null otherwise
+   */
+  getSocketIOIfAvailable(methodName = 'emit') {
+    const io = this.api.getSocketIO();
+    if (!io || typeof io[methodName] !== 'function') {
+      return null;
+    }
+    return io;
+  }
+
+  /**
    * Register API routes
    */
   registerRoutes() {
@@ -983,10 +996,8 @@ class ViewerXPPlugin extends EventEmitter {
    * Register WebSocket handlers
    */
   registerWebSocketHandlers() {
-    const io = this.api.getSocketIO();
-    
-    // Safety check: ensure Socket.IO instance is available
-    if (!io || typeof io.on !== 'function') {
+    const io = this.getSocketIOIfAvailable('on');
+    if (!io) {
       this.api.log('⚠️ Socket.IO not available, cannot register WebSocket handlers', 'warn');
       return;
     }
@@ -1126,9 +1137,8 @@ class ViewerXPPlugin extends EventEmitter {
 
       this.eventThrottle.lastLeaderboardEmit = now;
 
-      const io = this.api.getSocketIO();
-      if (!io || typeof io.to !== 'function') {
-        // Socket.IO not available, skip emission
+      const io = this.getSocketIOIfAvailable('to');
+      if (!io) {
         this.api.log('⚠️ Socket.IO not available, cannot emit leaderboard update', 'warn');
         return;
       }
@@ -2411,8 +2421,8 @@ class ViewerXPPlugin extends EventEmitter {
    */
   emitLevelUp(username, oldLevel, newLevel, rewards) {
     try {
-      const io = this.api.getSocketIO();
-      if (!io || typeof io.emit !== 'function') {
+      const io = this.getSocketIOIfAvailable('emit');
+      if (!io) {
         this.api.log('⚠️ Socket.IO not available, cannot emit level-up event', 'warn');
         return;
       }
