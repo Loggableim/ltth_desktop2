@@ -433,7 +433,8 @@ class PlinkoGame {
       bet: betAmount,
       ballType,
       timestamp: Date.now(),
-      batchId
+      batchId,
+      isTest // Store test mode flag for proper handling in handleBallLanded
     });
 
     let globalMultiplier = 1.0;

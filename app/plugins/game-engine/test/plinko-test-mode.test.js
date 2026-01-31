@@ -309,6 +309,52 @@ describe('Plinko Test Mode', () => {
       // Should award XP for regular balls
       expect(plinkoGame.awardXP).toHaveBeenCalled();
     });
+
+    test('should NOT trigger OpenShock when global testModeEnabled is true', async () => {
+      // This tests the fix for the issue where balls spawned with global testModeEnabled
+      // were not properly marked as test balls, causing OpenShock to trigger
+      plinkoGame.getConfig = jest.fn().mockReturnValue({
+        slots: [
+          {
+            multiplier: 10.0,
+            label: '10x',
+            openshockReward: {
+              enabled: true,
+              type: 'Shock',
+              duration: 1000,
+              intensity: 50
+            }
+          }
+        ],
+        physicsSettings: { testModeEnabled: true } // Global test mode enabled
+      });
+
+      // Spawn a ball using spawnBall with global test mode
+      const result = await plinkoGame.spawnBall(
+        'test_user_global',
+        'TestUser',
+        null,
+        100,
+        'standard',
+        {} // No explicit testMode option, relies on global testModeEnabled
+      );
+
+      expect(result.success).toBe(true);
+
+      // Verify the ball was marked as test
+      const ballData = plinkoGame.activeBalls.get(result.ballId);
+      expect(ballData.isTest).toBe(true);
+
+      // Now land the ball
+      await plinkoGame.handleBallLanded(result.ballId, 0);
+
+      // Should NOT trigger OpenShock because isTest flag should be set
+      expect(plinkoGame.triggerOpenshockReward).not.toHaveBeenCalled();
+      
+      // Should record in test table
+      expect(db.recordPlinkoTestTransaction).toHaveBeenCalled();
+      expect(db.recordPlinkoTransaction).not.toHaveBeenCalled();
+    });
   });
 
   describe('Test Mode Isolation', () => {
