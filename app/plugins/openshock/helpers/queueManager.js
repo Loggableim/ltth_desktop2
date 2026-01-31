@@ -778,7 +778,7 @@ class QueueManager extends EventEmitter {
             break;
 
           default:
-            throw new Error(`Unknown command type: ${command.type} (normalized: ${normalizedType}). Must be one of: shock, vibrate, sound, beep`);
+            throw new Error(`Unknown command type: ${command.type} (normalized: ${normalizedType}). Must be one of: shock, vibrate, sound/beep`);
         }
 
         // If we reach here without exception, the command was sent successfully

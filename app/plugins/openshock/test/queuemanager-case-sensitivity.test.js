@@ -60,7 +60,10 @@ describe('QueueManager - Command Type Case Sensitivity', () => {
       expect(result.success).toBe(true);
       expect(result.queueId).toBeDefined();
 
-      // Wait for processing
+      // Note: We use timeouts here because we're testing actual async queue processing
+      // The queue manager processes items asynchronously with delays, so we need to wait
+      // for the processing loop to complete. In a production environment, you'd use
+      // event listeners or callbacks instead.
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Verify the command was executed

@@ -60,10 +60,34 @@ class MockSafetyManager {
 
 // Logger
 const logger = {
-  info: (msg, data) => console.log(`[INFO] ${msg}`, data || ''),
-  warn: (msg, data) => console.warn(`[WARN] ${msg}`, data || ''),
-  error: (msg, data) => console.error(`[ERROR] ${msg}`, data || ''),
-  debug: (msg, data) => console.log(`[DEBUG] ${msg}`, data || '')
+  info: (msg, data) => {
+    if (data !== undefined && data !== null) {
+      console.log(`[INFO] ${msg}`, data);
+    } else {
+      console.log(`[INFO] ${msg}`);
+    }
+  },
+  warn: (msg, data) => {
+    if (data !== undefined && data !== null) {
+      console.warn(`[WARN] ${msg}`, data);
+    } else {
+      console.warn(`[WARN] ${msg}`);
+    }
+  },
+  error: (msg, data) => {
+    if (data !== undefined && data !== null) {
+      console.error(`[ERROR] ${msg}`, data);
+    } else {
+      console.error(`[ERROR] ${msg}`);
+    }
+  },
+  debug: (msg, data) => {
+    if (data !== undefined && data !== null) {
+      console.log(`[DEBUG] ${msg}`, data);
+    } else {
+      console.log(`[DEBUG] ${msg}`);
+    }
+  }
 };
 
 async function runTest() {
