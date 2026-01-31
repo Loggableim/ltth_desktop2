@@ -1129,6 +1129,7 @@ class ViewerXPPlugin extends EventEmitter {
       const io = this.api.getSocketIO();
       if (!io || typeof io.to !== 'function') {
         // Socket.IO not available, skip emission
+        this.api.log('⚠️  Socket.IO not available, cannot emit leaderboard update', 'warn');
         return;
       }
       
