@@ -185,6 +185,19 @@ class GameEngineDatabase {
       )
     `);
 
+    // Plinko test transactions table (for offline testing)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS game_plinko_test_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user TEXT NOT NULL,
+        bet INTEGER NOT NULL,
+        multiplier REAL NOT NULL,
+        profit INTEGER NOT NULL,
+        slot_index INTEGER NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Plinko configuration table - migrate to multi-board support
     // Check if the old single-board table exists with CHECK constraint
     try {
@@ -1404,6 +1417,83 @@ class GameEngineDatabase {
       ORDER BY totalProfit DESC
       LIMIT ?
     `).all(limit);
+  }
+
+  // ========================================
+  // PLINKO TEST MODE DATABASE METHODS
+  // Separate tracking for offline testing
+  // ========================================
+
+  /**
+   * Record a test Plinko transaction
+   */
+  recordPlinkoTestTransaction(user, bet, multiplier, profit, slotIndex) {
+    this.db.prepare(`
+      INSERT INTO game_plinko_test_transactions (user, bet, multiplier, profit, slot_index)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(user, bet, multiplier, profit, slotIndex);
+  }
+
+  /**
+   * Get Plinko test statistics
+   */
+  getPlinkoTestStats() {
+    const stats = this.db.prepare(`
+      SELECT 
+        COUNT(*) as total_games,
+        SUM(bet) as total_bet,
+        SUM(bet * multiplier) as total_payout,
+        SUM(profit) as total_profit,
+        AVG(multiplier) as avg_multiplier,
+        MAX(profit) as max_win,
+        MIN(profit) as max_loss
+      FROM game_plinko_test_transactions
+    `).get();
+
+    if (!stats || stats.total_games === 0) {
+      return {
+        totalGames: 0,
+        totalBet: 0,
+        totalPayout: 0,
+        rtp: 0,
+        avgMultiplier: 0,
+        maxWin: 0,
+        maxLoss: 0
+      };
+    }
+
+    const rtp = stats.total_bet > 0 ? ((stats.total_payout / stats.total_bet) * 100).toFixed(2) : 0;
+
+    return {
+      totalGames: stats.total_games,
+      totalBet: stats.total_bet,
+      totalPayout: stats.total_payout,
+      rtp: parseFloat(rtp),
+      avgMultiplier: stats.avg_multiplier ? parseFloat(stats.avg_multiplier.toFixed(2)) : 0,
+      maxWin: stats.max_win || 0,
+      maxLoss: stats.max_loss || 0
+    };
+  }
+
+  /**
+   * Get Plinko test history
+   * @param {number} limit - Number of recent test transactions to return (default: 50)
+   */
+  getPlinkoTestHistory(limit = 50) {
+    return this.db.prepare(`
+      SELECT * FROM game_plinko_test_transactions 
+      ORDER BY timestamp DESC 
+      LIMIT ?
+    `).all(limit);
+  }
+
+  /**
+   * Clear all Plinko test transactions
+   * @returns {number} Number of deleted rows
+   */
+  clearPlinkoTestHistory() {
+    const result = this.db.prepare('DELETE FROM game_plinko_test_transactions').run();
+    return result.changes;
   }
 
   // ========================================

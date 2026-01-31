@@ -570,6 +570,62 @@ class PlinkoGame {
   }
 
   /**
+   * Spawn a test ball (bypasses XP validation, unified queue, and gift triggers)
+   * @param {string} playerName - Display name for the test player
+   * @param {number} betAmount - Bet amount in XP
+   * @param {number|null} boardId - Optional board ID (defaults to first available)
+   * @returns {Promise<Object>} Result with ballId
+   */
+  async spawnTestBall(playerName, betAmount, boardId = null) {
+    // Create mock user profile
+    const username = `test_${playerName}_${Date.now()}`;
+    const nickname = playerName;
+    const profilePictureUrl = '';
+
+    // Get board config (optional boardId for future multi-board support)
+    const config = boardId ? this.getConfig(boardId) : this.getConfig();
+    
+    if (!config) {
+      return { success: false, error: 'Board not found' };
+    }
+
+    // Generate unique ball ID
+    const ballId = `test-ball-${Date.now()}_${this.ballIdCounter++}`;
+
+    // Store ball data with test flag
+    this.activeBalls.set(ballId, {
+      username,
+      nickname,
+      profilePictureUrl,
+      bet: betAmount,
+      ballType: 'standard',
+      timestamp: Date.now(),
+      isTest: true // <-- Flag for test mode
+    });
+
+    // Get ball color
+    const color = this.getBallColor(username, null);
+
+    // Emit spawn event to overlay (identical to regular balls)
+    this.io.emit('plinko:spawn-ball', {
+      ballId,
+      username,
+      nickname,
+      profilePictureUrl,
+      bet: betAmount,
+      ballType: 'standard',
+      globalMultiplier: 1.0,
+      timestamp: Date.now(),
+      color,
+      isTest: true // <-- Flag for overlay (optional tracking)
+    });
+
+    this.logger.info(`🧪 [TEST] Plinko test ball spawned: ${playerName} bet ${betAmount} XP (ballId: ${ballId})`);
+
+    return { success: true, ballId, testMode: true };
+  }
+
+  /**
    * Handle ball landing in a slot
    */
   async handleBallLanded(ballId, slotIndex) {
@@ -613,24 +669,37 @@ class PlinkoGame {
     const profit = Math.floor(ballData.bet * multiplier);
     const netProfit = profit - ballData.bet;
 
-    // Award XP if won
-    if (profit > 0) {
+    // Check if this is a test ball
+    const isTestBall = ballData.isTest || false;
+
+    // Award XP if won (skip for test balls)
+    if (profit > 0 && !isTestBall) {
       await this.awardXP(ballData.username, profit, multiplier);
     }
 
-    // Trigger OpenShock reward if configured
-    if (slot.openshockReward && slot.openshockReward.enabled) {
+    // Trigger OpenShock reward if configured (skip for test balls)
+    if (!isTestBall && slot.openshockReward && slot.openshockReward.enabled) {
       await this.triggerOpenshockReward(ballData.username, slot.openshockReward, slotIndex);
     }
 
-    // Record transaction
-    this.db.recordPlinkoTransaction(
-      ballData.username,
-      ballData.bet,
-      multiplier,
-      netProfit,
-      slotIndex
-    );
+    // Record transaction (separate tables for test vs regular)
+    if (isTestBall) {
+      this.db.recordPlinkoTestTransaction(
+        ballData.username,
+        ballData.bet,
+        multiplier,
+        netProfit,
+        slotIndex
+      );
+    } else {
+      this.db.recordPlinkoTransaction(
+        ballData.username,
+        ballData.bet,
+        multiplier,
+        netProfit,
+        slotIndex
+      );
+    }
 
     // Heatmap tracking
     if (!this.slotHitCounts.length) {

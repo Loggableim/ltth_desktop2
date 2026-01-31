@@ -1252,6 +1252,95 @@ class GameEnginePlugin {
       }
     });
 
+    // API: Spawn test ball (new enhanced test mode)
+    this.api.registerRoute('POST', '/api/game-engine/plinko/test/spawn', async (req, res) => {
+      try {
+        const { betAmount, playerName, count, boardId } = req.body || {};
+
+        // Validate bet amount
+        const bet = parseInt(betAmount);
+        if (!bet || bet <= 0 || bet > 10000) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Invalid bet amount (must be between 1 and 10000)' 
+          });
+        }
+
+        // Validate count
+        const ballCount = parseInt(count) || 1;
+        if (ballCount < 1 || ballCount > 10) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Invalid count (must be between 1 and 10)' 
+          });
+        }
+
+        const player = playerName || 'TestUser';
+        const results = [];
+
+        // Spawn multiple balls if requested
+        for (let i = 0; i < ballCount; i++) {
+          const result = await this.plinkoGame.spawnTestBall(
+            ballCount > 1 ? `${player}${i + 1}` : player,
+            bet,
+            boardId || null
+          );
+          if (result.success) {
+            results.push(result);
+          }
+        }
+
+        if (results.length > 0) {
+          res.json({
+            success: true,
+            ballIds: results.map(r => r.ballId),
+            message: `Test ball${ballCount > 1 ? 's' : ''} spawned for ${player}`,
+            testMode: true,
+            count: results.length
+          });
+        } else {
+          res.status(500).json({ success: false, error: 'Failed to spawn test balls' });
+        }
+      } catch (error) {
+        this.logger.error(`Error spawning test ball: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // API: Get test statistics
+    this.api.registerRoute('GET', '/api/game-engine/plinko/test/stats', (req, res) => {
+      try {
+        const stats = this.db.getPlinkoTestStats();
+        res.json(stats);
+      } catch (error) {
+        this.logger.error(`Error getting test stats: ${error.message}`);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // API: Get test history
+    this.api.registerRoute('GET', '/api/game-engine/plinko/test/history', (req, res) => {
+      try {
+        const limit = parseInt(req.query.limit) || 50;
+        const history = this.db.getPlinkoTestHistory(limit);
+        res.json(history);
+      } catch (error) {
+        this.logger.error(`Error getting test history: ${error.message}`);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // API: Clear test history
+    this.api.registerRoute('DELETE', '/api/game-engine/plinko/test/history', (req, res) => {
+      try {
+        const deletedCount = this.db.clearPlinkoTestHistory();
+        res.json({ success: true, deletedCount });
+      } catch (error) {
+        this.logger.error(`Error clearing test history: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
     // === WHEEL (GLÜCKSRAD) API ROUTES ===
 
     // API: Get all wheels
