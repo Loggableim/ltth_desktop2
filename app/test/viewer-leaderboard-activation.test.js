@@ -45,10 +45,13 @@ class MockPluginAPI {
   }
 
   getDatabase() {
+    const MAX_SQL_LOG_LENGTH = 100;
     // Mock database with better-sqlite3-like API
     const mockDb = {
       exec: (sql) => {
-        const truncated = sql.length > 100 ? sql.substring(0, 100) + '...' : sql;
+        const truncated = sql.length > MAX_SQL_LOG_LENGTH 
+          ? sql.substring(0, MAX_SQL_LOG_LENGTH) + '...' 
+          : sql;
         this.log(`Executing SQL: ${truncated}`, 'debug');
       },
       prepare: (sql) => {
