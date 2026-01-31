@@ -710,7 +710,11 @@ class QueueManager extends EventEmitter {
     try {
       const { command, userId } = item;
 
-      this.logger.info(`[QueueManager] Executing command: ${command.type} on device ${command.deviceId} (intensity: ${command.intensity}, duration: ${command.duration})`, {
+      // Normalize command type to lowercase for consistent processing
+      // This allows callers to use either 'Shock'/'shock', 'Vibrate'/'vibrate', etc.
+      const normalizedType = command.type?.toLowerCase();
+
+      this.logger.info(`[QueueManager] Executing command: ${normalizedType} on device ${command.deviceId} (intensity: ${command.intensity}, duration: ${command.duration})`, {
         queueId: item.id,
         userId,
         source: item.source
@@ -747,7 +751,7 @@ class QueueManager extends EventEmitter {
       // throwing, the command was accepted by the API.
       
       try {
-        switch (command.type) {
+        switch (normalizedType) {
           case 'shock':
             await this.openShockClient.sendShock(
               command.deviceId,
@@ -774,11 +778,11 @@ class QueueManager extends EventEmitter {
             break;
 
           default:
-            throw new Error(`Unknown command type: ${command.type}`);
+            throw new Error(`Unknown command type: ${command.type} (normalized: ${normalizedType}). Must be one of: shock, vibrate, sound, beep`);
         }
 
         // If we reach here without exception, the command was sent successfully
-        this.logger.info(`[QueueManager] Command executed successfully: ${command.type} on ${command.deviceId}`);
+        this.logger.info(`[QueueManager] Command executed successfully: ${normalizedType} on ${command.deviceId}`);
       } catch (apiError) {
         // Re-throw with more context for the error handler
         this.logger.error(`[QueueManager] OpenShock API error: ${apiError.message}`);
