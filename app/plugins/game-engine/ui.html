@@ -4202,7 +4202,7 @@
         });
         
         if (!response.ok) {
-          throw new Error('Fehler beim Speichern');
+          throw new Error(`Fehler beim Speichern: ${response.status} ${response.statusText}`);
         }
         
         // Only update local state if save was successful
