@@ -20,25 +20,8 @@ class ViewerProfilesAPI {
       this.getViewerList(req, res);
     });
 
-    // Get single viewer profile
-    this.api.registerRoute('GET', '/api/viewer-profiles/:username', (req, res) => {
-      this.getViewerProfile(req, res);
-    });
-
-    // Update viewer profile
-    this.api.registerRoute('PATCH', '/api/viewer-profiles/:username', (req, res) => {
-      this.updateViewerProfile(req, res);
-    });
-
-    // Set VIP status
-    this.api.registerRoute('POST', '/api/viewer-profiles/:username/vip', (req, res) => {
-      this.setVIPStatus(req, res);
-    });
-
-    // Get viewer heatmap
-    this.api.registerRoute('GET', '/api/viewer-profiles/:username/heatmap', (req, res) => {
-      this.getViewerHeatmap(req, res);
-    });
+    // Register specific routes BEFORE parameterized routes
+    // This ensures Express matches them correctly
 
     // Get statistics summary
     this.api.registerRoute('GET', '/api/viewer-profiles/stats/summary', (req, res) => {
@@ -53,6 +36,11 @@ class ViewerProfilesAPI {
     // Get VIP list
     this.api.registerRoute('GET', '/api/viewer-profiles/vip/list', (req, res) => {
       this.getVIPList(req, res);
+    });
+
+    // Get VIP tiers configuration
+    this.api.registerRoute('GET', '/api/viewer-profiles/vip/tiers', (req, res) => {
+      this.getVIPTiers(req, res);
     });
 
     // Get upcoming birthdays
@@ -75,9 +63,26 @@ class ViewerProfilesAPI {
       this.getActiveSessions(req, res);
     });
 
-    // Get VIP tiers configuration
-    this.api.registerRoute('GET', '/api/viewer-profiles/vip/tiers', (req, res) => {
-      this.getVIPTiers(req, res);
+    // Now register parameterized routes (less specific, must come after)
+
+    // Get viewer heatmap
+    this.api.registerRoute('GET', '/api/viewer-profiles/:username/heatmap', (req, res) => {
+      this.getViewerHeatmap(req, res);
+    });
+
+    // Set VIP status
+    this.api.registerRoute('POST', '/api/viewer-profiles/:username/vip', (req, res) => {
+      this.setVIPStatus(req, res);
+    });
+
+    // Get single viewer profile
+    this.api.registerRoute('GET', '/api/viewer-profiles/:username', (req, res) => {
+      this.getViewerProfile(req, res);
+    });
+
+    // Update viewer profile
+    this.api.registerRoute('PATCH', '/api/viewer-profiles/:username', (req, res) => {
+      this.updateViewerProfile(req, res);
     });
 
     this.api.log('Viewer Profiles API routes registered', 'info');
