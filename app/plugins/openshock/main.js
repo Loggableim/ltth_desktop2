@@ -163,6 +163,88 @@ class OpenShockPlugin {
     }
 
     /**
+     * Public API: Add item to queue (callable by other plugins)
+     * This method allows other plugins to add shocks to the OpenShock queue
+     * 
+     * @param {string} source - Plugin ID or source name (e.g. 'liveziele', 'game-engine')
+     * @param {Object} triggerData - Shock parameters
+     * @param {string} triggerData.deviceId - Device ID to trigger
+     * @param {string} [triggerData.commandType='vibrate'] - Command type: 'shock', 'vibrate', or 'sound'
+     * @param {number} [triggerData.intensity=50] - Intensity (0-100)
+     * @param {number} [triggerData.duration=1000] - Duration in milliseconds
+     * @param {number} [triggerData.priority=5] - Queue priority (1-10, 10 = highest)
+     * @param {string} [triggerData.userId='external-plugin'] - User ID who triggered
+     * 
+     * @returns {Promise<Object>} Result object { success, queueId, position, message }
+     * 
+     * @example
+     * // From another plugin:
+     * const openshockPlugin = this.api.pluginLoader.getPluginInstance('openshock');
+     * if (openshockPlugin) {
+     *   const result = await openshockPlugin.addToQueue('liveziele', {
+     *     deviceId: 'device-id-here',
+     *     commandType: 'vibrate',
+     *     intensity: 50,
+     *     duration: 2000,
+     *     priority: 7
+     *   });
+     * }
+     */
+    async addToQueue(source, triggerData) {
+        try {
+            // Validate required parameters
+            if (!triggerData || !triggerData.deviceId) {
+                return {
+                    success: false,
+                    queueId: null,
+                    position: -1,
+                    message: 'Missing required parameter: deviceId'
+                };
+            }
+
+            // Get device info
+            const device = this.devices.find(d => d.id === triggerData.deviceId);
+            if (!device) {
+                return {
+                    success: false,
+                    queueId: null,
+                    position: -1,
+                    message: `Device not found: ${triggerData.deviceId}`
+                };
+            }
+
+            // Build queue item with defaults
+            const queueItem = {
+                commandType: triggerData.commandType || triggerData.type || 'vibrate',
+                deviceId: triggerData.deviceId,
+                deviceName: device.name || triggerData.deviceId,
+                intensity: triggerData.intensity !== undefined ? triggerData.intensity : 50,
+                duration: triggerData.duration !== undefined ? triggerData.duration : 1000,
+                userId: triggerData.userId || 'external-plugin',
+                source: source || 'unknown-plugin',
+                sourceData: triggerData,
+                priority: triggerData.priority !== undefined ? triggerData.priority : 5
+            };
+
+            // Add to queue
+            const result = await this.queueManager.addItem(queueItem);
+
+            this.api.log(`Added item to queue from ${source}: ${JSON.stringify(result)}`, 'info');
+
+            return result;
+
+        } catch (error) {
+            this.api.log(`Failed to add item to queue from ${source}: ${error.message}`, 'error');
+            return {
+                success: false,
+                queueId: null,
+                position: -1,
+                message: error.message
+            };
+        }
+    }
+
+    /**
      * Datenbank-Tabellen erstellen
      */
     _initializeDatabase() {
@@ -437,6 +519,12 @@ class OpenShockPlugin {
         this.api.registerRoute('get', '/openshock/zappiehell/overlay', (req, res) => {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             res.sendFile(path.join(pluginDir, 'overlay', 'zappiehell-overlay.html'));
+        });
+
+        // Queue UI
+        this.api.registerRoute('get', '/openshock/queue', (req, res) => {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.sendFile(path.join(pluginDir, 'queue.html'));
         });
 
         // CSS
@@ -1246,6 +1334,28 @@ class OpenShockPlugin {
 
         // ============ API ROUTES - QUEUE ============
 
+        // Get Queue State (Full state with items for UI)
+        this.api.registerRoute('get', '/api/openshock/queue', (req, res) => {
+            try {
+                const status = this.queueManager.getQueueStatus();
+                const queueItems = this.queueManager.getQueueItems();
+                
+                res.json({
+                    success: true,
+                    state: {
+                        ...status,
+                        queueItems: queueItems,
+                        currentItem: this.queueManager.currentlyProcessingItem
+                    }
+                });
+            } catch (error) {
+                res.status(500).json({
+                    success: false,
+                    error: error.message
+                });
+            }
+        });
+
         // Get Queue Status
         this.api.registerRoute('get', '/api/openshock/queue/status', (req, res) => {
             try {
@@ -1677,6 +1787,17 @@ class OpenShockPlugin {
 
         // Client requests active goals state
         io.on('connection', (socket) => {
+            // Queue: Clear queue
+            socket.on('openshock:queue:clear', async () => {
+                try {
+                    await this.queueManager.clearQueue();
+                    this._broadcastQueueUpdate();
+                    this.api.log('Queue cleared via socket event', 'info');
+                } catch (error) {
+                    this.api.log(`Failed to clear queue: ${error.message}`, 'error');
+                }
+            });
+
             // Send initial ZappieHell state when client connects
             socket.on('zappiehell:request:state', () => {
                 const goals = this.zappieHellManager.getActiveGoals();
@@ -2533,7 +2654,13 @@ class OpenShockPlugin {
      */
     _broadcastQueueUpdate() {
         const status = this.queueManager.getQueueStatus();
-        this.api.emit('openshock:queue-update', status);
+        const queueItems = this.queueManager.getQueueItems();
+        
+        this.api.emit('openshock:queue:update', {
+            ...status,
+            queueItems: queueItems,
+            currentItem: this.queueManager.currentlyProcessingItem
+        });
     }
 
     /**
