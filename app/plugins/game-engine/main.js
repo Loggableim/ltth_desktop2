@@ -2050,8 +2050,8 @@ class GameEnginePlugin {
   handleGiftTrigger(data) {
     const { uniqueId, giftName, giftId, nickname, giftPictureUrl, profilePictureUrl = '', repeatEnd, repeatCount } = data;
     
-    // Debug logging to track gift events and potential double triggers
-    this.logger.debug(`[GIFT TRIGGER] Gift: ${giftName} (ID: ${giftId}), User: ${uniqueId}, repeatEnd: ${repeatEnd}, repeatCount: ${repeatCount ?? 1}`);
+    // Enhanced gift event logging for debugging
+    this.logger.info(`[GIFT TRIGGER] Received: ${giftName} (ID: ${giftId}) from ${uniqueId}, repeatEnd: ${repeatEnd}, repeatCount: ${repeatCount ?? 1}`);
     
     // Only process gift triggers when the gift streak is complete (repeatEnd = true)
     // This prevents multiple triggers for streakable gifts like roses
@@ -2090,6 +2090,7 @@ class GameEnginePlugin {
     
     // Check if this gift triggers a game from database triggers
     const triggers = this.db.getTriggers();
+    this.logger.debug(`[GIFT TRIGGER] Checking ${triggers.length} triggers for gift "${giftName}" (ID: ${giftIdStr})...`);
     
     const matchingTrigger = triggers.find(t => {
       if (t.trigger_type !== 'gift') return false;
@@ -2099,21 +2100,27 @@ class GameEnginePlugin {
       const triggerValueLower = (t.trigger_value || '').toLowerCase().trim();
       
       // Match by gift ID (exact string comparison) or gift name (case-insensitive)
-      return triggerValueStr === giftIdStr || 
-             triggerValueLower === giftNameLower;
+      const match = triggerValueStr === giftIdStr || 
+                    triggerValueLower === giftNameLower;
+      
+      if (match) {
+        this.logger.info(`[GIFT TRIGGER] ✅ Match found! Trigger: "${t.trigger_value}" → ${t.game_type}`);
+      }
+      
+      return match;
     });
 
     if (!matchingTrigger) {
+      this.logger.warn(`[GIFT TRIGGER] ❌ No matching trigger found for "${giftName}" (ID: ${giftId}). Available gift triggers: ${triggers.filter(t => t.trigger_type === 'gift').map(t => t.trigger_value).join(', ') || 'none'}`);
       return;
     }
     
     // Record this gift event AFTER verifying it matches a trigger
     this.recentGiftEvents.set(dedupKey, now);
 
-    this.logger.debug(`Gift trigger matched: ${giftName} (ID: ${giftId}) -> ${matchingTrigger.game_type}`);
-
     // Handle Plinko differently - it doesn't need queuing
     if (matchingTrigger.game_type === 'plinko') {
+      this.logger.info(`[GIFT TRIGGER] Plinko trigger matched for gift "${giftName}"`);
       this.handlePlinkoGiftTrigger(uniqueId, nickname, profilePictureUrl, giftName);
       return;
     }
@@ -2175,17 +2182,80 @@ class GameEnginePlugin {
    */
   async handlePlinkoGiftTrigger(username, nickname, profilePictureUrl, giftName) {
     try {
-      // Get gift mapping from config
-      const config = this.plinkoGame.getConfig();
-      const giftMapping = config.giftMappings && config.giftMappings[giftName];
+      // Normalize gift name for case-insensitive matching
+      const normalizedGiftName = (giftName || '').trim();
+      let giftMapping = null;
       
+      // Get primary config
+      const config = this.plinkoGame.getConfig();
+      
+      // Try exact match first in primary config
+      if (config.giftMappings && config.giftMappings[normalizedGiftName]) {
+        giftMapping = config.giftMappings[normalizedGiftName];
+        this.logger.debug(`[PLINKO] Found gift mapping in primary config for "${normalizedGiftName}"`);
+      }
+      
+      // Try case-insensitive match in primary config
+      if (!giftMapping && config.giftMappings) {
+        const lowerGiftName = normalizedGiftName.toLowerCase();
+        for (const [key, value] of Object.entries(config.giftMappings)) {
+          if (key.toLowerCase() === lowerGiftName) {
+            giftMapping = value;
+            this.logger.info(`[PLINKO] Matched gift "${normalizedGiftName}" via case-insensitive lookup (key: "${key}")`);
+            break;
+          }
+        }
+      }
+      
+      // Fallback: Check all enabled Plinko boards for gift mappings
       if (!giftMapping) {
-        this.logger.warn(`Gift ${giftName} triggered Plinko but no mapping found in config`);
-        return;
+        this.logger.debug(`[PLINKO] No mapping in primary config, checking all enabled boards...`);
+        const boards = this.plinkoGame.getAllBoards();
+        
+        for (const board of boards) {
+          if (!board.enabled) continue;
+          
+          try {
+            // Parse gift_mappings from database (may be JSON string or object)
+            const mappings = typeof board.gift_mappings === 'string' 
+              ? JSON.parse(board.gift_mappings) 
+              : (board.gift_mappings || {});
+            
+            // Try exact match
+            if (mappings[normalizedGiftName]) {
+              giftMapping = mappings[normalizedGiftName];
+              this.logger.info(`[PLINKO] Found gift mapping in board "${board.name}" (ID: ${board.id})`);
+              break;
+            }
+            
+            // Try case-insensitive match
+            const lowerGiftName = normalizedGiftName.toLowerCase();
+            for (const [key, value] of Object.entries(mappings)) {
+              if (key.toLowerCase() === lowerGiftName) {
+                giftMapping = value;
+                this.logger.info(`[PLINKO] Matched gift "${normalizedGiftName}" in board "${board.name}" via case-insensitive lookup (key: "${key}")`);
+                break;
+              }
+            }
+            
+            if (giftMapping) break;
+          } catch (e) {
+            this.logger.error(`[PLINKO] Failed to parse gift_mappings for board ${board.id}: ${e.message}`);
+          }
+        }
+        
+        // If still no mapping found, log comprehensive error
+        if (!giftMapping) {
+          const boardNames = boards.filter(b => b.enabled).map(b => b.name).join(', ') || 'none';
+          this.logger.warn(`[PLINKO] Gift "${normalizedGiftName}" triggered Plinko but no mapping found in any board. Available enabled boards: ${boardNames}`);
+          return;
+        }
       }
 
       const betAmount = giftMapping.betAmount || 100; // Default bet if not configured
       const ballType = giftMapping.ballType || 'standard'; // 'standard' or 'golden'
+
+      this.logger.info(`[PLINKO] Spawning ball for ${username}: betAmount=${betAmount}, ballType=${ballType}`);
 
       // Spawn ball
       const result = await this.plinkoGame.spawnBall(
@@ -2197,10 +2267,12 @@ class GameEnginePlugin {
       );
 
       if (!result.success) {
-        this.logger.error(`Failed to spawn Plinko ball for ${username}: ${result.error}`);
+        this.logger.error(`[PLINKO] Failed to spawn ball for ${username}: ${result.error}`);
+      } else {
+        this.logger.info(`[PLINKO] ✅ Ball spawned successfully for ${username}`);
       }
     } catch (error) {
-      this.logger.error(`Error handling Plinko gift trigger: ${error.message}`);
+      this.logger.error(`[PLINKO] Error handling gift trigger: ${error.message}`, error);
     }
   }
 
