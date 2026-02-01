@@ -2711,7 +2711,7 @@ class TTSPlugin {
                 engine: selectedEngine,
                 audioData,
                 isStreaming: isStreaming,
-                ...(isStreaming && { synthesisOptions }), // Only include for streaming items
+                ...(isStreaming && { synthesisOptions }), // Include synthesisOptions for streaming items
                 volume: this.config.volume * (userSettings?.volume_gain ?? 1.0),
                 speed: this.config.speed,
                 source,

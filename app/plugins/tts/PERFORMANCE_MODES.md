@@ -47,7 +47,7 @@ The TTS system supports three performance modes to optimize text-to-speech gener
 
 **Settings:**
 - Timeout: 20 seconds per attempt
-- Retries: 3 (4 attempts total)
+- Retries: 3 (4 total attempts)
 - Total max wait time: ~80 seconds per engine
 - **Fish.audio: Streaming disabled (quality mode)**
 

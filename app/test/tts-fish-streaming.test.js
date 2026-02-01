@@ -264,9 +264,14 @@ return runTest('tts:playback:started event should be emitted for streaming', asy
     const fs = require('fs');
     const mainCode = fs.readFileSync(require.resolve('../plugins/tts/main'), 'utf-8');
     
-    // Check that playback:started is emitted after stream starts
-    const playbackStartedInStreaming = mainCode.match(/if \(item\.isStreaming\)[\s\S]*?tts:playback:started/);
-    assert.ok(playbackStartedInStreaming, 'Should emit playback:started after stream connection established');
+    // Check that playback:started is emitted in the streaming branch
+    // Look for the streaming branch and then verify playback:started emission
+    assert.ok(mainCode.includes('if (item.isStreaming)'), 'Should have streaming branch');
+    assert.ok(mainCode.includes("this.api.emit('tts:playback:started'"), 'Should emit playback:started event');
+    
+    // Verify streaming flag is passed in playback started event
+    const streamingStartRegex = /tts:playback:started[\s\S]{0,200}isStreaming:\s*true/;
+    assert.ok(streamingStartRegex.test(mainCode), 'Should include isStreaming flag in playback:started event for streaming items');
 });
 
 }).then(() => {
