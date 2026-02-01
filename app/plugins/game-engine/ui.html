@@ -664,6 +664,75 @@
     .theme-icon {
       font-size: 16px;
     }
+
+    /* Toggle Switch Styles */
+    .toggle-switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .toggle-switch input[type="checkbox"] {
+      display: none;
+    }
+
+    .toggle-slider {
+      width: 60px;
+      height: 30px;
+      background: #555;
+      border-radius: 15px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      background: white;
+      border-radius: 50%;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.3s;
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+      background: #4CAF50;
+    }
+
+    .toggle-switch input:checked + .toggle-slider::before {
+      transform: translateX(30px);
+    }
+
+    .toggle-label {
+      min-width: 60px;
+      font-weight: 600;
+      color: #4CAF50;
+    }
+
+    .toggle-switch input:not(:checked) ~ .toggle-label {
+      color: #FF9800;
+    }
+
+    .info-box {
+      border-radius: 8px;
+    }
+
+    .info-box h3 {
+      margin-top: 0;
+    }
+
+    .info-box ul {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+
+    .info-box code {
+      font-family: 'Courier New', monospace;
+    }
   </style>
   <script src="/game-engine/assets/theme-manager.js"></script>
 </head>
@@ -700,6 +769,7 @@
       <button class="tab" data-tab="plinko-test">🧪 Plinko Test</button>
       <button class="tab" data-tab="wheel">🎡 Glücksrad</button>
       <button class="tab" data-tab="overlays">OBS Overlays</button>
+      <button class="tab" data-tab="overlay-settings">⚙️ Overlay Mode</button>
       <button class="tab" data-tab="triggers">Trigger</button>
       <button class="tab" data-tab="xp-rewards">XP-Belohnungen</button>
       <button class="tab" data-tab="elo">ELO System</button>
@@ -1988,6 +2058,118 @@
         <p style="margin: 5px 0 0 0; color: #aaa; font-size: 14px;">
           Du kannst mehrere Overlays gleichzeitig verwenden! Füge das jeweilige Spiel-Overlay für Spiele und das kompakte HUD für dauerhafte Anzeige hinzu.
         </p>
+      </div>
+    </div>
+
+    <!-- Overlay Settings Tab -->
+    <div class="tab-content" id="tab-overlay-settings">
+      <div class="card">
+        <h2>🎨 Overlay Mode Settings</h2>
+        <p>Choose between <strong>Unified Overlay</strong> (one OBS source for all games) or <strong>Legacy Mode</strong> (separate overlay per game).</p>
+        
+        <div class="info-box" style="background: #1e3a5f; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0; border-radius: 8px;">
+          <h3 style="margin-top: 0; color: #4CAF50;">✅ Unified Overlay (Recommended)</h3>
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            <li>One OBS Browser Source for all games</li>
+            <li>Automatic game switching</li>
+            <li>Queue management</li>
+            <li>Better performance</li>
+          </ul>
+          <p style="margin-bottom: 0;"><strong>URL:</strong> <code style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px;">http://localhost:3000/overlay/game-engine/unified</code></p>
+        </div>
+        
+        <div class="info-box" style="background: #3a2a1e; border-left: 4px solid #FF9800; padding: 15px; margin: 20px 0; border-radius: 8px;">
+          <h3 style="margin-top: 0; color: #FF9800;">⚠️ Legacy Mode</h3>
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            <li>Separate OBS Browser Source per game</li>
+            <li>Manual source switching required</li>
+            <li>Original overlay behavior</li>
+          </ul>
+        </div>
+        
+        <h3 style="margin-top: 30px;">Game-specific Settings</h3>
+        
+        <!-- Connect4 Settings -->
+        <div class="form-group" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <h4 style="margin: 0 0 5px 0; color: #E74C3C;">🔴 Connect4</h4>
+              <p style="margin: 0; color: #aaa; font-size: 14px;">Four in a Row game</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="overlay-mode-connect4" data-game="connect4" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label" id="overlay-label-connect4">Unified</span>
+            </label>
+          </div>
+          <div style="margin-top: 10px; font-size: 13px; color: #888;">
+            <span id="overlay-url-connect4">URL: http://localhost:3000/overlay/game-engine/unified</span>
+          </div>
+        </div>
+        
+        <!-- Chess Settings -->
+        <div class="form-group" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <h4 style="margin: 0 0 5px 0; color: #4CAF50;">♟️ Chess</h4>
+              <p style="margin: 0; color: #aaa; font-size: 14px;">Blitzschach game</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="overlay-mode-chess" data-game="chess" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label" id="overlay-label-chess">Unified</span>
+            </label>
+          </div>
+          <div style="margin-top: 10px; font-size: 13px; color: #888;">
+            <span id="overlay-url-chess">URL: http://localhost:3000/overlay/game-engine/unified</span>
+          </div>
+        </div>
+        
+        <!-- Plinko Settings -->
+        <div class="form-group" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <h4 style="margin: 0 0 5px 0; color: #FFD700;">🎰 Plinko</h4>
+              <p style="margin: 0; color: #aaa; font-size: 14px;">Physics-based gambling game</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="overlay-mode-plinko" data-game="plinko" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label" id="overlay-label-plinko">Unified</span>
+            </label>
+          </div>
+          <div style="margin-top: 10px; font-size: 13px; color: #888;">
+            <span id="overlay-url-plinko">URL: http://localhost:3000/overlay/game-engine/unified</span>
+          </div>
+        </div>
+        
+        <!-- Wheel Settings -->
+        <div class="form-group" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <h4 style="margin: 0 0 5px 0; color: #FF6B00;">🎡 Wheel (Glücksrad)</h4>
+              <p style="margin: 0; color: #aaa; font-size: 14px;">Wheel of Fortune game</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="overlay-mode-wheel" data-game="wheel" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label" id="overlay-label-wheel">Unified</span>
+            </label>
+          </div>
+          <div style="margin-top: 10px; font-size: 13px; color: #888;">
+            <span id="overlay-url-wheel">URL: http://localhost:3000/overlay/game-engine/unified</span>
+          </div>
+        </div>
+        
+        <button class="primary" id="btn-save-overlay-settings">💾 Save Overlay Settings</button>
+      </div>
+      
+      <!-- Queue Status Card -->
+      <div class="card" style="margin-top: 20px;">
+        <h2>📋 Game Queue Status</h2>
+        <div id="queue-status">
+          <p style="color: #888;">Loading queue status...</p>
+        </div>
       </div>
     </div>
 
@@ -5760,6 +5942,82 @@
         await handleWheelGiftSelection(gift);
       }
     }, true); // Use capture phase to intercept before original handler
+    
+    // === OVERLAY SETTINGS ===
+    
+    // Load overlay settings on page load
+    async function loadOverlaySettings() {
+      try {
+        const response = await fetch('/api/game-engine/overlay-settings');
+        const settings = await response.json();
+        
+        // Update toggles
+        Object.entries(settings).forEach(([gameType, useUnified]) => {
+          const toggle = document.getElementById(`overlay-mode-${gameType}`);
+          const label = document.getElementById(`overlay-label-${gameType}`);
+          const urlSpan = document.getElementById(`overlay-url-${gameType}`);
+          
+          if (toggle) {
+            toggle.checked = useUnified;
+            label.textContent = useUnified ? 'Unified' : 'Legacy';
+            urlSpan.textContent = useUnified 
+              ? `URL: http://localhost:3000/overlay/game-engine/unified`
+              : `URL: http://localhost:3000/overlay/game-engine/${gameType}`;
+          }
+        });
+      } catch (error) {
+        console.error('Failed to load overlay settings:', error);
+        showMessage('Failed to load overlay settings', 'error');
+      }
+    }
+    
+    // Save overlay settings
+    document.getElementById('btn-save-overlay-settings')?.addEventListener('click', async () => {
+      const games = ['connect4', 'chess', 'plinko', 'wheel'];
+      
+      try {
+        for (const game of games) {
+          const toggle = document.getElementById(`overlay-mode-${game}`);
+          if (toggle) {
+            await fetch('/api/game-engine/overlay-settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                gameType: game,
+                useUnified: toggle.checked
+              })
+            });
+          }
+        }
+        
+        showMessage('✅ Overlay settings saved!');
+      } catch (error) {
+        console.error('Failed to save overlay settings:', error);
+        showMessage('Failed to save overlay settings', 'error');
+      }
+    });
+    
+    // Update labels on toggle change
+    document.querySelectorAll('[id^="overlay-mode-"]').forEach(toggle => {
+      toggle.addEventListener('change', (e) => {
+        const game = e.target.dataset.game;
+        const label = document.getElementById(`overlay-label-${game}`);
+        const urlSpan = document.getElementById(`overlay-url-${game}`);
+        
+        label.textContent = e.target.checked ? 'Unified' : 'Legacy';
+        urlSpan.textContent = e.target.checked
+          ? `URL: http://localhost:3000/overlay/game-engine/unified`
+          : `URL: http://localhost:3000/overlay/game-engine/${game}`;
+      });
+    });
+    
+    // Load settings when switching to overlay settings tab
+    document.addEventListener('DOMContentLoaded', () => {
+      const overlaySettingsTab = document.querySelector('[data-tab="overlay-settings"]');
+      if (overlaySettingsTab) {
+        overlaySettingsTab.addEventListener('click', loadOverlaySettings);
+      }
+    });
   </script>
 </body>
 </html>
