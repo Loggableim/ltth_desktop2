@@ -485,6 +485,13 @@ The overlay uses HTML5 Canvas with alpha channel and explicit CSS transparency:
 - Canvas 2D context: initialized with `alpha: true` and `premultipliedAlpha: true`
 - All rendering uses `ctx.clearRect()` to maintain transparency between frames
 
+#### Known Issue: desynchronized Canvas Context
+- The canvas context does NOT use `desynchronized: true`
+- This option improves performance (~10-15% FPS) in browsers but breaks transparency in OBS
+- OBS Browser Source (CEF v103-107) cannot correctly read the alpha channel from desynchronized canvas
+- If you modify the canvas context initialization, ensure transparency still works in OBS
+- Trade-off: Minor performance reduction (~5-10 fps at 500 particles) for working transparency
+
 If transparency still doesn't work after trying all the above, there may be a system-level graphics driver issue or OBS configuration problem.
 
 ### Effects not showing in OBS

@@ -212,9 +212,12 @@
 
         // DOM elements
         const canvas = document.getElementById('weather-canvas');
+        // Initialize canvas context with transparency support
+        // NOTE: desynchronized:true breaks transparency in OBS Browser Source (CEF v103-107)
+        // The desynchronized option improves performance in browsers but causes OBS CEF
+        // to render the canvas in a separate GPU thread, breaking alpha channel reading
         const ctx = canvas.getContext('2d', { 
             alpha: true,
-            desynchronized: true,  // Better performance
             willReadFrequently: false,
             premultipliedAlpha: true  // Ensure proper alpha blending
         });
