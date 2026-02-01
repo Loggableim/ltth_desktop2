@@ -20,21 +20,23 @@ let passed = 0;
 let failed = 0;
 
 function runTest(name, fn) {
-    return new Promise(async (resolve) => {
-        try {
-            await fn();
-            console.log(`✓ ${name}`);
-            passed++;
-            resolve(true);
-        } catch (error) {
-            console.error(`✗ ${name}`);
-            console.error(`  Error: ${error.message}`);
-            if (error.stack) {
-                console.error(`  Stack: ${error.stack.split('\n').slice(0, 3).join('\n')}`);
+    return new Promise((resolve) => {
+        (async () => {
+            try {
+                await fn();
+                console.log(`✓ ${name}`);
+                passed++;
+                resolve(true);
+            } catch (error) {
+                console.error(`✗ ${name}`);
+                console.error(`  Error: ${error.message}`);
+                if (error.stack) {
+                    console.error(`  Stack: ${error.stack.split('\n').slice(0, 3).join('\n')}`);
+                }
+                failed++;
+                resolve(false);
             }
-            failed++;
-            resolve(false);
-        }
+        })();
     });
 }
 
@@ -162,14 +164,15 @@ return runTest('Stream processing should convert chunks to Base64', async () => 
 
 // Test 8: FishSpeechEngine should use balanced latency for streaming
 return runTest('FishSpeechEngine should use balanced latency for streaming', async () => {
-    // Check that the implementation uses 'balanced' latency
     const FishSpeechEngine = require('../plugins/tts/engines/fishspeech-engine');
-    const fs = require('fs');
-    const engineCode = fs.readFileSync(require.resolve('../plugins/tts/engines/fishspeech-engine'), 'utf-8');
     
-    // Verify that synthesizeStream method uses balanced latency
-    assert.ok(engineCode.includes("latency = 'balanced'"), 'synthesizeStream should use balanced latency');
-    assert.ok(engineCode.includes("responseType: 'stream'"), 'synthesizeStream should use stream response type');
+    // Verify the method implementation details by checking source
+    const methodStr = FishSpeechEngine.prototype.synthesizeStream.toString();
+    
+    // Check key implementation details
+    assert.ok(methodStr.includes('balanced'), 'synthesizeStream should reference balanced latency');
+    assert.ok(methodStr.includes('stream'), 'synthesizeStream should use stream response type');
+    assert.ok(methodStr.includes('responseType'), 'synthesizeStream should configure responseType');
 });
 
 }).then(() => {
@@ -177,13 +180,14 @@ return runTest('FishSpeechEngine should use balanced latency for streaming', asy
 // Test 9: Verify synthesizeStream uses correct API parameters
 return runTest('synthesizeStream should use correct API parameters', async () => {
     const FishSpeechEngine = require('../plugins/tts/engines/fishspeech-engine');
-    const fs = require('fs');
-    const engineCode = fs.readFileSync(require.resolve('../plugins/tts/engines/fishspeech-engine'), 'utf-8');
     
-    // Check for required parameters in synthesizeStream
-    assert.ok(engineCode.includes('reference_id'), 'Should include reference_id parameter');
-    assert.ok(engineCode.includes('chunk_length'), 'Should include chunk_length parameter');
-    assert.ok(engineCode.includes('normalize'), 'Should include normalize parameter');
+    // Check method implementation for required parameters
+    const methodStr = FishSpeechEngine.prototype.synthesizeStream.toString();
+    
+    // Verify key parameters are used
+    assert.ok(methodStr.includes('reference_id'), 'Should use reference_id parameter');
+    assert.ok(methodStr.includes('chunk_length'), 'Should use chunk_length parameter');
+    assert.ok(methodStr.includes('normalize'), 'Should use normalize parameter');
 });
 
 }).then(() => {

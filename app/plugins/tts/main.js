@@ -2663,6 +2663,11 @@ class TTSPlugin {
                         // Success! Break out of fallback loop
                         break;
                         
+                    } catch (fallbackError) {
+                        // This fallback also failed, track it and continue to next
+                        fallbackAttempts.push({ engine: fallbackEngine, error: fallbackError.message });
+                        this.logger.warn(`Fallback engine ${fallbackEngine} also failed: ${fallbackError.message}`);
+                        this._logDebug('FALLBACK', `${fallbackEngine} failed`, { error: fallbackError.message });
                     }
                 }
                 
