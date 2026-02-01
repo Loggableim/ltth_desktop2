@@ -678,8 +678,8 @@ class PlinkoGame {
       await this.awardXP(ballData.username, profit, multiplier);
     }
 
-    // Trigger OpenShock reward if configured (skip for test balls)
-    if (!isTestBall && slot.openshockReward && slot.openshockReward.enabled) {
+    // Trigger OpenShock reward if configured
+    if (slot.openshockReward && slot.openshockReward.enabled) {
       await this.triggerOpenshockReward(ballData.username, slot.openshockReward, slotIndex);
     }
 

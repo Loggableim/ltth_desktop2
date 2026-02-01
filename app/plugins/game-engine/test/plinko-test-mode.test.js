@@ -212,14 +212,14 @@ describe('Plinko Test Mode', () => {
     });
 
     test('should record test transaction for test balls', async () => {
-      // Add test ball
+      // Add test ball with old timestamp to pass anti-cheat
       const ballId = 'test-ball-123';
       plinkoGame.activeBalls.set(ballId, {
         username: 'test_user_123',
         nickname: 'TestUser',
         bet: 100,
         isTest: true,
-        timestamp: Date.now()
+        timestamp: Date.now() - 2000 // 2 seconds ago to pass anti-cheat
       });
 
       await plinkoGame.handleBallLanded(ballId, 0); // Slot 0 with 2.0x
@@ -243,7 +243,7 @@ describe('Plinko Test Mode', () => {
         username: 'test_user_456',
         bet: 100,
         isTest: true,
-        timestamp: Date.now()
+        timestamp: Date.now() - 2000 // 2 seconds ago to pass anti-cheat
       });
 
       await plinkoGame.handleBallLanded(ballId, 0); // 2.0x multiplier
@@ -252,7 +252,7 @@ describe('Plinko Test Mode', () => {
       expect(plinkoGame.awardXP).not.toHaveBeenCalled();
     });
 
-    test('should NOT trigger OpenShock for test balls', async () => {
+    test('should trigger OpenShock for test balls', async () => {
       plinkoGame.getConfig = jest.fn().mockReturnValue({
         slots: [
           {
@@ -274,13 +274,22 @@ describe('Plinko Test Mode', () => {
         username: 'test_user_789',
         bet: 100,
         isTest: true,
-        timestamp: Date.now()
+        timestamp: Date.now() - 2000 // 2 seconds ago to pass anti-cheat
       });
 
       await plinkoGame.handleBallLanded(ballId, 0);
 
-      // Should NOT trigger OpenShock
-      expect(plinkoGame.triggerOpenshockReward).not.toHaveBeenCalled();
+      // Should trigger OpenShock even for test balls
+      expect(plinkoGame.triggerOpenshockReward).toHaveBeenCalledWith(
+        'test_user_789',
+        expect.objectContaining({
+          enabled: true,
+          type: 'Shock',
+          duration: 1000,
+          intensity: 50
+        }),
+        0
+      );
     });
 
     test('regular balls should still use regular transaction table', async () => {
@@ -289,7 +298,7 @@ describe('Plinko Test Mode', () => {
         username: 'real_user',
         bet: 100,
         isTest: false, // Regular ball
-        timestamp: Date.now()
+        timestamp: Date.now() - 2000 // 2 seconds ago to pass anti-cheat
       });
 
       await plinkoGame.handleBallLanded(ballId, 1); // 0.5x slot
@@ -310,9 +319,8 @@ describe('Plinko Test Mode', () => {
       expect(plinkoGame.awardXP).toHaveBeenCalled();
     });
 
-    test('should NOT trigger OpenShock when global testModeEnabled is true', async () => {
-      // This tests the fix for the issue where balls spawned with global testModeEnabled
-      // were not properly marked as test balls, causing OpenShock to trigger
+    test('should trigger OpenShock when global testModeEnabled is true', async () => {
+      // Test that OpenShock is now triggered for test balls when global test mode is enabled
       plinkoGame.getConfig = jest.fn().mockReturnValue({
         slots: [
           {
@@ -348,8 +356,17 @@ describe('Plinko Test Mode', () => {
       // Now land the ball
       await plinkoGame.handleBallLanded(result.ballId, 0);
 
-      // Should NOT trigger OpenShock because isTest flag should be set
-      expect(plinkoGame.triggerOpenshockReward).not.toHaveBeenCalled();
+      // Should trigger OpenShock even though isTest flag is set
+      expect(plinkoGame.triggerOpenshockReward).toHaveBeenCalledWith(
+        'test_user_global',
+        expect.objectContaining({
+          enabled: true,
+          type: 'Shock',
+          duration: 1000,
+          intensity: 50
+        }),
+        0
+      );
       
       // Should record in test table
       expect(db.recordPlinkoTestTransaction).toHaveBeenCalled();
