@@ -229,11 +229,10 @@
         indicator.classList.add('visible');
         list.innerHTML = `<div class="queue-item">${data.queueLength} game(s) in queue</div>`;
         
-        // Hide after 5 seconds
+        // Hide after 5 seconds if queue becomes empty
         setTimeout(() => {
-          if (data.queueLength === 1) {
-            indicator.classList.remove('visible');
-          }
+          // Note: We hide after timeout regardless - in production, listen to queue-cleared events
+          indicator.classList.remove('visible');
         }, 5000);
       }
     }

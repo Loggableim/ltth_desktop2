@@ -5945,6 +5945,9 @@
     
     // === OVERLAY SETTINGS ===
     
+    // Base URL for overlays (extracted to avoid duplication and enable easy configuration)
+    const OVERLAY_BASE_URL = window.location.origin || 'http://localhost:3000';
+    
     // Load overlay settings on page load
     async function loadOverlaySettings() {
       try {
@@ -5961,8 +5964,8 @@
             toggle.checked = useUnified;
             label.textContent = useUnified ? 'Unified' : 'Legacy';
             urlSpan.textContent = useUnified 
-              ? `URL: http://localhost:3000/overlay/game-engine/unified`
-              : `URL: http://localhost:3000/overlay/game-engine/${gameType}`;
+              ? `URL: ${OVERLAY_BASE_URL}/overlay/game-engine/unified`
+              : `URL: ${OVERLAY_BASE_URL}/overlay/game-engine/${gameType}`;
           }
         });
       } catch (error) {
@@ -6006,8 +6009,8 @@
         
         label.textContent = e.target.checked ? 'Unified' : 'Legacy';
         urlSpan.textContent = e.target.checked
-          ? `URL: http://localhost:3000/overlay/game-engine/unified`
-          : `URL: http://localhost:3000/overlay/game-engine/${game}`;
+          ? `URL: ${OVERLAY_BASE_URL}/overlay/game-engine/unified`
+          : `URL: ${OVERLAY_BASE_URL}/overlay/game-engine/${game}`;
       });
     });
     

@@ -65,10 +65,11 @@ class UnifiedQueueManager {
   /**
    * Check if a game type should use unified overlay
    * @param {string} gameType - Game type
-   * @returns {boolean} True if should use unified overlay (default: true)
+   * @returns {boolean} True if should use unified overlay (default: true if not explicitly set)
    */
   shouldUseUnifiedOverlay(gameType) {
     // Default to true if not explicitly set to false
+    // This allows opt-out behavior: games default to unified mode unless specifically disabled
     return this.gameModes.get(gameType) !== false;
   }
   
