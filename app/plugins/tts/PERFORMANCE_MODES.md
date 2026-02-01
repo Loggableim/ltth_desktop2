@@ -2,7 +2,7 @@
 
 ## Overview
 
-The TTS system now supports three performance modes to optimize text-to-speech generation for different hardware capabilities and use cases.
+The TTS system supports three performance modes to optimize text-to-speech generation for different hardware capabilities and use cases. Additionally, Fish.audio engine supports **streaming mode** for ultra-low latency audio delivery.
 
 ## Performance Modes
 
@@ -14,6 +14,7 @@ The TTS system now supports three performance modes to optimize text-to-speech g
 - Timeout: 5 seconds per attempt
 - Retries: 1 (2 total attempts)
 - Total max wait time: ~10 seconds per engine
+- **Fish.audio: Streaming enabled (low-latency mode)**
 
 **Use cases:**
 - Streaming on low-end hardware
@@ -31,6 +32,7 @@ The TTS system now supports three performance modes to optimize text-to-speech g
 - Timeout: 10 seconds per attempt
 - Retries: 2 (3 total attempts)
 - Total max wait time: ~30 seconds per engine
+- **Fish.audio: Streaming enabled (low-latency mode)**
 
 **Use cases:**
 - Standard streaming setups
@@ -47,6 +49,7 @@ The TTS system now supports three performance modes to optimize text-to-speech g
 - Timeout: 20 seconds per attempt
 - Retries: 3 (4 total attempts)
 - Total max wait time: ~80 seconds per engine
+- **Fish.audio: Streaming disabled (quality mode)**
 
 **Use cases:**
 - High-quality production streams
@@ -55,6 +58,48 @@ The TTS system now supports three performance modes to optimize text-to-speech g
 - Systems with plenty of resources
 
 **Trade-off:** Slower, but maximum reliability.
+
+## 🌊 Fish.audio Streaming Mode (Low-Latency)
+
+### What is Streaming Mode?
+
+In **Fast** and **Balanced** modes, Fish.audio uses **streaming synthesis** to minimize Time-to-First-Audio (TTFA). Instead of waiting for the complete audio file to be generated, audio chunks are sent to the client immediately as they're generated, significantly reducing perceived latency.
+
+### How It Works
+
+1. **Lazy Queuing:** When a TTS request is made, the message is queued immediately without waiting for synthesis
+2. **Async Synthesis:** Audio synthesis happens in the background as the queue processes
+3. **Chunk Streaming:** Audio data is sent to clients in real-time chunks via `tts:stream:chunk` socket events
+4. **Immediate Playback:** Clients can start playing audio as soon as the first chunk arrives
+
+### Benefits
+
+- **Reduced Latency:** Up to 70-90% faster time-to-first-audio
+- **Better User Experience:** Live chat messages are spoken almost immediately
+- **Resource Efficient:** Doesn't block the queue while generating audio
+- **Automatic Fallback:** If streaming fails, automatically falls back to regular synthesis
+
+### When Streaming is Used
+
+- **Enabled:** Fish.audio in Fast or Balanced mode
+- **Disabled:** Fish.audio in Quality mode (uses traditional buffered synthesis)
+- **Not Applicable:** Other engines (Google, Speechify, ElevenLabs, OpenAI, SiliconFlow) always use buffered synthesis
+
+### Socket Events
+
+**Client-Side Integration:**
+```javascript
+// Listen for streaming chunks
+socket.on('tts:stream:chunk', (data) => {
+    // data.id: Queue item ID
+    // data.chunk: Base64-encoded audio chunk
+    // data.isFirst: true for first chunk
+    // data.volume: Volume setting
+    // data.speed: Speed setting
+    // data.duckOther: Duck other audio
+    // data.duckVolume: Ducking volume
+});
+```
 
 ## Configuration
 
@@ -115,6 +160,16 @@ With fast mode, the entire fallback chain completes much faster (~40s vs ~120s i
 
 ## Recommendations
 
+### For Ultra-Low Latency (Live Chat Interactions)
+```json
+{
+  "performanceMode": "fast",
+  "defaultEngine": "fishaudio",
+  "enableAutoFallback": true
+}
+```
+**Note:** Fish.audio streaming provides the lowest Time-to-First-Audio for immediate live interaction feedback.
+
 ### For Streaming on Low-End PCs ("Toaster PCs")
 ```json
 {
@@ -124,14 +179,25 @@ With fast mode, the entire fallback chain completes much faster (~40s vs ~120s i
 }
 ```
 
-### For Professional Streams
+### For Professional Streams with Fish.audio
 ```json
 {
   "performanceMode": "balanced",
+  "defaultEngine": "fishaudio",
+  "enableAutoFallback": true
+}
+```
+**Note:** Balanced mode with Fish.audio provides streaming benefits while maintaining good reliability.
+
+### For Maximum Quality (Premium Streams)
+```json
+{
+  "performanceMode": "quality",
   "defaultEngine": "elevenlabs",
   "enableAutoFallback": true
 }
 ```
+**Note:** Quality mode disables streaming for Fish.audio to ensure maximum audio quality and reliability.
 
 ### For Unreliable Networks
 ```json

@@ -1133,6 +1133,121 @@ class FishSpeechEngine {
     }
 
     /**
+     * Synthesize text to speech with streaming (low-latency mode)
+     * Returns a readable stream for immediate playback
+     * @param {string} text - Text to synthesize
+     * @param {string} voiceId - Voice ID or reference ID
+     * @param {number} speed - Speech speed multiplier (included for API consistency but not used by Fish.audio API, which doesn't support speed modification)
+     * @param {Object} options - Additional options (same as synthesize)
+     * @returns {Promise<Object>} Object with stream and metadata
+     */
+    async synthesizeStream(text, voiceId = 'fish-sarah', speed = 1.0, options = {}) {
+        // Get built-in voices
+        const builtInVoices = FishSpeechEngine.getVoices();
+        
+        // Merge with custom voices if provided
+        const customVoices = options.customVoices || {};
+        const allVoices = { ...builtInVoices, ...customVoices };
+        
+        const voiceConfig = allVoices[voiceId];
+
+        // Get the reference_id - either from voice config or use voiceId directly if it's a valid reference ID
+        let referenceId;
+        
+        if (voiceConfig?.reference_id) {
+            // Voice found in config - use its reference_id
+            referenceId = voiceConfig.reference_id;
+            this.logger.debug(`Fish.audio TTS Stream: Using voice '${voiceId}' with reference_id: ${referenceId}`);
+        } else if (this._isValidReferenceId(voiceId)) {
+            // voiceId looks like a raw reference ID (32-char hex) - use it directly
+            referenceId = voiceId;
+            this.logger.info(`Fish.audio TTS Stream: Using raw reference_id: ${referenceId}`);
+        } else {
+            // Invalid voice - log warning and fall back to default
+            this.logger.warn(`Fish.audio TTS Stream: Invalid voice ID: ${voiceId}, falling back to default`);
+            referenceId = FishSpeechEngine.DEFAULT_REFERENCE_ID;
+        }
+
+        // Process emotion injection if provided
+        let processedText = text;
+        if (options.emotion && this.isValidEmotion(options.emotion)) {
+            // Add emotion marker at the beginning of the text if not already present
+            if (!text.trim().startsWith('(')) {
+                processedText = `(${options.emotion}) ${text}`;
+                this.logger.info(`Fish.audio TTS Stream: Injecting emotion '${options.emotion}' into text`);
+            }
+        }
+
+        // Extract parameters - use 'balanced' latency for streaming
+        const format = options.format || 'mp3';
+        const normalize = options.normalize !== undefined ? options.normalize : true;
+        const latency = 'balanced'; // Always use balanced latency for streaming
+        const chunkLength = options.chunk_length || 200;
+        const mp3Bitrate = options.mp3_bitrate || 128;
+
+        this.logger.info(`Fish.audio TTS Stream: Starting stream with voice=${voiceId}, reference_id=${referenceId}, format=${format}, latency=${latency}`);
+
+        // Fish.audio API request body
+        const requestBody = {
+            text: processedText,
+            reference_id: referenceId,
+            format: format,
+            mp3_bitrate: mp3Bitrate,
+            normalize: normalize,
+            latency: latency,
+            chunk_length: chunkLength
+        };
+
+        // If format is opus, add opus_bitrate
+        if (format === 'opus') {
+            requestBody.opus_bitrate = FishSpeechEngine.OPUS_AUTO_BITRATE; // Automatic bitrate selection
+        }
+
+        try {
+            const response = await axios.post(this.apiSynthesisUrl, requestBody, {
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'Content-Type': 'application/json',
+                    'model': this.model  // Fish Audio S1 model
+                },
+                responseType: 'stream', // Request streaming response
+                timeout: this.timeout
+            });
+
+            this.logger.info('Fish.audio TTS Stream: Stream connection established');
+
+            // Return the stream and metadata
+            return {
+                stream: response.data,
+                format: format,
+                voiceId: voiceId,
+                referenceId: referenceId
+            };
+
+        } catch (error) {
+            // Handle errors
+            if (error.response) {
+                // API error response
+                const errorMessage = error.response.data ? 
+                    (Buffer.isBuffer(error.response.data) ? 
+                        error.response.data.toString('utf-8') : 
+                        JSON.stringify(error.response.data)) : 
+                    'Unknown error';
+                this.logger.error(`Fish.audio TTS Stream: API error (${error.response.status}): ${errorMessage}`);
+                throw new Error(`Fish.audio API error: ${errorMessage}`);
+            } else if (error.request) {
+                // Network error
+                this.logger.error(`Fish.audio TTS Stream: Network error - ${error.message}`);
+                throw new Error(`Fish.audio network error: ${error.message}`);
+            } else {
+                // Other error
+                this.logger.error(`Fish.audio TTS Stream: Failed - ${error.message}`);
+                throw error;
+            }
+        }
+    }
+
+    /**
      * Update API key
      * @param {string} apiKey - New API key
      */
