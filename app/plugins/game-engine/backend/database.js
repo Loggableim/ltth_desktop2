@@ -492,7 +492,65 @@ class GameEngineDatabase {
       `).run('Standard Wheel', JSON.stringify(defaultSegments), JSON.stringify(defaultSettings), JSON.stringify(defaultGiftTriggers), null, 1);
     }
 
+    // Game overlay settings table (unified vs legacy overlay mode per game)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS game_overlay_settings (
+        game_type TEXT PRIMARY KEY,
+        use_unified_overlay INTEGER DEFAULT 1,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Initialize default overlay settings for all game types
+    this.initializeOverlaySettings();
+
     this.logger.info('✅ Game Engine database tables initialized');
+  }
+  
+  /**
+   * Initialize overlay settings with defaults for all game types
+   */
+  initializeOverlaySettings() {
+    const games = ['connect4', 'chess', 'plinko', 'wheel'];
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO game_overlay_settings (game_type, use_unified_overlay)
+      VALUES (?, 1)
+    `);
+    
+    games.forEach(game => {
+      stmt.run(game);
+    });
+  }
+  
+  /**
+   * Get overlay settings for all games
+   * @returns {Object} Object with game types as keys and boolean values
+   */
+  getOverlaySettings() {
+    const rows = this.db.prepare(`
+      SELECT game_type, use_unified_overlay 
+      FROM game_overlay_settings
+    `).all();
+    
+    return rows.reduce((acc, row) => {
+      acc[row.game_type] = Boolean(row.use_unified_overlay);
+      return acc;
+    }, {});
+  }
+  
+  /**
+   * Set overlay setting for a specific game type
+   * @param {string} gameType - Game type (connect4, chess, plinko, wheel)
+   * @param {boolean} useUnified - Whether to use unified overlay
+   */
+  setOverlaySetting(gameType, useUnified) {
+    this.db.prepare(`
+      INSERT INTO game_overlay_settings (game_type, use_unified_overlay, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(game_type) DO UPDATE SET
+        use_unified_overlay = excluded.use_unified_overlay,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(gameType, useUnified ? 1 : 0);
   }
 
   /**

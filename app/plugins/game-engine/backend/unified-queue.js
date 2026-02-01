@@ -32,6 +32,9 @@ class UnifiedQueueManager {
     // Queue size limits (prevent memory exhaustion from rapid triggers)
     this.MAX_QUEUE_SIZE = 50; // Maximum items in queue
     this.QUEUE_WARNING_SIZE = 40; // Warning threshold
+    
+    // Overlay mode tracking per game type (unified vs legacy)
+    this.gameModes = new Map(); // gameType -> useUnified (boolean)
   }
 
   /**
@@ -47,6 +50,50 @@ class UnifiedQueueManager {
 
   setGameEnginePlugin(gameEnginePlugin) {
     this.gameEnginePlugin = gameEnginePlugin;
+  }
+  
+  /**
+   * Set overlay mode for a specific game type
+   * @param {string} gameType - Game type (connect4, chess, plinko, wheel)
+   * @param {boolean} useUnified - Whether to use unified overlay
+   */
+  setGameMode(gameType, useUnified) {
+    this.gameModes.set(gameType, useUnified);
+    this.logger.debug(`[UNIFIED QUEUE] Set overlay mode for ${gameType}: ${useUnified ? 'unified' : 'legacy'}`);
+  }
+  
+  /**
+   * Check if a game type should use unified overlay
+   * @param {string} gameType - Game type
+   * @returns {boolean} True if should use unified overlay (default: true)
+   */
+  shouldUseUnifiedOverlay(gameType) {
+    // Default to true if not explicitly set to false
+    return this.gameModes.get(gameType) !== false;
+  }
+  
+  /**
+   * Switch to a specific game in the unified overlay
+   * @param {string} gameType - Game type
+   * @param {string} sessionId - Session ID
+   * @param {Object} config - Game configuration
+   */
+  switchGame(gameType, sessionId, config) {
+    const useUnified = this.shouldUseUnifiedOverlay(gameType);
+    
+    if (useUnified) {
+      this.logger.info(`[UNIFIED QUEUE] Switching to ${gameType} (session: ${sessionId})`);
+      
+      // Emit game-switched event to unified overlay
+      this.io.emit('game-engine:game-switched', {
+        gameType,
+        sessionId,
+        state: 'starting',
+        config,
+        useUnified: true,
+        timestamp: Date.now()
+      });
+    }
   }
 
   /**
