@@ -2511,11 +2511,16 @@ class TTSPlugin {
             }
 
             // Step 5: Generate TTS (no caching)
+            // For Fish Audio (not in quality mode), use lazy queuing with streaming
+            const useLazyQueuing = selectedEngine === 'fishaudio' && this.config.performanceMode !== 'quality';
+            
             this._logDebug('SPEAK_STEP5', 'Starting TTS synthesis', {
                 engine: selectedEngine,
                 voice: selectedVoice,
                 textLength: finalText.length,
-                speed: this.config.speed
+                speed: this.config.speed,
+                useLazyQueuing: useLazyQueuing,
+                performanceMode: this.config.performanceMode
             });
 
             const ttsEngine = this.engines[selectedEngine];
@@ -2524,76 +2529,86 @@ class TTSPlugin {
                 throw new Error(`TTS engine not available: ${selectedEngine}`);
             }
 
-            let audioData;
+            let audioData = null;
+            let isStreaming = false;
+            let synthesisOptions = {};
             let fallbackAttempts = [];
             
-            try {
-                // Prepare synthesis options for Speechify
-                const synthesisOptions = {};
-                
-                // Add language parameter for Speechify if engine is speechify
-                if (selectedEngine === 'speechify' && this.config.autoLanguageDetection) {
-                    // Detect language from text
-                    const detectedLang = this.languageDetector.detectLanguage(finalText);
-                    if (detectedLang && detectedLang.language) {
-                        synthesisOptions.language = detectedLang.language;
-                        this._logDebug('SPEAK_STEP5', 'Language detected for Speechify', { language: detectedLang.language, confidence: detectedLang.confidence });
-                    }
+            // Prepare synthesis options
+            // Add language parameter for Speechify if engine is speechify
+            if (selectedEngine === 'speechify' && this.config.autoLanguageDetection) {
+                // Detect language from text
+                const detectedLang = this.languageDetector.detectLanguage(finalText);
+                if (detectedLang && detectedLang.language) {
+                    synthesisOptions.language = detectedLang.language;
+                    this._logDebug('SPEAK_STEP5', 'Language detected for Speechify', { language: detectedLang.language, confidence: detectedLang.confidence });
                 }
-                
-                // Add emotion parameter for Speechify
-                if (selectedEngine === 'speechify') {
-                    // Priority: user emotion > default emotion
-                    const emotion = userSettings?.voice_emotion || this.config.defaultEmotion;
-                    if (emotion) {
-                        synthesisOptions.emotion = emotion;
-                        this._logDebug('SPEAK_STEP5', 'Emotion set for Speechify', { emotion });
-                    }
+            }
+            
+            // Add emotion parameter for Speechify
+            if (selectedEngine === 'speechify') {
+                // Priority: user emotion > default emotion
+                const emotion = userSettings?.voice_emotion || this.config.defaultEmotion;
+                if (emotion) {
+                    synthesisOptions.emotion = emotion;
+                    this._logDebug('SPEAK_STEP5', 'Emotion set for Speechify', { emotion });
                 }
-                
-                // Add emotion and prosody parameters for Fish.audio
-                if (selectedEngine === 'fishaudio') {
-                    // Add custom voices configuration
-                    synthesisOptions.customVoices = this.config.customFishVoices || {};
-                    const customVoiceNames = Object.keys(synthesisOptions.customVoices);
-                    this._logDebug('SPEAK_STEP5', 'Custom voices configured for Fish.audio', { 
-                        customVoiceCount: customVoiceNames.length,
-                        customVoiceNames: customVoiceNames
-                    });
-                    
-                    // Priority: user emotion > default Fish.audio emotion
-                    const emotion = userSettings?.voice_emotion || this.config.defaultFishaudioEmotion;
-                    if (emotion && emotion !== 'neutral') {
-                        synthesisOptions.emotion = emotion;
-                        this._logDebug('SPEAK_STEP5', 'Emotion set for Fish.audio', { emotion });
-                    }
-                    
-                    // Add Fish.audio-specific options
-                    synthesisOptions.normalize = true; // Default to true for stability
-                    synthesisOptions.latency = 'balanced'; // Use balanced latency for good responsiveness
-                    synthesisOptions.chunk_length = 200; // Optimal chunk length
-                    synthesisOptions.mp3_bitrate = 128; // Good quality-to-size ratio
-                    
-                    // Add pitch and volume if configured
-                    if (this.config.defaultFishaudioPitch !== undefined && this.config.defaultFishaudioPitch !== 0) {
-                        synthesisOptions.pitch = this.config.defaultFishaudioPitch;
-                        this._logDebug('SPEAK_STEP5', 'Pitch set for Fish.audio', { pitch: this.config.defaultFishaudioPitch });
-                    }
-                    
-                    if (this.config.defaultFishaudioVolume !== undefined && this.config.defaultFishaudioVolume !== 1.0) {
-                        synthesisOptions.volume = this.config.defaultFishaudioVolume;
-                        this._logDebug('SPEAK_STEP5', 'Volume set for Fish.audio', { volume: this.config.defaultFishaudioVolume });
-                    }
-                }
-                
-                audioData = await ttsEngine.synthesize(finalText, selectedVoice, this.config.speed, synthesisOptions);
-                this._logDebug('SPEAK_STEP5', 'TTS synthesis successful', {
-                    engine: selectedEngine,
-                    voice: selectedVoice,
-                    audioDataLength: audioData?.length || 0,
-                    options: synthesisOptions
+            }
+            
+            // Add emotion and prosody parameters for Fish.audio
+            if (selectedEngine === 'fishaudio') {
+                // Add custom voices configuration
+                synthesisOptions.customVoices = this.config.customFishVoices || {};
+                const customVoiceNames = Object.keys(synthesisOptions.customVoices);
+                this._logDebug('SPEAK_STEP5', 'Custom voices configured for Fish.audio', { 
+                    customVoiceCount: customVoiceNames.length,
+                    customVoiceNames: customVoiceNames
                 });
-            } catch (engineError) {
+                
+                // Priority: user emotion > default Fish.audio emotion
+                const emotion = userSettings?.voice_emotion || this.config.defaultFishaudioEmotion;
+                if (emotion && emotion !== 'neutral') {
+                    synthesisOptions.emotion = emotion;
+                    this._logDebug('SPEAK_STEP5', 'Emotion set for Fish.audio', { emotion });
+                }
+                
+                // Add Fish.audio-specific options
+                synthesisOptions.normalize = true; // Default to true for stability
+                synthesisOptions.latency = 'balanced'; // Use balanced latency for good responsiveness
+                synthesisOptions.chunk_length = 200; // Optimal chunk length
+                synthesisOptions.mp3_bitrate = 128; // Good quality-to-size ratio
+                
+                // Add pitch and volume if configured
+                if (this.config.defaultFishaudioPitch !== undefined && this.config.defaultFishaudioPitch !== 0) {
+                    synthesisOptions.pitch = this.config.defaultFishaudioPitch;
+                    this._logDebug('SPEAK_STEP5', 'Pitch set for Fish.audio', { pitch: this.config.defaultFishaudioPitch });
+                }
+                
+                if (this.config.defaultFishaudioVolume !== undefined && this.config.defaultFishaudioVolume !== 1.0) {
+                    synthesisOptions.volume = this.config.defaultFishaudioVolume;
+                    this._logDebug('SPEAK_STEP5', 'Volume set for Fish.audio', { volume: this.config.defaultFishaudioVolume });
+                }
+            }
+            
+            // Skip immediate synthesis for Fish Audio lazy queuing (streaming mode)
+            if (useLazyQueuing) {
+                this._logDebug('SPEAK_STEP5', 'Using lazy queuing for Fish.audio - skipping immediate synthesis', {
+                    engine: selectedEngine,
+                    performanceMode: this.config.performanceMode
+                });
+                isStreaming = true;
+                audioData = null; // No audio data yet - will be generated during playback
+            } else {
+                // Regular synthesis path for all other cases
+                try {
+                    audioData = await ttsEngine.synthesize(finalText, selectedVoice, this.config.speed, synthesisOptions);
+                    this._logDebug('SPEAK_STEP5', 'TTS synthesis successful', {
+                        engine: selectedEngine,
+                        voice: selectedVoice,
+                        audioDataLength: audioData?.length || 0,
+                        options: synthesisOptions
+                    });
+                } catch (engineError) {
                 // Check if auto-fallback is enabled
                 if (!this.config.enableAutoFallback) {
                     this._logDebug('SPEAK_ERROR', 'TTS engine failed and auto-fallback is disabled', {
@@ -2648,11 +2663,6 @@ class TTSPlugin {
                         // Success! Break out of fallback loop
                         break;
                         
-                    } catch (fallbackError) {
-                        // This fallback also failed, track it and continue to next
-                        fallbackAttempts.push({ engine: fallbackEngine, error: fallbackError.message });
-                        this.logger.warn(`Fallback engine ${fallbackEngine} also failed: ${fallbackError.message}`);
-                        this._logDebug('FALLBACK', `${fallbackEngine} failed`, { error: fallbackError.message });
                     }
                 }
                 
@@ -2663,10 +2673,11 @@ class TTSPlugin {
                     this.logger.error('All TTS engines failed. Attempts: ' + failureReport);
                     throw new Error(`All TTS engines failed. Primary: ${engineError.message}. Fallbacks: ${failureReport}`);
                 }
+                }
             }
 
-            // Validate audioData
-            if (!audioData || audioData.length === 0) {
+            // Validate audioData (skip validation for streaming mode)
+            if (!isStreaming && (!audioData || audioData.length === 0)) {
                 this._logDebug('SPEAK_ERROR', 'Empty audio data returned', {
                     engine: selectedEngine,
                     audioData: audioData
@@ -2683,7 +2694,8 @@ class TTSPlugin {
                 volume: this.config.volume * (userSettings?.volume_gain ?? 1.0),
                 speed: this.config.speed,
                 source,
-                priority
+                priority,
+                isStreaming: isStreaming
             });
 
             const queueResult = this.queueManager.enqueue({
@@ -2693,6 +2705,8 @@ class TTSPlugin {
                 voice: selectedVoice,
                 engine: selectedEngine,
                 audioData,
+                isStreaming: isStreaming,
+                synthesisOptions: isStreaming ? synthesisOptions : undefined,
                 volume: this.config.volume * (userSettings?.volume_gain ?? 1.0),
                 speed: this.config.speed,
                 source,
@@ -2769,7 +2783,8 @@ class TTSPlugin {
                 voice: item.voice,
                 engine: item.engine,
                 volume: item.volume,
-                speed: item.speed
+                speed: item.speed,
+                isStreaming: item.isStreaming || false
             });
 
             const playbackMeta = {
@@ -2780,62 +2795,226 @@ class TTSPlugin {
                 voice: item.voice,
                 engine: item.engine,
                 hasAssignedVoice: item.hasAssignedVoice === true,
-                source: item.source || 'unknown'
+                source: item.source || 'unknown',
+                isStreaming: item.isStreaming || false
             };
 
-            // Emit playback start event
-            this.api.emit('tts:playback:started', {
-                id: item.id,
-                username: item.username,
-                text: item.text
-            });
+            // Handle streaming mode
+            if (item.isStreaming) {
+                this._logDebug('PLAYBACK', 'Using streaming mode', {
+                    id: item.id,
+                    engine: item.engine
+                });
 
-            // Send audio to clients for playback
-            this.api.emit('tts:play', {
-                id: item.id,
-                username: item.username,
-                text: item.text,
-                voice: item.voice,
-                engine: item.engine,
-                audioData: item.audioData,
-                volume: item.volume,
-                speed: item.speed,
-                duckOther: this.config.duckOtherAudio,
-                duckVolume: this.config.duckVolume
-            });
-
-            this._logDebug('PLAYBACK', 'Audio event emitted to clients', {
-                id: item.id,
-                event: 'tts:play',
-                audioDataLength: item.audioData?.length || 0
-            });
-
-            // Estimate playback duration based on realistic speech rate
-            // Average speaking rate: ~150 words/min = ~2.5 words/sec = ~12.5 chars/sec
-            // Formula: chars * 100ms + buffer (accounting for pauses, pacing, etc.)
-            const baseDelay = Math.ceil(item.text.length * 100); // 100ms per character
-            const speedAdjustment = item.speed ? (1 / item.speed) : 1; // Adjust for speed
-            const buffer = 2000; // 2 second buffer for network latency and startup
-            const estimatedDuration = Math.ceil(baseDelay * speedAdjustment) + buffer;
-            playbackMeta.duration = estimatedDuration;
-
-            if (this.api.pluginLoader && typeof this.api.pluginLoader.emit === 'function') {
                 try {
-                    this.api.pluginLoader.emit('tts:playback:started', playbackMeta);
-                } catch (error) {
-                    this.logger.warn(`TTS: Failed to broadcast playback start to plugins: ${error.message}`);
+                    const ttsEngine = this.engines[item.engine];
+                    if (!ttsEngine || !ttsEngine.synthesizeStream) {
+                        throw new Error(`Streaming not supported for engine: ${item.engine}`);
+                    }
+
+                    // Start streaming synthesis
+                    const streamResult = await ttsEngine.synthesizeStream(
+                        item.text,
+                        item.voice,
+                        item.speed,
+                        item.synthesisOptions || {}
+                    );
+
+                    this._logDebug('PLAYBACK', 'Stream connection established', {
+                        id: item.id,
+                        format: streamResult.format
+                    });
+
+                    // Emit playback start event now that stream has started
+                    this.api.emit('tts:playback:started', {
+                        id: item.id,
+                        username: item.username,
+                        text: item.text,
+                        isStreaming: true
+                    });
+
+                    if (this.api.pluginLoader && typeof this.api.pluginLoader.emit === 'function') {
+                        try {
+                            this.api.pluginLoader.emit('tts:playback:started', playbackMeta);
+                        } catch (error) {
+                            this.logger.warn(`TTS: Failed to broadcast playback start to plugins: ${error.message}`);
+                        }
+                    }
+
+                    // Process the stream
+                    const stream = streamResult.stream;
+                    const chunks = [];
+                    let totalBytes = 0;
+
+                    // Handle stream data
+                    stream.on('data', (chunk) => {
+                        chunks.push(chunk);
+                        totalBytes += chunk.length;
+                        
+                        // Convert chunk to Base64 and emit immediately
+                        const base64Chunk = chunk.toString('base64');
+                        this.api.emit('tts:stream:chunk', {
+                            id: item.id,
+                            chunk: base64Chunk,
+                            isFirst: chunks.length === 1,
+                            volume: item.volume,
+                            speed: item.speed,
+                            duckOther: this.config.duckOtherAudio,
+                            duckVolume: this.config.duckVolume
+                        });
+
+                        this._logDebug('PLAYBACK', 'Stream chunk emitted', {
+                            id: item.id,
+                            chunkNumber: chunks.length,
+                            chunkSize: chunk.length,
+                            totalBytes: totalBytes
+                        });
+                    });
+
+                    // Wait for stream to complete
+                    await new Promise((resolve, reject) => {
+                        stream.on('end', () => {
+                            this._logDebug('PLAYBACK', 'Stream completed', {
+                                id: item.id,
+                                totalChunks: chunks.length,
+                                totalBytes: totalBytes
+                            });
+                            resolve();
+                        });
+
+                        stream.on('error', (error) => {
+                            this._logDebug('PLAYBACK', 'Stream error', {
+                                id: item.id,
+                                error: error.message
+                            });
+                            reject(error);
+                        });
+                    });
+
+                    // Estimate playback duration based on realistic speech rate
+                    const baseDelay = Math.ceil(item.text.length * 100); // 100ms per character
+                    const speedAdjustment = item.speed ? (1 / item.speed) : 1;
+                    const buffer = 2000; // 2 second buffer
+                    const estimatedDuration = Math.ceil(baseDelay * speedAdjustment) + buffer;
+
+                    this._logDebug('PLAYBACK', 'Waiting for audio playback to complete', {
+                        estimatedDuration,
+                        textLength: item.text.length
+                    });
+
+                    // Wait for audio playback to complete
+                    await new Promise(resolve => setTimeout(resolve, estimatedDuration));
+
+                } catch (streamError) {
+                    this.logger.error(`TTS streaming error: ${streamError.message}, falling back to regular synthesis`);
+                    this._logDebug('PLAYBACK', 'Streaming failed, attempting fallback to regular synthesis', {
+                        id: item.id,
+                        error: streamError.message
+                    });
+
+                    // Fallback to regular synthesis
+                    const ttsEngine = this.engines[item.engine];
+                    if (ttsEngine && ttsEngine.synthesize) {
+                        try {
+                            const audioData = await ttsEngine.synthesize(
+                                item.text,
+                                item.voice,
+                                item.speed,
+                                item.synthesisOptions || {}
+                            );
+
+                            // Emit regular playback events
+                            this.api.emit('tts:playback:started', {
+                                id: item.id,
+                                username: item.username,
+                                text: item.text
+                            });
+
+                            this.api.emit('tts:play', {
+                                id: item.id,
+                                username: item.username,
+                                text: item.text,
+                                voice: item.voice,
+                                engine: item.engine,
+                                audioData: audioData,
+                                volume: item.volume,
+                                speed: item.speed,
+                                duckOther: this.config.duckOtherAudio,
+                                duckVolume: this.config.duckVolume
+                            });
+
+                            // Wait for playback
+                            const baseDelay = Math.ceil(item.text.length * 100);
+                            const speedAdjustment = item.speed ? (1 / item.speed) : 1;
+                            const buffer = 2000;
+                            const estimatedDuration = Math.ceil(baseDelay * speedAdjustment) + buffer;
+                            await new Promise(resolve => setTimeout(resolve, estimatedDuration));
+
+                        } catch (fallbackError) {
+                            this.logger.error(`TTS fallback synthesis also failed: ${fallbackError.message}`);
+                            throw fallbackError;
+                        }
+                    } else {
+                        throw streamError;
+                    }
                 }
+
+            } else {
+                // Regular (non-streaming) playback mode
+                // Emit playback start event
+                this.api.emit('tts:playback:started', {
+                    id: item.id,
+                    username: item.username,
+                    text: item.text
+                });
+
+                // Send audio to clients for playback
+                this.api.emit('tts:play', {
+                    id: item.id,
+                    username: item.username,
+                    text: item.text,
+                    voice: item.voice,
+                    engine: item.engine,
+                    audioData: item.audioData,
+                    volume: item.volume,
+                    speed: item.speed,
+                    duckOther: this.config.duckOtherAudio,
+                    duckVolume: this.config.duckVolume
+                });
+
+                this._logDebug('PLAYBACK', 'Audio event emitted to clients', {
+                    id: item.id,
+                    event: 'tts:play',
+                    audioDataLength: item.audioData?.length || 0
+                });
+
+                // Estimate playback duration based on realistic speech rate
+                // Average speaking rate: ~150 words/min = ~2.5 words/sec = ~12.5 chars/sec
+                // Formula: chars * 100ms + buffer (accounting for pauses, pacing, etc.)
+                const baseDelay = Math.ceil(item.text.length * 100); // 100ms per character
+                const speedAdjustment = item.speed ? (1 / item.speed) : 1; // Adjust for speed
+                const buffer = 2000; // 2 second buffer for network latency and startup
+                const estimatedDuration = Math.ceil(baseDelay * speedAdjustment) + buffer;
+                playbackMeta.duration = estimatedDuration;
+
+                if (this.api.pluginLoader && typeof this.api.pluginLoader.emit === 'function') {
+                    try {
+                        this.api.pluginLoader.emit('tts:playback:started', playbackMeta);
+                    } catch (error) {
+                        this.logger.warn(`TTS: Failed to broadcast playback start to plugins: ${error.message}`);
+                    }
+                }
+
+                this._logDebug('PLAYBACK', 'Waiting for playback to complete', {
+                    estimatedDuration,
+                    textLength: item.text.length,
+                    speed: item.speed,
+                    calculation: `${item.text.length} chars * 100ms * ${speedAdjustment.toFixed(2)} + ${buffer}ms = ${estimatedDuration}ms`
+                });
+
+                // Wait for playback to complete
+                await new Promise(resolve => setTimeout(resolve, estimatedDuration));
             }
-
-            this._logDebug('PLAYBACK', 'Waiting for playback to complete', {
-                estimatedDuration,
-                textLength: item.text.length,
-                speed: item.speed,
-                calculation: `${item.text.length} chars * 100ms * ${speedAdjustment.toFixed(2)} + ${buffer}ms = ${estimatedDuration}ms`
-            });
-
-            // Wait for playback to complete
-            await new Promise(resolve => setTimeout(resolve, estimatedDuration));
 
             // Emit playback end event
             this.api.emit('tts:playback:ended', {
