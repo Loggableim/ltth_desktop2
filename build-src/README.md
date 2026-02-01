@@ -7,6 +7,61 @@ This directory contains the source code for the Windows launchers.
 1. **launcher.exe** - Local launcher for existing installations
 2. **ltthgit.exe** - Cloud launcher that downloads files from GitHub
 
+## Launcher Features
+
+### Automatische Node.js Installation
+Der Launcher installiert automatisch eine portable Node.js Version (v20.18.1 LTS) falls keine Installation gefunden wird.
+Keine User-Interaktion nötig.
+
+**Installation Flow:**
+1. Prüft globale Node.js Installation (`node` in PATH)
+2. Prüft portable Installation (`runtime/node/node.exe`)
+3. Falls keine gefunden: Automatisch portable Installation
+   - Download von nodejs.org (ca. 45 MB)
+   - Progress-Anzeige während Download
+   - Automatische Extraktion nach `runtime/node/`
+   - Struktur-Flattening (Root-Ordner wird entfernt)
+   - Validierung der Installation
+
+### Auto-Update
+Prüft bei jedem Start ob eine neuere Node.js Version verfügbar ist und aktualisiert automatisch.
+
+**Update Mechanismus:**
+- Version wird in `runtime/node/version.txt` gespeichert
+- Vergleich mit Target-Version im Launcher
+- Automatischer Download und Installation
+- Backup der alten Version in `runtime/node.backup/`
+- Kein Rollback bei Fehler - alte Version bleibt erhalten
+
+### Portable Installation
+Node.js wird in `runtime/node/` installiert und benötigt keine Admin-Rechte.
+
+**Datei-Struktur:**
+```
+LTTH_Desktop/
+├── launcher.exe
+├── runtime/
+│   ├── node/
+│   │   ├── node.exe
+│   │   ├── npm.cmd
+│   │   ├── npx.cmd
+│   │   ├── version.txt          # "20.18.1"
+│   │   └── node_modules/
+│   └── node.backup/              # Optional: Backup bei Update
+├── app/
+└── ...
+```
+
+### Plattform-Unterstützung
+- **Windows:** ZIP-Extraktion (primär unterstützt)
+- **Linux:** TAR.XZ-Extraktion mit tar command
+- **macOS:** TAR.GZ-Extraktion mit tar command
+
+### Fehlerbehandlung
+- **Download fehlgeschlagen:** 3 Retry-Versuche, dann manuelle Installations-Anleitung
+- **Extraktion fehlgeschlagen:** Cleanup von temporären Dateien
+- **Update fehlgeschlagen:** Bestehende Installation bleibt erhalten
+
 ## Building the Launchers
 
 The launchers are written in Go and include embedded resources.
