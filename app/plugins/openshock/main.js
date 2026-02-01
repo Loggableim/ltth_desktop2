@@ -25,6 +25,7 @@ const MappingEngine = require('./helpers/mappingEngine');
 const PatternEngine = require('./helpers/patternEngine');
 const SafetyManager = require('./helpers/safetyManager');
 const QueueManager = require('./helpers/queueManager');
+const PatternExecutor = require('./helpers/patternExecutor');
 const ZappieHellManager = require('./helpers/zappieHellManager');
 
 class OpenShockPlugin {
@@ -71,6 +72,7 @@ class OpenShockPlugin {
         this.patternEngine = null;
         this.safetyManager = null;
         this.queueManager = null;
+        this.patternExecutor = null;
         this.zappieHellManager = null;
 
         // State
@@ -92,9 +94,6 @@ class OpenShockPlugin {
             lastCommandTime: null,
             errors: []
         };
-
-        // Pattern-Execution Tracking
-        this.activePatternExecutions = new Map();
 
         // Log-Buffer für Frontend
         this.eventLog = [];
@@ -321,11 +320,40 @@ class OpenShockPlugin {
             logger
         );
         
-        // Set up pattern execution cancellation callback
-        // This allows QueueManager to check if a pattern execution has been cancelled
+        // Initialize PatternExecutor with queue feedback
+        this.patternExecutor = new PatternExecutor(this.queueManager, this.api.log.bind(this.api));
+
+        // Set cancel callback for queueManager
         this.queueManager.setShouldCancelExecution((executionId) => {
-            const execution = this.activePatternExecutions.get(executionId);
-            return execution && execution.cancelled;
+            const status = this.patternExecutor.getExecutionStatus(executionId);
+            return status.found && (status.status === 'cancelled' || status.status === 'failed');
+        });
+
+        // Listen to executor events
+        this.patternExecutor.on('execution-completed', (execution) => {
+            this.api.log(`Pattern execution completed: ${execution.pattern.name}`, 'info');
+            if (this.io) {
+                this.io.emit('openshock:pattern-completed', {
+                    executionId: execution.executionId,
+                    patternName: execution.pattern.name,
+                    duration: execution.completedAt - execution.startedAt,
+                });
+            }
+        });
+
+        this.patternExecutor.on('execution-failed', (execution) => {
+            this.api.log(`Pattern execution failed: ${execution.pattern.name}`, 'error');
+            if (this.io) {
+                this.io.emit('openshock:pattern-failed', {
+                    executionId: execution.executionId,
+                    patternName: execution.pattern.name,
+                    error: execution.error,
+                });
+            }
+        });
+
+        this.patternExecutor.on('execution-cancelled', (execution) => {
+            this.api.log(`Pattern execution cancelled: ${execution.pattern.name}`, 'info');
         });
 
         // ZappieHell Manager
@@ -973,13 +1001,21 @@ class OpenShockPlugin {
                     });
                 }
 
-                // Pattern ausführen
-                const executionId = await this._executePattern(pattern, device, {
-                    userId: 'manual-execution',
-                    username: 'Manual',
-                    source: 'manual',
-                    variables
-                });
+                // Pattern ausführen using PatternExecutor
+                const executionId = await this.patternExecutor.executePattern(
+                    pattern,
+                    deviceId,
+                    'manual-execution',
+                    'manual',
+                    1, // repeatCount
+                    {
+                        username: 'Manual',
+                        sourceData: {},
+                        variables
+                    }
+                );
+
+                this.stats.patternsExecuted++;
 
                 res.json({
                     success: true,
@@ -1000,11 +1036,10 @@ class OpenShockPlugin {
             try {
                 const { executionId } = req.params;
 
-                if (this.activePatternExecutions.has(executionId)) {
-                    const execution = this.activePatternExecutions.get(executionId);
-                    execution.cancelled = true;
-                    this.activePatternExecutions.delete(executionId);
+                // Use PatternExecutor to cancel execution
+                const cancelled = this.patternExecutor.cancelExecution(executionId);
 
+                if (cancelled) {
                     res.json({
                         success: true,
                         message: 'Pattern execution stopped'
@@ -1153,8 +1188,13 @@ class OpenShockPlugin {
                 // Queue leeren
                 await this.queueManager.clearQueue();
 
-                // Alle Pattern-Executions stoppen
-                this.activePatternExecutions.clear();
+                // Cancel all active pattern executions
+                if (this.patternExecutor) {
+                    const activeExecutions = this.patternExecutor.getActiveExecutions();
+                    activeExecutions.forEach(exec => {
+                        this.patternExecutor.cancelExecution(exec.executionId);
+                    });
+                }
 
                 // Stats
                 this.stats.emergencyStops++;
@@ -1281,7 +1321,8 @@ class OpenShockPlugin {
                         queueSize: queueStatus.queueSize,
                         queuePending: queueStatus.pending,
                         queueProcessing: queueStatus.processing,
-                        activePatternExecutions: this.activePatternExecutions.size,
+                        activePatternExecutions: this.patternExecutor.getActiveExecutions().length,
+                        patternExecutorStats: this.patternExecutor.getStats(),
                         devicesCount: this.devices.length,
                         mappingsCount: this.mappingEngine.getAllMappings().length,
                         patternsCount: this.patternEngine.getAllPatterns().length
@@ -1949,24 +1990,43 @@ class OpenShockPlugin {
             return;
         }
 
-        // In Queue einfügen
-        this.queueManager.addItem({
-            id: `cmd-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-            type: 'command',
-            deviceId,
-            deviceName: device.name,
-            commandType,
-            intensity,
-            duration,
-            userId,
-            username,
-            source,
-            sourceData,
-            timestamp: Date.now(),
-            priority: action.priority || 5
-        });
+        // Determine repeat count from source data (e.g., gift repeatCount)
+        const repeatCount = (sourceData && sourceData.repeatCount) ? sourceData.repeatCount : 1;
 
-        this.stats.queuedCommands++;
+        if (repeatCount > 1) {
+            this.api.log(`Command will repeat ${repeatCount} times due to gift multiplier`, 'info');
+        }
+
+        // Enqueue commands sequentially with duration-based spacing
+        const safetyMargin = 200; // 200ms safety buffer between commands
+        const baseTimestamp = Date.now();
+
+        for (let i = 0; i < repeatCount; i++) {
+            // Calculate scheduled time with duration + safety margin spacing
+            const scheduledTime = baseTimestamp + (i * (duration + safetyMargin));
+
+            this.queueManager.addItem({
+                id: `cmd-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 11)}`,
+                type: 'command',
+                deviceId,
+                deviceName: device.name,
+                commandType,
+                intensity,
+                duration,
+                userId,
+                username,
+                source,
+                sourceData,
+                timestamp: scheduledTime,
+                priority: action.priority || 5,
+                repeatIndex: i,
+                totalRepeats: repeatCount
+            });
+
+            this.stats.queuedCommands++;
+        }
+
+        this.api.log(`Queued ${repeatCount} command(s) for ${device.name}`, 'info');
     }
 
     /**
@@ -1990,89 +2050,28 @@ class OpenShockPlugin {
             return null;
         }
 
-        // Pattern ausführen and return executionId
-        return await this._executePattern(pattern, device, {
+        // Determine repeat count from source data (e.g., gift repeatCount)
+        let repeatCount = 1;
+        if (sourceData && sourceData.repeatCount) {
+            repeatCount = sourceData.repeatCount;
+            this.api.log(`Pattern will repeat ${repeatCount} times due to gift multiplier`, 'info');
+        }
+
+        // Use PatternExecutor for sequential execution with queue feedback
+        const executionId = await this.patternExecutor.executePattern(
+            pattern,
+            deviceId,
             userId,
-            username,
             source,
-            sourceData,
-            variables
-        });
-    }
-
-    /**
-     * Pattern ausführen (alle Steps in Queue)
-     */
-    async _executePattern(pattern, device, context) {
-        const executionId = `pattern-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-
-        this.api.log(`[Pattern Execution] Starting pattern "${pattern.name}" (ID: ${pattern.id}) on device "${device.name}" (ID: ${device.id})`, 'info');
-        this.api.log(`[Pattern Execution] Pattern has ${pattern.steps?.length || 0} steps`, 'info');
-
-        // Execution tracken
-        this.activePatternExecutions.set(executionId, {
-            patternId: pattern.id,
-            patternName: pattern.name,
-            deviceId: device.id,
-            deviceName: device.name,
-            startTime: Date.now(),
-            cancelled: false
-        });
-
-        // Pattern-Steps direkt aus pattern.steps verwenden
-        const steps = pattern.steps || [];
-
-        if (steps.length === 0) {
-            this.api.log(`[Pattern Execution] Warning: Pattern "${pattern.name}" has no steps!`, 'warn');
-            return executionId;
-        }
-
-        // Calculate cumulative delay for each command step
-        // Pause steps add to the cumulative delay, command steps use the cumulative delay
-        let cumulativeDelay = 0;
-        let queuedSteps = 0;
-        const baseTimestamp = Date.now();
-
-        for (let i = 0; i < steps.length; i++) {
-            const step = steps[i];
-
-            if (step.type === 'pause') {
-                // Pause steps add to the cumulative delay for subsequent commands
-                cumulativeDelay += step.duration || 0;
-                this.api.log(`[Pattern Execution] Step ${i}: Pause (${step.duration}ms) - cumulative delay now ${cumulativeDelay}ms`, 'debug');
-                continue;
+            repeatCount,
+            {
+                username,
+                sourceData,
+                variables
             }
+        );
 
-            // For command steps (shock, vibrate, sound), schedule with cumulative delay
-            const scheduledTime = baseTimestamp + cumulativeDelay + (step.delay || 0);
-            
-            this.api.log(`[Pattern Execution] Step ${i}: ${step.type} (intensity: ${step.intensity}, duration: ${step.duration}ms) scheduled at +${cumulativeDelay}ms`, 'debug');
-
-            this.queueManager.addItem({
-                id: `${executionId}-step-${i}`,
-                type: 'command',
-                deviceId: device.id,
-                deviceName: device.name,
-                commandType: step.type,
-                intensity: step.intensity,
-                duration: step.duration,
-                userId: context.userId,
-                username: context.username,
-                source: `pattern:${pattern.name}`,
-                sourceData: context.sourceData,
-                timestamp: scheduledTime,
-                priority: 5,
-                executionId,
-                stepIndex: i
-            });
-            queuedSteps++;
-
-            // After a command step, add its duration to cumulative delay
-            // This ensures the next command waits for this one to complete
-            cumulativeDelay += step.duration || 0;
-        }
-
-        this.api.log(`[Pattern Execution] Queued ${queuedSteps} steps for pattern "${pattern.name}" (executionId: ${executionId}), total duration: ${cumulativeDelay}ms`, 'info');
+        this.api.log(`Pattern execution started with ID: ${executionId}`, 'info');
         this.stats.patternsExecuted++;
 
         return executionId;
@@ -2083,14 +2082,8 @@ class OpenShockPlugin {
      */
     async _processQueueItem(item) {
         try {
-            // Check ob Execution gecancelt wurde
-            if (item.executionId) {
-                const execution = this.activePatternExecutions.get(item.executionId);
-                if (execution && execution.cancelled) {
-                    this.api.log(`Pattern execution ${item.executionId} was cancelled, skipping step`, 'info');
-                    return true; // Als erfolgreich markieren (damit keine Retries)
-                }
-            }
+            // Pattern execution cancellation is now handled by QueueManager
+            // via the shouldCancelExecution callback set during initialization
 
             // Safety-Check
             const safetyCheck = this.safetyManager.validateCommand({
@@ -2151,18 +2144,8 @@ class OpenShockPlugin {
                 source: item.source
             });
 
-            // Wenn Pattern-Step, checken ob letzter Step
-            if (item.executionId) {
-                const execution = this.activePatternExecutions.get(item.executionId);
-                if (execution) {
-                    // Prüfen ob alle Steps verarbeitet wurden
-                    // (Wird vereinfacht - in Produktion würde man die Steps tracken)
-                    // Für jetzt: Execution nach 10 Sekunden entfernen
-                    setTimeout(() => {
-                        this.activePatternExecutions.delete(item.executionId);
-                    }, 10000);
-                }
-            }
+            // Pattern step tracking is now handled by PatternExecutor
+            // No need to manage activePatternExecutions here
 
             return true;
 
@@ -2572,7 +2555,7 @@ class OpenShockPlugin {
             ...this.stats,
             uptime,
             queueSize: queueStatus.queueSize || 0,
-            activePatternExecutions: this.activePatternExecutions.size
+            activePatternExecutions: this.patternExecutor ? this.patternExecutor.getActiveExecutions().length : 0
         });
     }
 
@@ -2624,6 +2607,14 @@ class OpenShockPlugin {
                 this.queueManager.stopProcessing();
             }
 
+            // Cancel all active pattern executions
+            if (this.patternExecutor) {
+                const activeExecutions = this.patternExecutor.getActiveExecutions();
+                activeExecutions.forEach(exec => {
+                    this.patternExecutor.cancelExecution(exec.executionId);
+                });
+            }
+
             // Safety Manager cleanup
             if (this.safetyManager && typeof this.safetyManager.destroy === 'function') {
                 this.safetyManager.destroy();
@@ -2634,9 +2625,6 @@ class OpenShockPlugin {
                 this.patternEngine.stopAllExecutions();
                 this.patternEngine.cleanupExecutions(0); // Cleanup all
             }
-
-            // Pattern-Executions stoppen
-            this.activePatternExecutions.clear();
 
             // Daten speichern
             await this.saveData();

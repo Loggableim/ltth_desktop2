@@ -321,8 +321,17 @@ class QueueManager extends EventEmitter {
       // Process item
       await this._processNextItem(item);
 
-      // Delay before next item
-      if (this.isProcessing) {
+      // Duration-aware delay before next item
+      // Wait for actual command duration + safety margin to ensure command completes
+      if (this.isProcessing && item.command) {
+        const commandDuration = item.command.duration || 0; // in ms
+        const safetyMargin = 200; // 200ms safety buffer
+        const totalWaitTime = Math.max(this.processingDelay, commandDuration + safetyMargin);
+        
+        this.logger.debug(`[QueueManager] Waiting ${totalWaitTime}ms before next command (duration: ${commandDuration}ms + safety: ${safetyMargin}ms)`);
+        await this._sleep(totalWaitTime);
+      } else if (this.isProcessing) {
+        // Fallback to default processing delay if no command duration
         await this._sleep(this.processingDelay);
       }
 
