@@ -1137,7 +1137,7 @@ class FishSpeechEngine {
      * Returns a readable stream for immediate playback
      * @param {string} text - Text to synthesize
      * @param {string} voiceId - Voice ID or reference ID
-     * @param {number} speed - Speech speed (not used by Fish.audio API)
+     * @param {number} speed - Speech speed multiplier (included for API consistency but not used by Fish.audio API, which doesn't support speed modification)
      * @param {Object} options - Additional options (same as synthesize)
      * @returns {Promise<Object>} Object with stream and metadata
      */

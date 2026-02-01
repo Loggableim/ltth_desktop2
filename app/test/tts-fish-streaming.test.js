@@ -254,7 +254,7 @@ return runTest('synthesisOptions should be passed to streaming synthesis', async
     
     // Verify options are stored and used
     assert.ok(mainCode.includes('item.synthesisOptions'), 'Should use item.synthesisOptions');
-    assert.ok(mainCode.includes('synthesisOptions: isStreaming ? synthesisOptions'), 'Should store synthesisOptions in queue item');
+    assert.ok(mainCode.includes('isStreaming && { synthesisOptions }'), 'Should conditionally include synthesisOptions in queue item');
 });
 
 }).then(() => {
