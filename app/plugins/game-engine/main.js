@@ -1341,6 +1341,31 @@ class GameEnginePlugin {
       }
     });
 
+    // API: Toggle Plinko debug mode
+    this.api.registerRoute('POST', '/api/game-engine/plinko/debug', (req, res) => {
+      try {
+        const { enabled } = req.body;
+        
+        if (typeof enabled !== 'boolean') {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Invalid enabled parameter. Must be a boolean.' 
+          });
+        }
+        
+        this.plinkoGame.setDebugMode(enabled);
+        
+        res.json({ 
+          success: true, 
+          debugMode: enabled,
+          message: `Debug mode ${enabled ? 'enabled' : 'disabled'}`
+        });
+      } catch (error) {
+        this.logger.error(`Error toggling debug mode: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
     // === WHEEL (GLÜCKSRAD) API ROUTES ===
 
     // API: Get all wheels
