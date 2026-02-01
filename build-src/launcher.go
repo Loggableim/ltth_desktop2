@@ -947,7 +947,7 @@ func main() {
 	hasUpdate, latestSHA, err := checkForUpdates()
 	if err != nil {
 		fmt.Printf("⚠️  Update-Pruefung fehlgeschlagen: %v\n", err)
-		fmt.Println("Fahre mit lokalem Stand fort...\n")
+		fmt.Println("Fahre mit lokalem Stand fort...")
 	} else if hasUpdate {
 		fmt.Println()
 		fmt.Println("===============================================")
@@ -964,7 +964,7 @@ func main() {
 			err := downloadUpdate(latestSHA)
 			if err != nil {
 				fmt.Printf("❌ Update fehlgeschlagen: %v\n", err)
-				fmt.Println("Fahre mit lokalem Stand fort...\n")
+				fmt.Println("Fahre mit lokalem Stand fort...")
 			} else {
 				fmt.Println("Hinweis: npm install wird automatisch ausgefuehrt falls noetig...")
 				fmt.Println()
