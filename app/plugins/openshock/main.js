@@ -25,6 +25,7 @@ const MappingEngine = require('./helpers/mappingEngine');
 const PatternEngine = require('./helpers/patternEngine');
 const SafetyManager = require('./helpers/safetyManager');
 const QueueManager = require('./helpers/queueManager');
+const { SAFETY_MARGIN_MS } = require('./helpers/queueManager');
 const PatternExecutor = require('./helpers/patternExecutor');
 const ZappieHellManager = require('./helpers/zappieHellManager');
 
@@ -1998,15 +1999,15 @@ class OpenShockPlugin {
         }
 
         // Enqueue commands sequentially with duration-based spacing
-        const safetyMargin = 200; // 200ms safety buffer between commands
         const baseTimestamp = Date.now();
+        const baseId = Date.now();
 
         for (let i = 0; i < repeatCount; i++) {
             // Calculate scheduled time with duration + safety margin spacing
-            const scheduledTime = baseTimestamp + (i * (duration + safetyMargin));
+            const scheduledTime = baseTimestamp + (i * (duration + SAFETY_MARGIN_MS));
 
             this.queueManager.addItem({
-                id: `cmd-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 11)}`,
+                id: `cmd-${baseId}-${i}-${Math.random().toString(36).substring(2, 11)}`,
                 type: 'command',
                 deviceId,
                 deviceName: device.name,

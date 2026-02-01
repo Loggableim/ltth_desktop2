@@ -8,6 +8,9 @@
 const { nanoid } = require('nanoid');
 const EventEmitter = require('events');
 
+// Constants
+const SAFETY_MARGIN_MS = 200; // Safety buffer between commands to ensure complete execution
+
 class QueueManager extends EventEmitter {
   /**
    * Create a new QueueManager
@@ -325,10 +328,9 @@ class QueueManager extends EventEmitter {
       // Wait for actual command duration + safety margin to ensure command completes
       if (this.isProcessing && item.command) {
         const commandDuration = item.command.duration || 0; // in ms
-        const safetyMargin = 200; // 200ms safety buffer
-        const totalWaitTime = Math.max(this.processingDelay, commandDuration + safetyMargin);
+        const totalWaitTime = Math.max(this.processingDelay, commandDuration + SAFETY_MARGIN_MS);
         
-        this.logger.debug(`[QueueManager] Waiting ${totalWaitTime}ms before next command (duration: ${commandDuration}ms + safety: ${safetyMargin}ms)`);
+        this.logger.debug(`[QueueManager] Waiting ${totalWaitTime}ms before next command (duration: ${commandDuration}ms + safety: ${SAFETY_MARGIN_MS}ms)`);
         await this._sleep(totalWaitTime);
       } else if (this.isProcessing) {
         // Fallback to default processing delay if no command duration
@@ -977,3 +979,4 @@ class QueueManager extends EventEmitter {
 }
 
 module.exports = QueueManager;
+module.exports.SAFETY_MARGIN_MS = SAFETY_MARGIN_MS;
