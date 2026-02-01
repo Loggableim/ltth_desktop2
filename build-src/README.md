@@ -9,6 +9,31 @@ This directory contains the source code for the Windows launchers.
 
 ## Launcher Features
 
+### GitHub API Auto-Update
+Der Launcher prüft automatisch bei jedem Start ob Updates verfügbar sind und lädt diese via GitHub API herunter.
+
+**Update-Mechanismus:**
+- Prüft bei jedem Start nach Updates (max. 1x pro 24h)
+- Vergleicht neuesten Commit SHA mit lokalem Stand (`runtime/version_sha.txt`)
+- User-Prompt für Update-Installation
+- Download nur relevanter Dateien:
+  - ✅ `app/`, `plugins/`, `game-engine/`, `package.json`, `package-lock.json`
+  - ❌ `launcher.exe`, `runtime/`, `logs/`, `data/`, `node_modules/`, `.git/`
+- Progress-Anzeige während Download
+- Automatische npm install nach Update falls nötig
+- Robuste Fehlerbehandlung (min. 90% Erfolgsrate)
+
+**Rate Limiting:**
+- Max. 1 Update-Check pro 24h
+- Timestamp gespeichert in `runtime/last_update_check.txt`
+- Aktueller SHA gespeichert in `runtime/version_sha.txt`
+
+**Sicherheit:**
+- Keine Credentials nötig (GitHub API read-only)
+- `launcher.exe` wird NIE überschrieben
+- User-Daten geschützt (`runtime/`, `logs/`, `data/`)
+- 30 Sekunden Timeout pro Request
+
 ### Automatische Node.js Installation
 Der Launcher installiert automatisch eine portable Node.js Version (v20.18.1 LTS) falls keine Installation gefunden wird.
 Keine User-Interaktion nötig.
@@ -47,7 +72,9 @@ LTTH_Desktop/
 │   │   ├── npx.cmd
 │   │   ├── version.txt          # "20.18.1"
 │   │   └── node_modules/
-│   └── node.backup/              # Optional: Backup bei Update
+│   ├── node.backup/              # Optional: Backup bei Update
+│   ├── version_sha.txt           # Aktueller Git Commit SHA
+│   └── last_update_check.txt     # Timestamp letzter Update-Check
 ├── app/
 └── ...
 ```
