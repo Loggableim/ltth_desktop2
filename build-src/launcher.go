@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const (
@@ -133,8 +134,13 @@ func downloadFile(filepath, url string) error {
 	}
 	defer out.Close()
 	
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 300 * time.Second, // 5 minutes for large downloads
+	}
+	
 	// Get the data
-	resp, err := http.Get(url)
+	resp, err := client.Get(url)
 	if err != nil {
 		return err
 	}
@@ -327,9 +333,9 @@ func installNodePortable() (string, error) {
 	// Download with retry logic
 	var downloadErr error
 	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		if i > 0 {
-			fmt.Printf("\nDownload fehlgeschlagen, Versuch %d von %d...\n", i+1, maxRetries)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if attempt > 1 {
+			fmt.Printf("\nDownload fehlgeschlagen, Versuch %d von %d...\n", attempt, maxRetries)
 		}
 		
 		downloadErr = downloadFile(archivePath, downloadURL)
@@ -380,6 +386,8 @@ func installNodePortable() (string, error) {
 }
 
 // checkNodeUpdate checks if an update is available
+// Note: Uses simple string comparison. Works for same version format (e.g., "20.18.1" vs "20.18.0")
+// but may not work correctly for semantic version comparison with different digit counts.
 func checkNodeUpdate(nodeDir string) (bool, error) {
 	installedVersion := getInstalledNodeVersion(nodeDir)
 	if installedVersion == "" {
@@ -458,8 +466,10 @@ func updateNodePortable() error {
 	// Move new version to final location
 	if err := os.Rename(nodeNewDir, nodeDir); err != nil {
 		// Try to restore backup
-		os.Rename(nodeBackupDir, nodeDir)
-		return fmt.Errorf("installation fehlgeschlagen: %v", err)
+		if restoreErr := os.Rename(nodeBackupDir, nodeDir); restoreErr != nil {
+			return fmt.Errorf("installation fehlgeschlagen: %v (Backup-Wiederherstellung auch fehlgeschlagen: %v)", err, restoreErr)
+		}
+		return fmt.Errorf("installation fehlgeschlagen: %v (alte Version wiederhergestellt)", err)
 	}
 	
 	// Write new version file
@@ -473,13 +483,37 @@ func updateNodePortable() error {
 	return nil
 }
 
-func installDependencies(appDir string) error {
+func installDependencies(appDir, nodePath string) error {
 	fmt.Println("Installiere Abhaengigkeiten... (Das kann beim ersten Start ein paar Minuten dauern)")
 	
+	// Determine npm path based on Node.js path
+	var npmPath string
+	if strings.Contains(nodePath, filepath.Join("runtime", "node")) {
+		// Use portable npm
+		exePath, err := os.Executable()
+		if err == nil {
+			exeDir := filepath.Dir(exePath)
+			nodeDir := filepath.Join(exeDir, "runtime", "node")
+			if runtime.GOOS == "windows" {
+				npmPath = filepath.Join(nodeDir, "npm.cmd")
+			} else {
+				npmPath = filepath.Join(nodeDir, "bin", "npm")
+			}
+		}
+	}
+	
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
+	if npmPath != "" && runtime.GOOS == "windows" {
+		// Use portable npm on Windows
+		cmd = exec.Command("cmd", "/C", npmPath, "install", "--cache", "false")
+	} else if npmPath != "" {
+		// Use portable npm on Unix
+		cmd = exec.Command(npmPath, "install", "--cache", "false")
+	} else if runtime.GOOS == "windows" {
+		// Fallback to global npm on Windows
 		cmd = exec.Command("cmd", "/C", "npm", "install", "--cache", "false")
 	} else {
+		// Fallback to global npm on Unix
 		cmd = exec.Command("npm", "install", "--cache", "false")
 	}
 	
@@ -588,7 +622,7 @@ func main() {
 	
 	// Check and install node_modules if needed
 	if !checkNodeModules(appDir) {
-		err = installDependencies(appDir)
+		err = installDependencies(appDir, nodePath)
 		if err != nil {
 			fmt.Println()
 			fmt.Println("===============================================")
