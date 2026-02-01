@@ -2,6 +2,8 @@ package main
 
 import (
 	"archive/zip"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,7 +21,47 @@ const (
 	nodeWinURL   = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-win-x64.zip"
 	nodeLinuxURL = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz"
 	nodeMacURL   = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-darwin-x64.tar.gz"
+	
+	// GitHub API settings for auto-update
+	githubOwner      = "Loggableim"
+	githubRepo       = "ltth_desktop2"
+	githubBranch     = "main"
+	githubAPIURL     = "https://api.github.com"
+	updateCheckFile  = "runtime/last_update_check.txt"
+	versionSHAFile   = "runtime/version_sha.txt"
+	updateInterval   = 24 * time.Hour
 )
+
+// GitHub API response structures for auto-update
+type GitHubCommit struct {
+	SHA    string `json:"sha"`
+	Commit struct {
+		Message string `json:"message"`
+		Author  struct {
+			Name string    `json:"name"`
+			Date time.Time `json:"date"`
+		} `json:"author"`
+	} `json:"commit"`
+}
+
+type GitHubTreeItem struct {
+	Path string `json:"path"`
+	Type string `json:"type"` // "blob" or "tree"
+	SHA  string `json:"sha"`
+	Size int    `json:"size"`
+	URL  string `json:"url"`
+}
+
+type GitHubTree struct {
+	Tree      []GitHubTreeItem `json:"tree"`
+	Truncated bool             `json:"truncated"`
+}
+
+type GitHubBlob struct {
+	Content  string `json:"content"`
+	Encoding string `json:"encoding"` // "base64"
+	Size     int    `json:"size"`
+}
 
 // writeCounter tracks download progress
 type writeCounter struct {
@@ -552,9 +594,388 @@ func pause() {
 	fmt.Scanln()
 }
 
+// ============================================
+// Auto-Update Functions
+// ============================================
+
+// shouldCheckForUpdates checks if enough time has passed since last update check (rate limiting)
+func shouldCheckForUpdates() bool {
+	exePath, err := os.Executable()
+	if err != nil {
+		return true // Check anyway if we can't determine path
+	}
+	
+	exeDir := filepath.Dir(exePath)
+	checkFilePath := filepath.Join(exeDir, updateCheckFile)
+	
+	data, err := os.ReadFile(checkFilePath)
+	if err != nil {
+		return true // No previous check, so check now
+	}
+	
+	lastCheck, err := time.Parse(time.RFC3339, strings.TrimSpace(string(data)))
+	if err != nil {
+		return true // Invalid timestamp, check again
+	}
+	
+	return time.Since(lastCheck) >= updateInterval
+}
+
+// updateLastCheckTime saves the current time as last update check time
+func updateLastCheckTime() {
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	
+	exeDir := filepath.Dir(exePath)
+	runtimeDir := filepath.Join(exeDir, "runtime")
+	
+	// Ensure runtime directory exists
+	os.MkdirAll(runtimeDir, 0755)
+	
+	checkFilePath := filepath.Join(exeDir, updateCheckFile)
+	timestamp := time.Now().Format(time.RFC3339)
+	os.WriteFile(checkFilePath, []byte(timestamp), 0644)
+}
+
+// getLocalCommitSHA reads the local commit SHA from version_sha.txt
+func getLocalCommitSHA() (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	
+	exeDir := filepath.Dir(exePath)
+	shaFilePath := filepath.Join(exeDir, versionSHAFile)
+	
+	data, err := os.ReadFile(shaFilePath)
+	if err != nil {
+		return "", err
+	}
+	
+	return strings.TrimSpace(string(data)), nil
+}
+
+// writeLocalCommitSHA writes the commit SHA to version_sha.txt
+func writeLocalCommitSHA(sha string) error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	
+	exeDir := filepath.Dir(exePath)
+	runtimeDir := filepath.Join(exeDir, "runtime")
+	
+	// Ensure runtime directory exists
+	os.MkdirAll(runtimeDir, 0755)
+	
+	shaFilePath := filepath.Join(exeDir, versionSHAFile)
+	return os.WriteFile(shaFilePath, []byte(sha), 0644)
+}
+
+// getLatestCommitSHA fetches the latest commit SHA from GitHub
+func getLatestCommitSHA() (string, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/commits/%s",
+		githubAPIURL, githubOwner, githubRepo, githubBranch)
+	
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+	
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+	
+	var commit GitHubCommit
+	if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil {
+		return "", err
+	}
+	
+	return commit.SHA, nil
+}
+
+// checkForUpdates checks if an update is available
+func checkForUpdates() (bool, string, error) {
+	// 1. Check rate limiting
+	if !shouldCheckForUpdates() {
+		return false, "", nil
+	}
+	
+	// 2. Get latest commit SHA from GitHub
+	latestSHA, err := getLatestCommitSHA()
+	if err != nil {
+		return false, "", err
+	}
+	
+	// 3. Read local SHA
+	localSHA, err := getLocalCommitSHA()
+	if err != nil {
+		// First installation - save current SHA
+		writeLocalCommitSHA(latestSHA)
+		return false, "", nil
+	}
+	
+	// 4. Compare
+	if localSHA != latestSHA {
+		return true, latestSHA, nil
+	}
+	
+	updateLastCheckTime()
+	return false, "", nil
+}
+
+// getRepositoryTree fetches the repository tree from GitHub
+func getRepositoryTree(commitSHA string) (*GitHubTree, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/git/trees/%s?recursive=1",
+		githubAPIURL, githubOwner, githubRepo, commitSHA)
+	
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+	
+	var tree GitHubTree
+	if err := json.NewDecoder(resp.Body).Decode(&tree); err != nil {
+		return nil, err
+	}
+	
+	return &tree, nil
+}
+
+// filterRelevantFiles filters the tree items to only include files we want to update
+func filterRelevantFiles(items []GitHubTreeItem) []GitHubTreeItem {
+	var filtered []GitHubTreeItem
+	
+	// Whitelist - paths we want to update
+	allowedPaths := []string{
+		"app/",
+		"plugins/",
+		"game-engine/",
+		"package.json",
+		"package-lock.json",
+	}
+	
+	// Blacklist - paths we never want to touch
+	excludePaths := []string{
+		"launcher.exe",
+		"runtime/",
+		"logs/",
+		"data/",
+		"node_modules/",
+		".git/",
+		"build-src/",
+		".github/",
+		".gitignore",
+		"README.md",
+		"LICENSE",
+	}
+	
+	for _, item := range items {
+		// Check whitelist
+		allowed := false
+		for _, prefix := range allowedPaths {
+			if strings.HasPrefix(item.Path, prefix) || item.Path == strings.TrimSuffix(prefix, "/") {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			continue
+		}
+		
+		// Check blacklist
+		excluded := false
+		for _, prefix := range excludePaths {
+			if strings.HasPrefix(item.Path, prefix) || item.Path == strings.TrimSuffix(prefix, "/") {
+				excluded = true
+				break
+			}
+		}
+		if excluded {
+			continue
+		}
+		
+		filtered = append(filtered, item)
+	}
+	
+	return filtered
+}
+
+// downloadFileFromGitHub downloads a single file from GitHub using the Blob API
+func downloadFileFromGitHub(baseDir string, file GitHubTreeItem) error {
+	// Create directory structure
+	filePath := filepath.Join(baseDir, file.Path)
+	os.MkdirAll(filepath.Dir(filePath), 0755)
+	
+	// If it's a tree (directory), just create it
+	if file.Type == "tree" {
+		return os.MkdirAll(filePath, 0755)
+	}
+	
+	// Download blob
+	url := fmt.Sprintf("%s/repos/%s/%s/git/blobs/%s",
+		githubAPIURL, githubOwner, githubRepo, file.SHA)
+	
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+	
+	// Parse JSON
+	var blob GitHubBlob
+	if err := json.NewDecoder(resp.Body).Decode(&blob); err != nil {
+		return err
+	}
+	
+	// Decode Base64 content
+	content, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(blob.Content, "\n", ""))
+	if err != nil {
+		return err
+	}
+	
+	// Write file
+	return os.WriteFile(filePath, content, 0644)
+}
+
+// downloadUpdate downloads and applies an update from GitHub
+func downloadUpdate(commitSHA string) error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("kann Programmverzeichnis nicht ermitteln: %v", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	
+	fmt.Println()
+	fmt.Println("===============================================")
+	fmt.Println("  Update wird heruntergeladen...")
+	fmt.Println("===============================================")
+	fmt.Println()
+	
+	// 1. Get repository tree
+	tree, err := getRepositoryTree(commitSHA)
+	if err != nil {
+		return fmt.Errorf("konnte Repository-Tree nicht abrufen: %v", err)
+	}
+	
+	// 2. Filter relevant files
+	relevantFiles := filterRelevantFiles(tree.Tree)
+	
+	if len(relevantFiles) == 0 {
+		fmt.Println("Keine Dateien zu aktualisieren.")
+		return nil
+	}
+	
+	fmt.Printf("Lade %d Dateien herunter...\n\n", len(relevantFiles))
+	
+	// 3. Download each file
+	successCount := 0
+	for i, file := range relevantFiles {
+		fmt.Printf("[%d/%d] %s\n", i+1, len(relevantFiles), file.Path)
+		
+		err := downloadFileFromGitHub(exeDir, file)
+		if err != nil {
+			fmt.Printf("  ⚠️  Fehler: %v\n", err)
+			continue
+		}
+		successCount++
+	}
+	
+	fmt.Println()
+	
+	// Check if enough files were downloaded (>90%)
+	successRate := float64(successCount) / float64(len(relevantFiles)) * 100
+	if successRate < 90 {
+		return fmt.Errorf("zu viele Fehler beim Download (%.1f%% erfolgreich)", successRate)
+	}
+	
+	// 4. Write new SHA
+	if err := writeLocalCommitSHA(commitSHA); err != nil {
+		return fmt.Errorf("konnte version_sha.txt nicht aktualisieren: %v", err)
+	}
+	
+	fmt.Println("✅ Update erfolgreich installiert!")
+	fmt.Println()
+	
+	return nil
+}
+
+// End of Auto-Update Functions
+// ============================================
+
 func main() {
 	printHeader()
 	
+	// === Auto-Update Check ===
+	fmt.Println("Pruefe auf Updates...")
+	hasUpdate, latestSHA, err := checkForUpdates()
+	if err != nil {
+		fmt.Printf("⚠️  Update-Pruefung fehlgeschlagen: %v\n", err)
+		fmt.Println("Fahre mit lokalem Stand fort...\n")
+	} else if hasUpdate {
+		fmt.Println()
+		fmt.Println("===============================================")
+		fmt.Println("  Update verfuegbar!")
+		fmt.Println("===============================================")
+		fmt.Println()
+		fmt.Print("Moechtest du das Update jetzt installieren? (J/N): ")
+		
+		var input string
+		fmt.Scanln(&input)
+		
+		input = strings.ToUpper(strings.TrimSpace(input))
+		if input == "J" || input == "Y" || input == "" {
+			err := downloadUpdate(latestSHA)
+			if err != nil {
+				fmt.Printf("❌ Update fehlgeschlagen: %v\n", err)
+				fmt.Println("Fahre mit lokalem Stand fort...\n")
+			} else {
+				fmt.Println("Hinweis: npm install wird automatisch ausgefuehrt falls noetig...")
+				fmt.Println()
+			}
+		} else {
+			fmt.Println("Update uebersprungen.")
+			fmt.Println()
+		}
+	}
+	
+	// === Node.js Check ===
 	// Check Node.js installation
 	nodePath, err := checkNodeJS()
 	if err != nil {
