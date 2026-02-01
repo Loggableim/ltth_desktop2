@@ -223,6 +223,12 @@ CSV-Export mit Filter:
 - `streamEnd` Event beendet alle Sessions automatisch
 - Heartbeat läuft jede Minute
 
+### API Endpoints geben falsche Antworten
+- **Fix (v1.0.1)**: Route-Registrierung wurde korrigiert
+- Spezifische Routes (z.B. `/stats/summary`) müssen vor parametrisierten Routes (`:username`) registriert werden
+- Express matcht Routes in der Reihenfolge ihrer Registrierung
+- Dies verhindert, dass `/stats/summary` als `/:username` mit `username="stats"` interpretiert wird
+
 ## 📦 Dependencies
 
 - `better-sqlite3` - SQLite-Datenbank
@@ -230,6 +236,12 @@ CSV-Export mit Filter:
 - `express` - HTTP-Server
 
 ## 🔄 Version History
+
+### v1.0.1 (2026-02-01)
+- **Fix**: Corrected API route registration order
+  - Specific routes now registered before parameterized routes
+  - Prevents Express routing conflicts
+  - Fixes plugin activation issues
 
 ### v1.0.0 (2024)
 - Initial Release
