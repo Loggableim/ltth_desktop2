@@ -26,7 +26,7 @@ class PlinkoGame {
     this.unifiedQueue = null; // Set by main.js
     
     // Debug flag - can be set via config or environment variable
-    this.debugMode = process.env.PLINKO_DEBUG === 'true' || false;
+    this.debugMode = process.env.PLINKO_DEBUG === 'true';
     
     // Track active balls in-flight
     this.activeBalls = new Map(); // ballId -> { username, bet, timestamp }
