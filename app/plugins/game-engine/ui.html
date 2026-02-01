@@ -1257,6 +1257,14 @@
         </div>
 
         <div class="form-group">
+          <label>
+            <input type="checkbox" id="plinko-debug-mode">
+            🔍 Debug-Logging aktivieren
+          </label>
+          <small style="color: #888;">Aktiviert detaillierte Logs für OpenShock-Integration und Ball-Events (nur für Entwickler/Troubleshooting).</small>
+        </div>
+
+        <div class="form-group">
           <label>Maximale Bälle pro Drop:</label>
           <input type="number" id="plinko-max-balls" value="5" min="1" max="20" step="1">
         </div>
@@ -4159,6 +4167,31 @@
     // Plinko event listeners
     document.getElementById('savePlinkoSettingsBtn').addEventListener('click', savePlinkoSettings);
     document.getElementById('refreshPlinkoStatsBtn').addEventListener('click', loadPlinkoStats);
+    
+    // Plinko debug mode toggle
+    document.getElementById('plinko-debug-mode')?.addEventListener('change', async (e) => {
+      const enabled = e.target.checked;
+      try {
+        const response = await fetch('/api/game-engine/plinko/debug', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          showMessage(`🔍 Debug-Modus ${enabled ? 'aktiviert' : 'deaktiviert'}`, 'success');
+        } else {
+          showMessage('Fehler beim Umschalten des Debug-Modus: ' + result.error, 'error');
+          // Revert checkbox on error
+          e.target.checked = !enabled;
+        }
+      } catch (error) {
+        showMessage('Fehler: ' + error.message, 'error');
+        // Revert checkbox on error
+        e.target.checked = !enabled;
+      }
+    });
     
     // Plinko board selector
     document.getElementById('plinko-board-selector')?.addEventListener('change', async (e) => {
