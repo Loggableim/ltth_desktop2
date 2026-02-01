@@ -25,6 +25,9 @@ class PlinkoGame {
     this.wheelGame = null;
     this.unifiedQueue = null; // Set by main.js
     
+    // Debug flag - can be set via config or environment variable
+    this.debugMode = process.env.PLINKO_DEBUG === 'true';
+    
     // Track active balls in-flight
     this.activeBalls = new Map(); // ballId -> { username, bet, timestamp }
     this.batchTrackers = new Map(); // batchId -> { remaining, totalBet, totalWinnings, slots: [] }
@@ -632,6 +635,8 @@ class PlinkoGame {
   async handleBallLanded(ballId, slotIndex) {
     const ballData = this.activeBalls.get(ballId);
     
+    this._debugLog(`Ball landed: ${ballId} in slot ${slotIndex}`);
+    
     if (!ballData) {
       this.logger.warn(`Ball ${ballId} not found in active balls`);
       return { success: false, error: 'Ball not found' };
@@ -664,6 +669,13 @@ class PlinkoGame {
     const slot = config.slots[slotIndex];
     const multiplier = slot.multiplier;
 
+    this._debugLog(`Slot configuration:`, {
+      slotIndex,
+      multiplier,
+      hasOpenshockReward: !!slot.openshockReward,
+      openshockEnabled: slot.openshockReward?.enabled
+    });
+
     // Calculate winnings
     // Note: Math.floor is used to ensure XP is always a whole number (no fractional XP)
     // This prevents precision issues and matches the XP system's integer-only behavior
@@ -679,8 +691,27 @@ class PlinkoGame {
     }
 
     // Trigger OpenShock reward if configured
+    this._debugLog('Checking OpenShock trigger conditions', {
+      hasRewardConfig: !!slot.openshockReward,
+      enabled: slot.openshockReward?.enabled,
+      username: ballData.username
+    });
+    
     if (slot.openshockReward && slot.openshockReward.enabled) {
+      this._debugLog('✅ Triggering OpenShock reward', {
+        username: ballData.username,
+        type: slot.openshockReward.type,
+        intensity: slot.openshockReward.intensity,
+        duration: slot.openshockReward.duration,
+        deviceCount: slot.openshockReward.deviceIds?.length || 0
+      });
+      
       await this.triggerOpenshockReward(ballData.username, slot.openshockReward, slotIndex);
+    } else {
+      this._debugLog('❌ OpenShock NOT triggered', {
+        reason: !slot.openshockReward ? 'No reward config' : 'Reward disabled',
+        slotIndex
+      });
     }
 
     // Record transaction (separate tables for test vs regular)
@@ -782,8 +813,26 @@ class PlinkoGame {
    */
   async triggerOpenshockReward(username, reward, slotIndex) {
     try {
+      this._debugLog('triggerOpenshockReward called', {
+        username,
+        slotIndex,
+        reward: {
+          enabled: reward.enabled,
+          type: reward.type,
+          intensity: reward.intensity,
+          duration: reward.duration,
+          deviceIds: reward.deviceIds
+        }
+      });
+
       // Get OpenShock plugin
       const openshockPlugin = this.api.pluginLoader?.loadedPlugins?.get('openshock');
+      
+      this._debugLog('OpenShock plugin lookup', {
+        found: !!openshockPlugin,
+        hasInstance: !!openshockPlugin?.instance
+      });
+      
       if (!openshockPlugin || !openshockPlugin.instance) {
         this.logger.warn('OpenShock plugin not available for reward trigger');
         return false;
@@ -833,6 +882,13 @@ class PlinkoGame {
         return false;
       }
 
+      this._debugLog(`Queuing ${targetDeviceIds.length} OpenShock commands`, {
+        devices: targetDeviceIds,
+        type,
+        intensity,
+        duration
+      });
+
       // Trigger for all selected devices in parallel
       let successCount = 0;
       const queuePromises = targetDeviceIds.map(targetDeviceId => {
@@ -872,6 +928,12 @@ class PlinkoGame {
         }
       });
 
+      this._debugLog('OpenShock trigger complete', {
+        successCount,
+        totalDevices: targetDeviceIds.length,
+        successRate: `${Math.round((successCount / targetDeviceIds.length) * 100)}%`
+      });
+
       // Emit event for overlay notification if at least one succeeded
       if (successCount > 0) {
         this.io.emit('plinko:openshock-triggered', {
@@ -890,6 +952,10 @@ class PlinkoGame {
       }
     } catch (error) {
       this.logger.error(`Failed to trigger OpenShock reward: ${error.message}`);
+      this._debugLog('OpenShock trigger error', {
+        error: error.message,
+        stack: error.stack
+      });
       return false;
     }
   }
@@ -971,6 +1037,31 @@ class PlinkoGame {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
     }
+  }
+
+  /**
+   * Debug log helper - only logs if debugMode is enabled
+   * @private
+   * @param {string} message - Debug message
+   * @param {object} data - Optional data to log
+   */
+  _debugLog(message, data = null) {
+    if (this.debugMode) {
+      if (data) {
+        this.logger.info(`🔍 [Plinko Debug] ${message}`, data);
+      } else {
+        this.logger.info(`🔍 [Plinko Debug] ${message}`);
+      }
+    }
+  }
+
+  /**
+   * Enable or disable debug mode
+   * @param {boolean} enabled - Debug mode state
+   */
+  setDebugMode(enabled) {
+    this.debugMode = enabled;
+    this.logger.info(`🔍 Plinko debug mode ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
