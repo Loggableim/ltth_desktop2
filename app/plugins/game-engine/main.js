@@ -2216,10 +2216,8 @@ class GameEnginePlugin {
           if (!board.enabled) continue;
           
           try {
-            // Parse gift_mappings from database (may be JSON string or object)
-            const mappings = typeof board.gift_mappings === 'string' 
-              ? JSON.parse(board.gift_mappings) 
-              : (board.gift_mappings || {});
+            // getAllBoards() returns already parsed giftMappings object
+            const mappings = board.giftMappings || {};
             
             // Try exact match
             if (mappings[normalizedGiftName]) {
@@ -2240,7 +2238,7 @@ class GameEnginePlugin {
             
             if (giftMapping) break;
           } catch (e) {
-            this.logger.error(`[PLINKO] Failed to parse gift_mappings for board ${board.id}: ${e.message}`);
+            this.logger.error(`[PLINKO] Failed to process gift_mappings for board ${board.id}: ${e.message}`);
           }
         }
         
