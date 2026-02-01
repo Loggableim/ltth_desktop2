@@ -30,6 +30,9 @@ const (
 	updateCheckFile  = "runtime/last_update_check.txt"
 	versionSHAFile   = "runtime/version_sha.txt"
 	updateInterval   = 24 * time.Hour
+	
+	// Update download settings
+	minUpdateSuccessRate = 90.0 // Minimum percentage of files that must download successfully
 )
 
 // GitHub API response structures for auto-update
@@ -919,9 +922,10 @@ func downloadUpdate(commitSHA string) error {
 	
 	fmt.Println()
 	
-	// Check if enough files were downloaded (>90%)
+	// Check if enough files were downloaded successfully
+	// We consider the update successful if at least minUpdateSuccessRate% of files downloaded
 	successRate := float64(successCount) / float64(len(relevantFiles)) * 100
-	if successRate < 90 {
+	if successRate < minUpdateSuccessRate {
 		return fmt.Errorf("zu viele Fehler beim Download (%.1f%% erfolgreich)", successRate)
 	}
 	
@@ -954,6 +958,7 @@ func main() {
 		fmt.Println("  Update verfuegbar!")
 		fmt.Println("===============================================")
 		fmt.Println()
+		// Accept update with "J" (Ja), "Y" (Yes), or just pressing Enter for convenience
 		fmt.Print("Moechtest du das Update jetzt installieren? (J/N): ")
 		
 		var input string
