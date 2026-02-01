@@ -337,14 +337,16 @@ describe('Plinko OpenShock Multi-Device Integration', () => {
       expect(queuedCommands[1].command.deviceId).toBe('device-2');
     });
 
-    test('should not trigger OpenShock for test balls', async () => {
+    test('should trigger OpenShock for test balls', async () => {
       // Make it a test ball
       plinkoGame.activeBalls.get('ball-123').isTest = true;
 
       const result = await plinkoGame.handleBallLanded('ball-123', 0);
 
       expect(result.success).toBe(true);
-      expect(queuedCommands).toHaveLength(0);  // Should not trigger OpenShock
+      expect(queuedCommands).toHaveLength(2);  // Should trigger OpenShock even for test balls
+      expect(queuedCommands[0].command.deviceId).toBe('device-1');
+      expect(queuedCommands[1].command.deviceId).toBe('device-2');
     });
 
     test('should not trigger OpenShock when not enabled', async () => {
