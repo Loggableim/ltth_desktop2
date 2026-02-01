@@ -2211,6 +2211,7 @@ class GameEnginePlugin {
       if (!giftMapping) {
         this.logger.debug(`[PLINKO] No mapping in primary config, checking all enabled boards...`);
         const boards = this.plinkoGame.getAllBoards();
+        const lowerGiftName = normalizedGiftName.toLowerCase(); // Compute once, reuse in loop
         
         for (const board of boards) {
           if (!board.enabled) continue;
@@ -2227,7 +2228,6 @@ class GameEnginePlugin {
             }
             
             // Try case-insensitive match
-            const lowerGiftName = normalizedGiftName.toLowerCase();
             for (const [key, value] of Object.entries(mappings)) {
               if (key.toLowerCase() === lowerGiftName) {
                 giftMapping = value;
