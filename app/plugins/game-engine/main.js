@@ -161,6 +161,17 @@ class GameEnginePlugin {
       // Set game engine reference for Connect4 and Chess
       this.unifiedQueue.setGameEnginePlugin(this);
       
+      // Load and apply overlay settings to unified queue
+      try {
+        const overlaySettings = this.db.getOverlaySettings();
+        Object.entries(overlaySettings).forEach(([gameType, useUnified]) => {
+          this.unifiedQueue.setGameMode(gameType, useUnified);
+        });
+        this.logger.info('✅ Overlay settings loaded and applied to unified queue');
+      } catch (error) {
+        this.logger.warn(`Failed to load overlay settings: ${error.message}`);
+      }
+      
       // Keep legacy wheel reference for backward compatibility
       this.plinkoGame.setWheelGame(this.wheelGame);
 
@@ -530,13 +541,22 @@ class GameEnginePlugin {
       is_default: true
     };
 
-    // Emit game started event
+    // Check if should use unified overlay
+    const useUnified = this.unifiedQueue ? this.unifiedQueue.shouldUseUnifiedOverlay(challenge.gameType) : false;
+    
+    // Emit game-switched event for unified overlay
+    if (useUnified && this.unifiedQueue) {
+      this.unifiedQueue.switchGame(challenge.gameType, sessionId, config);
+    }
+
+    // Emit game started event (backwards compatibility)
     this.io.emit('game-engine:game-started', {
       sessionId,
       gameType: challenge.gameType,
       state: game.getState(),
       config,
-      media: media
+      media: media,
+      useUnified
     });
 
     this.logger.info(`Started ${challenge.gameType} game #${sessionId}: ${player1.username} vs ${player2.username}`);
@@ -564,6 +584,11 @@ class GameEnginePlugin {
     // Serve Wheel (Glücksrad) overlay HTML
     this.api.registerRoute('GET', '/overlay/game-engine/wheel', (req, res) => {
       res.sendFile(path.join(__dirname, 'overlay', 'wheel.html'));
+    });
+
+    // Serve Unified overlay HTML (all games in one)
+    this.api.registerRoute('GET', '/overlay/game-engine/unified', (req, res) => {
+      res.sendFile(path.join(__dirname, 'overlay', 'unified.html'));
     });
 
     // Serve HUD overlay HTML
@@ -1759,6 +1784,57 @@ class GameEnginePlugin {
         res.status(404).json({ error: 'Audio file not found' });
       }
     });
+    
+    // === OVERLAY SETTINGS API ===
+    
+    // API: Get overlay settings for all games
+    this.api.registerRoute('GET', '/api/game-engine/overlay-settings', (req, res) => {
+      try {
+        const settings = this.db.getOverlaySettings();
+        res.json(settings);
+      } catch (error) {
+        this.logger.error(`Error getting overlay settings: ${error.message}`);
+        res.status(500).json({ error: error.message });
+      }
+    });
+    
+    // API: Update overlay settings for a specific game
+    this.api.registerRoute('POST', '/api/game-engine/overlay-settings', (req, res) => {
+      try {
+        const { gameType, useUnified } = req.body;
+        
+        if (!gameType || useUnified === undefined) {
+          return res.status(400).json({ error: 'Missing required fields: gameType, useUnified' });
+        }
+        
+        // Validate game type
+        const validGames = ['connect4', 'chess', 'plinko', 'wheel'];
+        if (!validGames.includes(gameType)) {
+          return res.status(400).json({ error: `Invalid game type. Must be one of: ${validGames.join(', ')}` });
+        }
+        
+        // Update database
+        this.db.setOverlaySetting(gameType, useUnified);
+        
+        // Update unified queue manager
+        if (this.unifiedQueue) {
+          this.unifiedQueue.setGameMode(gameType, useUnified);
+        }
+        
+        // Emit update to overlays
+        this.io.emit('game-engine:overlay-settings-updated', { 
+          gameType, 
+          useUnified 
+        });
+        
+        this.logger.info(`Overlay settings updated for ${gameType}: ${useUnified ? 'unified' : 'legacy'}`);
+        
+        res.json({ success: true });
+      } catch (error) {
+        this.logger.error(`Error updating overlay settings: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
   }
 
   /**
@@ -2786,12 +2862,21 @@ class GameEnginePlugin {
     const game = new Connect4Game(sessionId, player1, player2, this.logger);
     this.activeSessions.set(sessionId, game);
 
-    // Emit game started event
+    // Check if should use unified overlay
+    const useUnified = this.unifiedQueue ? this.unifiedQueue.shouldUseUnifiedOverlay('connect4') : false;
+    
+    // Emit game-switched event for unified overlay
+    if (useUnified && this.unifiedQueue) {
+      this.unifiedQueue.switchGame('connect4', sessionId, config);
+    }
+
+    // Emit game started event (backwards compatibility)
     this.io.emit('game-engine:game-started', {
       sessionId,
       gameType,
       state: game.getState(),
-      config
+      config,
+      useUnified
     });
 
     this.logger.info(`Started ${gameType} game #${sessionId}: ${player1.username} vs ${player2.username}`);
@@ -2923,13 +3008,22 @@ class GameEnginePlugin {
     // Store interval reference for cleanup
     game.timerInterval = timerInterval;
 
-    // Emit game started event
+    // Check if should use unified overlay
+    const useUnified = this.unifiedQueue ? this.unifiedQueue.shouldUseUnifiedOverlay('chess') : false;
+    
+    // Emit game-switched event for unified overlay
+    if (useUnified && this.unifiedQueue) {
+      this.unifiedQueue.switchGame('chess', sessionId, config);
+    }
+
+    // Emit game started event (backwards compatibility)
     this.io.emit('game-engine:game-started', {
       sessionId,
       gameType: 'chess',
       state: game.getState(),
       config,
-      timeControl: gameTimeControl
+      timeControl: gameTimeControl,
+      useUnified
     });
 
     this.logger.info(`Started chess game #${sessionId}: ${whitePlayer.username} (white) vs ${blackPlayer.username} (black) - Time control: ${gameTimeControl}`);

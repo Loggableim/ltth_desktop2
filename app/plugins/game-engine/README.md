@@ -319,6 +319,71 @@ http://localhost:3000/overlay/game-engine/connect4?testMode=true&position=center
 - **Größe**: Skalierung 100% oder nach Bedarf
 - **Transparenz**: Aktiviert (für transparenten Hintergrund)
 
+## 🎨 Overlay Modes (v2.0)
+
+Das Game Engine Plugin bietet nun zwei Overlay-Modi für maximale Flexibilität:
+
+### Unified Overlay (Empfohlen) ✅
+
+**Ein OBS Browser Source für alle Spiele:**
+```
+http://localhost:3000/overlay/game-engine/unified
+```
+
+**Vorteile:**
+- ✅ Automatisches Umschalten zwischen Spielen
+- ✅ Queue-Management integriert
+- ✅ Bessere Performance (weniger Browser-Instanzen)
+- ✅ Kein manuelles Ein-/Ausblenden in OBS
+- ✅ Smooth Transitions zwischen Spielen
+
+**Setup:**
+1. Admin UI öffnen → "⚙️ Overlay Mode" Tab
+2. Spiele für Unified Overlay aktivieren (Standard: alle aktiviert)
+3. Eine Browser Source in OBS mit obiger URL erstellen
+4. Fertig! Alle aktivierten Spiele werden automatisch umgeschaltet
+
+**OBS Einstellungen:**
+- Breite: 1920
+- Höhe: 1080
+- Benutzerdefiniertes CSS: `body { background-color: rgba(0, 0, 0, 0); }`
+
+### Legacy Mode ⚠️
+
+**Separate OBS Browser Sources pro Spiel:**
+```
+http://localhost:3000/overlay/game-engine/connect4
+http://localhost:3000/overlay/game-engine/chess
+http://localhost:3000/overlay/game-engine/plinko
+http://localhost:3000/overlay/game-engine/wheel
+```
+
+**Wann nutzen:**
+- Du möchtest verschiedene Szenen pro Spiel
+- Du brauchst individuelle Positionierung
+- Kompatibilität mit bestehendem Setup
+
+**Setup:**
+1. Admin UI öffnen → "⚙️ Overlay Mode" Tab
+2. Spiele für Legacy Mode deaktivieren (Toggle auf "Legacy" setzen)
+3. Separate Browser Sources in OBS erstellen
+4. Manuell zwischen Quellen wechseln wenn Spiel wechselt
+
+### Overlay Mode Einstellungen
+
+Im Admin UI unter "⚙️ Overlay Mode" kannst du für jedes Spiel individuell wählen:
+
+- **🔴 Connect4**: Unified ✅ / Legacy ⚠️
+- **♟️ Chess**: Unified ✅ / Legacy ⚠️
+- **🎰 Plinko**: Unified ✅ / Legacy ⚠️
+- **🎡 Wheel**: Unified ✅ / Legacy ⚠️
+
+**Hinweis:** Du kannst die Modi auch mischen! Zum Beispiel:
+- Connect4 & Chess im Unified Mode
+- Plinko & Wheel im Legacy Mode
+
+Die Einstellungen werden sofort übernommen und persistent gespeichert.
+
 ## Technische Details
 
 ### Datenbankstruktur
