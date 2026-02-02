@@ -23,6 +23,9 @@ echo.
 REM Navigate to build-src directory
 cd /d "%~dp0"
 
+REM Set project root (parent directory of build-src)
+for %%I in ("%~dp0..") do set "PROJECT_ROOT=%%~fI"
+
 REM Download dependencies
 echo Installing dependencies...
 go mod download
@@ -31,7 +34,7 @@ echo.
 
 REM Build for Windows
 echo Building launcher.exe (Windows GUI)...
-go build -o ..\launcher.exe -ldflags "-H windowsgui -s -w" launcher-gui.go
+go build -o "%PROJECT_ROOT%\launcher.exe" -ldflags "-H windowsgui -s -w" launcher-gui.go
 if %errorlevel% neq 0 (
     echo Error building launcher.exe
     pause
@@ -41,7 +44,7 @@ echo ✓ Built launcher.exe
 echo.
 
 echo Building launcher-console.exe (Windows CLI)...
-go build -o ..\launcher-console.exe -ldflags "-s -w" launcher.go
+go build -o "%PROJECT_ROOT%\launcher-console.exe" -ldflags "-s -w" launcher.go
 if %errorlevel% neq 0 (
     echo Error building launcher-console.exe
     pause
@@ -51,7 +54,7 @@ echo ✓ Built launcher-console.exe
 echo.
 
 echo Building dev_launcher.exe (Windows GUI with console)...
-go build -o ..\dev_launcher.exe -ldflags "-s -w" dev-launcher.go
+go build -o "%PROJECT_ROOT%\dev_launcher.exe" -ldflags "-s -w" dev-launcher.go
 if %errorlevel% neq 0 (
     echo Error building dev_launcher.exe
     pause
@@ -66,7 +69,7 @@ echo ================================================
 echo.
 
 REM Show file sizes
-cd ..
+cd /d "%PROJECT_ROOT%"
 echo launcher.exe:
 dir launcher.exe | find "launcher.exe"
 echo.

@@ -27,6 +27,7 @@ echo ""
 
 # Get the directory of this script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$SCRIPT_DIR"
 
 # Download dependencies
@@ -37,15 +38,15 @@ echo ""
 
 # Build for Windows
 echo -e "${YELLOW}Building launcher.exe (Windows GUI)...${NC}"
-GOOS=windows GOARCH=amd64 go build -o ../launcher.exe -ldflags "-H windowsgui -s -w" launcher-gui.go
+GOOS=windows GOARCH=amd64 go build -o "$PROJECT_ROOT/launcher.exe" -ldflags "-H windowsgui -s -w" launcher-gui.go
 echo -e "${GREEN}✓ Built launcher.exe${NC}"
 
 echo -e "${YELLOW}Building launcher-console.exe (Windows CLI)...${NC}"
-GOOS=windows GOARCH=amd64 go build -o ../launcher-console.exe -ldflags "-s -w" launcher.go
+GOOS=windows GOARCH=amd64 go build -o "$PROJECT_ROOT/launcher-console.exe" -ldflags "-s -w" launcher.go
 echo -e "${GREEN}✓ Built launcher-console.exe${NC}"
 
 echo -e "${YELLOW}Building dev_launcher.exe (Windows GUI with console)...${NC}"
-GOOS=windows GOARCH=amd64 go build -o ../dev_launcher.exe -ldflags "-s -w" dev-launcher.go
+GOOS=windows GOARCH=amd64 go build -o "$PROJECT_ROOT/dev_launcher.exe" -ldflags "-s -w" dev-launcher.go
 echo -e "${GREEN}✓ Built dev_launcher.exe${NC}"
 
 echo ""
@@ -57,7 +58,7 @@ echo ""
 # Verify the binaries
 echo -e "${YELLOW}Verifying binaries...${NC}"
 if command -v file &> /dev/null; then
-    cd ..
+    cd "$PROJECT_ROOT"
     echo ""
     echo -e "${GREEN}launcher.exe:${NC}"
     file launcher.exe
