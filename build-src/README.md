@@ -141,6 +141,9 @@ go build -o dev_launcher.exe dev-launcher.go
 **IMPORTANT:** When building launcher.exe on non-Windows systems (e.g., GitHub Actions, Linux, macOS), you MUST use cross-compilation to create Windows binaries:
 
 ```bash
+# Navigate to build-src directory first
+cd build-src
+
 # Cross-compile the GUI launcher for Windows
 GOOS=windows GOARCH=amd64 go build -o ../launcher.exe -ldflags "-H windowsgui -s -w" launcher-gui.go
 
@@ -156,6 +159,7 @@ GOOS=windows GOARCH=amd64 go build -o ../dev_launcher.exe -ldflags "-s -w" dev-l
 **Verification:**
 Always verify the built binary is a Windows executable:
 ```bash
+cd ..
 file launcher.exe
 # Expected output: launcher.exe: PE32+ executable (GUI) x86-64, for MS Windows
 ```
