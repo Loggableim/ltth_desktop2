@@ -98,6 +98,26 @@ The launchers are written in Go and include embedded resources.
 - Go 1.18 or higher
 - `go-winres` tool (for embedding icons in launcher.exe)
 
+### Quick Build (Recommended)
+
+**Use the provided build scripts for automatic cross-compilation:**
+
+```bash
+# On Windows:
+build-launcher.bat
+
+# On Linux/macOS:
+./build-launcher.sh
+```
+
+These scripts will automatically:
+- Download Go dependencies
+- Build all launcher variants with correct flags
+- Verify the binaries are Windows executables
+- Display file sizes
+
+### Manual Build
+
 ### Building on Windows
 
 #### Local Launcher (launcher.exe)
@@ -114,6 +134,34 @@ go build -o launcher-backup.exe launcher-backup.go
 
 # Build the dev launcher (GUI with visible terminal for debugging)
 go build -o dev_launcher.exe dev-launcher.go
+```
+
+### Building on Linux/macOS (Cross-Compilation)
+
+**IMPORTANT:** When building launcher.exe on non-Windows systems (e.g., GitHub Actions, Linux, macOS), you MUST use cross-compilation to create Windows binaries:
+
+```bash
+# Navigate to build-src directory first
+cd build-src
+
+# Cross-compile the GUI launcher for Windows
+GOOS=windows GOARCH=amd64 go build -o ../launcher.exe -ldflags "-H windowsgui -s -w" launcher-gui.go
+
+# Cross-compile the console launcher for Windows
+GOOS=windows GOARCH=amd64 go build -o ../launcher-console.exe -ldflags "-s -w" launcher.go
+
+# Cross-compile the dev launcher for Windows
+GOOS=windows GOARCH=amd64 go build -o ../dev_launcher.exe -ldflags "-s -w" dev-launcher.go
+```
+
+**Note:** The `-s -w` flags strip debug information and reduce binary size. The `-H windowsgui` flag is essential for GUI applications to hide the console window on Windows.
+
+**Verification:**
+Always verify the built binary is a Windows executable:
+```bash
+cd ..
+file launcher.exe
+# Expected output: launcher.exe: PE32+ executable (GUI) x86-64, for MS Windows
 ```
 
 #### Cloud Launcher (ltthgit.exe)
