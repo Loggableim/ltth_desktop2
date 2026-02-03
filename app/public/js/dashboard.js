@@ -3476,10 +3476,7 @@ function handleStreamChunk(data) {
     
     // Decode Base64 chunk to Uint8Array
     const binaryString = atob(data.chunk);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
+    const bytes = Uint8Array.from(binaryString, c => c.charCodeAt(0));
     buffer.chunks.push(bytes);
     
     // Store metadata from first chunk

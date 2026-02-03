@@ -208,10 +208,15 @@ return runTest('handleStreamEnd should prevent double playback', async () => {
 return runTest('Streaming functions should have console logging', async () => {
     const dashboardCode = fs.readFileSync(dashboardPath, 'utf-8');
     
-    // Check all three functions have logging
-    assert.ok(dashboardCode.includes('handleStreamChunk') && dashboardCode.includes("console.log(`🎵 [Dashboard] Stream chunk"), 'handleStreamChunk should log');
-    assert.ok(dashboardCode.includes('handleStreamEnd') && dashboardCode.includes("console.log(`🎵 [Dashboard] Stream ended"), 'handleStreamEnd should log');
-    assert.ok(dashboardCode.includes('playStreamingAudio') && dashboardCode.includes("console.log(`🎵 [Dashboard] Playing streaming audio"), 'playStreamingAudio should log');
+    // Check that each function has logging within its body
+    const handleStreamChunkMatch = dashboardCode.match(/function handleStreamChunk\(data\)[\s\S]{0,500}/);
+    assert.ok(handleStreamChunkMatch && handleStreamChunkMatch[0].includes("console.log(`🎵 [Dashboard] Stream chunk"), 'handleStreamChunk should log');
+    
+    const handleStreamEndMatch = dashboardCode.match(/function handleStreamEnd\(data\)[\s\S]{0,500}/);
+    assert.ok(handleStreamEndMatch && handleStreamEndMatch[0].includes("console.log(`🎵 [Dashboard] Stream ended"), 'handleStreamEnd should log');
+    
+    const playStreamingAudioMatch = dashboardCode.match(/function playStreamingAudio\(id\)[\s\S]{0,500}/);
+    assert.ok(playStreamingAudioMatch && playStreamingAudioMatch[0].includes("console.log(`🎵 [Dashboard] Playing streaming audio"), 'playStreamingAudio should log');
 });
 
 }).then(() => {
