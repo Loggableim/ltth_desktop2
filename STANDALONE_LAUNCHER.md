@@ -65,7 +65,6 @@ build.bat           # Windows
 - ✅ `plugins/` - Plugin-System  
 - ✅ `game-engine/` - Game Engine
 - ✅ `package.json` + `package-lock.json`
-- ✅ `main.js`
 
 **Was wird NICHT heruntergeladen:**
 - ❌ Build-Dateien (build-src/)

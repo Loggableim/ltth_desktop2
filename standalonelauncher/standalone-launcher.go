@@ -239,6 +239,7 @@ func (sl *StandaloneLauncher) filterRelevantFiles(items []GitHubTreeItem) []GitH
 	// Whitelist: Only download these directories and files
 	whitelistPrefixes := []string{
 		"app/",
+		"plugins/",
 		"game-engine/",
 		"package.json",
 		"package-lock.json",
