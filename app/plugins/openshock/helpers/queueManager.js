@@ -10,6 +10,9 @@ const EventEmitter = require('events');
 
 // Constants
 const SAFETY_MARGIN_MS = 200; // Safety buffer between commands to ensure complete execution
+const DEDUPLICATION_WINDOW_MS = 1000; // 1 second window for detecting duplicate commands
+const LOCK_TIMEOUT_MS = 10000; // 10 seconds max wait for lock acquisition
+const HASH_CLEANUP_THRESHOLD = 100; // Minimum hashes before triggering cleanup
 
 class QueueManager extends EventEmitter {
   /**
@@ -43,6 +46,11 @@ class QueueManager extends EventEmitter {
     // Set by main.js to check if a pattern execution has been cancelled
     this.shouldCancelExecution = null;
 
+    // Command deduplication tracking
+    // Map of command hashes to last enqueue timestamp
+    // Used to prevent duplicate commands within DEDUPLICATION_WINDOW_MS
+    this._commandHashes = new Map();
+
     // Statistics
     this.stats = {
       totalEnqueued: 0,
@@ -50,6 +58,7 @@ class QueueManager extends EventEmitter {
       totalFailed: 0,
       totalCancelled: 0,
       totalRetried: 0,
+      totalDuplicatesBlocked: 0, // Track blocked duplicates
       processingTimes: [], // Store last 100 processing times
       commandsPerMinute: [],
       lastMinuteTimestamp: Date.now(),
@@ -72,6 +81,81 @@ class QueueManager extends EventEmitter {
   }
 
   /**
+   * Generate a hash key for command deduplication
+   * Hash includes: deviceId, type, intensity, duration, userId, source
+   * Pattern steps (with executionId) are excluded from deduplication to allow sequential execution
+   * @private
+   * @param {Object} command - Command object
+   * @param {string} userId - User ID
+   * @param {string} source - Command source
+   * @param {Object} options - Options object
+   * @returns {string} Hash key
+   */
+  _getCommandHash(command, userId, source, options) {
+    // Exclude pattern steps from deduplication (they need to execute sequentially)
+    if (options.executionId) {
+      return null; // Return null to skip deduplication check
+    }
+    
+    const hashParts = [
+      command.deviceId || 'no-device',
+      command.type || 'no-type',
+      command.intensity || 0,
+      command.duration || 0,
+      userId || 'no-user',
+      source || 'no-source'
+    ];
+    
+    return hashParts.join(':');
+  }
+
+  /**
+   * Check if command is a duplicate within the deduplication window
+   * @private
+   * @param {string} commandHash - Command hash
+   * @returns {boolean} True if duplicate
+   */
+  _isDuplicateCommand(commandHash) {
+    if (!commandHash) {
+      return false; // Skip deduplication for pattern steps
+    }
+    
+    const now = Date.now();
+    const lastEnqueueTime = this._commandHashes.get(commandHash);
+    
+    if (lastEnqueueTime && (now - lastEnqueueTime) < DEDUPLICATION_WINDOW_MS) {
+      // Duplicate command within window
+      return true;
+    }
+    
+    // Not a duplicate, update timestamp
+    this._commandHashes.set(commandHash, now);
+    
+    // Clean up old hashes to prevent memory leak
+    this._cleanupCommandHashes(now);
+    
+    return false;
+  }
+
+  /**
+   * Clean up old command hashes (older than deduplication window)
+   * @private
+   * @param {number} now - Current timestamp
+   */
+  _cleanupCommandHashes(now) {
+    // Only clean up occasionally to reduce overhead
+    if (this._commandHashes.size < HASH_CLEANUP_THRESHOLD) {
+      return;
+    }
+    
+    for (const [hash, timestamp] of this._commandHashes.entries()) {
+      if ((now - timestamp) > DEDUPLICATION_WINDOW_MS) {
+        this._commandHashes.delete(hash);
+      }
+    }
+  }
+
+  /**
    * Enqueue a command for execution
    * @param {Object} command - Command object { type, deviceId, intensity, duration }
    * @param {string} userId - User ID who triggered the command
@@ -88,6 +172,25 @@ class QueueManager extends EventEmitter {
     try {
       // Validate priority
       priority = Math.max(1, Math.min(10, priority));
+
+      // Check for duplicate command (before acquiring lock for performance)
+      const commandHash = this._getCommandHash(command, userId, source, options);
+      if (this._isDuplicateCommand(commandHash)) {
+        this.stats.totalDuplicatesBlocked++;
+        this.logger.debug('[QueueManager] Duplicate command blocked', {
+          type: command.type,
+          deviceId: command.deviceId,
+          userId,
+          source,
+          windowMs: DEDUPLICATION_WINDOW_MS
+        });
+        return {
+          success: false,
+          queueId: null,
+          position: -1,
+          message: `Duplicate command blocked (${DEDUPLICATION_WINDOW_MS}ms window)`
+        };
+      }
 
       // Acquire lock before modifying queue
       await this._acquireLock();
@@ -159,8 +262,13 @@ class QueueManager extends EventEmitter {
         });
 
         // Start processing if not already running
+        // Use setImmediate to avoid sync issues and allow lock to be released first
         if (!this.isProcessing && !this.isPaused) {
-          this.processQueue();
+          setImmediate(() => {
+            if (!this.isProcessing && !this.isPaused) {
+              this.processQueue();
+            }
+          });
         }
 
         return {
@@ -303,52 +411,55 @@ class QueueManager extends EventEmitter {
     this.logger.info('[QueueManager] Started queue processing');
     this.emit('queue-started');
 
-    while (this.isProcessing) {
-      // Check if paused
-      if (this.isPaused) {
-        await this._sleep(100);
-        continue;
+    try {
+      while (this.isProcessing) {
+        // Check if paused
+        if (this.isPaused) {
+          await this._sleep(100);
+          continue;
+        }
+
+        // Get next item (now async with lock)
+        const item = await this.dequeue();
+
+        if (!item) {
+          // Queue is empty, stop processing
+          this.logger.debug('[QueueManager] Queue is empty, stopping processing');
+          this.emit('queue-empty');
+          break;
+        }
+
+        // Process item
+        await this._processNextItem(item);
+
+        // Duration-aware delay before next item
+        // Wait for actual command duration + safety margin to ensure command completes
+        if (this.isProcessing && item.command) {
+          const commandDuration = item.command.duration || 0; // in ms
+          const totalWaitTime = Math.max(this.processingDelay, commandDuration + SAFETY_MARGIN_MS);
+          
+          this.logger.debug(`[QueueManager] Waiting ${totalWaitTime}ms before next command (duration: ${commandDuration}ms + safety: ${SAFETY_MARGIN_MS}ms)`);
+          await this._sleep(totalWaitTime);
+        } else if (this.isProcessing) {
+          // Fallback to default processing delay if no command duration
+          await this._sleep(this.processingDelay);
+        }
+
+        // Update commands per minute
+        this._updateCommandsPerMinute();
+
+        // Cleanup old completed items
+        await this._cleanupCompletedItems();
+
+        // Emit queue-changed event
+        this.emit('queue-changed');
       }
-
-      // Get next item (now async with lock)
-      const item = await this.dequeue();
-
-      if (!item) {
-        // Queue is empty, stop processing
-        this.logger.debug('[QueueManager] Queue is empty, stopping processing');
-        this.isProcessing = false;
-        this.emit('queue-empty');
-        break;
-      }
-
-      // Process item
-      await this._processNextItem(item);
-
-      // Duration-aware delay before next item
-      // Wait for actual command duration + safety margin to ensure command completes
-      if (this.isProcessing && item.command) {
-        const commandDuration = item.command.duration || 0; // in ms
-        const totalWaitTime = Math.max(this.processingDelay, commandDuration + SAFETY_MARGIN_MS);
-        
-        this.logger.debug(`[QueueManager] Waiting ${totalWaitTime}ms before next command (duration: ${commandDuration}ms + safety: ${SAFETY_MARGIN_MS}ms)`);
-        await this._sleep(totalWaitTime);
-      } else if (this.isProcessing) {
-        // Fallback to default processing delay if no command duration
-        await this._sleep(this.processingDelay);
-      }
-
-      // Update commands per minute
-      this._updateCommandsPerMinute();
-
-      // Cleanup old completed items
-      await this._cleanupCompletedItems();
-
-      // Emit queue-changed event
-      this.emit('queue-changed');
+    } finally {
+      // Always reset isProcessing flag in finally block to prevent stuck state
+      this.isProcessing = false;
+      this.logger.info('[QueueManager] Stopped queue processing');
+      this.emit('queue-stopped');
     }
-
-    this.logger.info('[QueueManager] Stopped queue processing');
-    this.emit('queue-stopped');
   }
 
   /**
@@ -579,6 +690,7 @@ class QueueManager extends EventEmitter {
       totalFailed: this.stats.totalFailed,
       totalCancelled: this.stats.totalCancelled,
       totalRetried: this.stats.totalRetried,
+      totalDuplicatesBlocked: this.stats.totalDuplicatesBlocked,
       averageProcessingTime: Math.round(avgProcessingTime),
       commandsPerMinute: Math.round(avgCommandsPerMinute),
       successRate: Math.round(successRate * 100) / 100
@@ -586,9 +698,10 @@ class QueueManager extends EventEmitter {
   }
 
   /**
-   * Acquire queue lock for synchronization
+   * Acquire queue lock for synchronization with timeout
    * @private
    * @returns {Promise<void>}
+   * @throws {Error} If lock cannot be acquired within LOCK_TIMEOUT_MS
    */
   async _acquireLock() {
     // If lock is not held, acquire it immediately
@@ -597,9 +710,36 @@ class QueueManager extends EventEmitter {
       return;
     }
 
-    // Lock is held, wait for it to be released
-    return new Promise((resolve) => {
-      this._lockWaiters.push(resolve);
+    // Lock is held, wait for it to be released with timeout
+    return new Promise((resolve, reject) => {
+      // Create waiter object first so we can reference it in the timeout
+      const waiter = {
+        resolve: null
+      };
+      
+      const timeoutId = setTimeout(() => {
+        // Remove this waiter from the queue
+        const index = this._lockWaiters.indexOf(waiter);
+        if (index !== -1) {
+          this._lockWaiters.splice(index, 1);
+        }
+        
+        this.logger.error('[QueueManager] Lock acquisition timeout', {
+          waitersCount: this._lockWaiters.length,
+          timeoutMs: LOCK_TIMEOUT_MS
+        });
+        
+        reject(new Error(`Lock acquisition timeout after ${LOCK_TIMEOUT_MS}ms`));
+      }, LOCK_TIMEOUT_MS);
+      
+      // Set the resolve function that clears the timeout
+      waiter.resolve = () => {
+        clearTimeout(timeoutId);
+        resolve();
+      };
+      
+      // Add to waiters queue
+      this._lockWaiters.push(waiter);
     });
   }
 
@@ -611,7 +751,7 @@ class QueueManager extends EventEmitter {
     // If there are waiters, wake up the next one
     if (this._lockWaiters.length > 0) {
       const nextWaiter = this._lockWaiters.shift();
-      nextWaiter();
+      nextWaiter.resolve();
     } else {
       // No waiters, release the lock
       this._queueLock = false;

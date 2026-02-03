@@ -17,6 +17,7 @@ const SHOCK_MAX_INTENSITY = 100; // Maximum shock intensity
 const SHOCK_MIN_DURATION = 300; // Minimum shock duration (ms)
 const SHOCK_MAX_DURATION = 30000; // Maximum shock duration (ms)
 const SHOCK_DISPLAY_DELAY_MS = 500; // Delay before triggering shock to ensure result is visible first
+const OPENSHOCK_BATCH_CLEANUP_THRESHOLD = 50; // Minimum batches before triggering cleanup
 
 // Error messages (TODO: Move to localization system)
 const ERROR_MESSAGES = {
@@ -46,6 +47,12 @@ class WheelGame {
     
     // Spin ID counter
     this.spinIdCounter = 0;
+    
+    // OpenShock batch deduplication tracking
+    // Prevents duplicate multi-device commands within a time window
+    // Key format: "username:deviceIds:type:intensity:duration"
+    this.openshockBatches = new Map(); // batchKey -> timestamp
+    this.openshockBatchWindow = 5000; // 5 second window for batch deduplication
     
     // Cleanup timer
     this.cleanupTimer = null;
@@ -944,6 +951,64 @@ class WheelGame {
   }
 
   /**
+   * Generate a batch key for OpenShock command deduplication
+   * @private
+   * @param {string} username - Username
+   * @param {Array<string>} deviceIds - Device IDs (sorted)
+   * @param {string} type - Command type
+   * @param {number} intensity - Intensity value
+   * @param {number} duration - Duration in ms
+   * @returns {string} Batch key
+   */
+  _getOpenshockBatchKey(username, deviceIds, type, intensity, duration) {
+    // Sort device IDs to ensure consistent key regardless of order
+    const sortedDevices = [...deviceIds].sort().join(',');
+    return `${username}:${sortedDevices}:${type}:${intensity}:${duration}`;
+  }
+
+  /**
+   * Check if an OpenShock batch is a duplicate within the deduplication window
+   * @private
+   * @param {string} batchKey - Batch key
+   * @returns {boolean} True if duplicate
+   */
+  _isDuplicateOpenshockBatch(batchKey) {
+    const now = Date.now();
+    const lastBatchTime = this.openshockBatches.get(batchKey);
+    
+    if (lastBatchTime && (now - lastBatchTime) < this.openshockBatchWindow) {
+      // Duplicate batch within window
+      return true;
+    }
+    
+    // Not a duplicate, update timestamp
+    this.openshockBatches.set(batchKey, now);
+    
+    // Clean up old batches to prevent memory leak
+    this._cleanupOpenshockBatches(now);
+    
+    return false;
+  }
+
+  /**
+   * Clean up old OpenShock batch tracking entries
+   * @private
+   * @param {number} now - Current timestamp
+   */
+  _cleanupOpenshockBatches(now) {
+    // Only clean up occasionally to reduce overhead
+    if (this.openshockBatches.size < OPENSHOCK_BATCH_CLEANUP_THRESHOLD) {
+      return;
+    }
+    
+    for (const [key, timestamp] of this.openshockBatches.entries()) {
+      if ((now - timestamp) > this.openshockBatchWindow) {
+        this.openshockBatches.delete(key);
+      }
+    }
+  }
+
+  /**
    * Trigger shock/vibrate via OpenShock plugin
    * Supports multiple devices and both shock and vibrate actions
    * @private
@@ -980,6 +1045,20 @@ class WheelGame {
       // No devices configured, use first available
       targetDevices = [availableDevices[0]];
       this.logger.debug(`No devices configured for segment, using first available: ${targetDevices[0].name}`);
+    }
+    
+    // Check for duplicate batch within deduplication window
+    const deviceIds = targetDevices.map(d => d.id);
+    const batchKey = this._getOpenshockBatchKey(spinData.username, deviceIds, actionType, intensity, duration);
+    if (this._isDuplicateOpenshockBatch(batchKey)) {
+      this.logger.info(`[Wheel] Duplicate OpenShock batch blocked for ${spinData.username}`, {
+        deviceCount: deviceIds.length,
+        actionType,
+        intensity,
+        duration,
+        windowMs: this.openshockBatchWindow
+      });
+      return;
     }
     
     // Send commands to all target devices
