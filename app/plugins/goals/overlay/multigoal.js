@@ -262,7 +262,7 @@ class MultiGoalOverlayRenderer {
      */
     getTemplate(id) {
         if (!window.GoalTemplates) {
-            console.error('GoalTemplates not loaded');
+            console.error('GoalTemplates not loaded. Ensure templates-shared.js is loaded before multigoal.js');
             return null;
         }
 
