@@ -44,12 +44,6 @@ class ChessGame {
     this.lastMove = null;
     this.moveHistory = []; // Array of { san, uci, fen, timeLeft }
     
-    // Track captured pieces incrementally for performance
-    this.capturedPieces = {
-      white: { p: 0, n: 0, b: 0, r: 0, q: 0 },
-      black: { p: 0, n: 0, b: 0, r: 0, q: 0 }
-    };
-    
     // Ensure players have correct sides assigned
     if (this.player1.side === 'white') {
       this.whitePlayer = this.player1;
@@ -65,10 +59,7 @@ class ChessGame {
    */
   startTimer() {
     this.lastMoveTime = Date.now();
-    if (this.timerInterval) {
-      clearInterval(this.timerInterval);
-    }
-    this.timerInterval = setInterval(() => this.updateTimer(), 100);
+    this.updateTimer();
   }
 
   /**
@@ -207,12 +198,6 @@ class ChessGame {
     // Update timer (add increment and switch player)
     this.updateTimer();
     this.timers[this.currentPlayer] += this.timeControl.increment;
-    
-    // Track captured pieces incrementally
-    if (moveResult.captured) {
-      const capturingSide = this.currentPlayer; // Current player captured opponent's piece
-      this.capturedPieces[capturingSide][moveResult.captured]++;
-    }
     
     // Record move
     this.moveCount++;
@@ -378,7 +363,27 @@ class ChessGame {
    * Get captured pieces
    */
   getCapturedPieces() {
-    return this.capturedPieces;
+    const captured = {
+      white: { p: 0, n: 0, b: 0, r: 0, q: 0 },
+      black: { p: 0, n: 0, b: 0, r: 0, q: 0 }
+    };
+    
+    for (const move of this.moveHistory) {
+      // Parse the move from history
+      const tempChess = new Chess();
+      const moves = this.moveHistory.slice(0, this.moveHistory.indexOf(move));
+      for (const m of moves) {
+        tempChess.move(m.san);
+      }
+      const moveObj = tempChess.move(move.san);
+      
+      if (moveObj && moveObj.captured) {
+        const capturingSide = moveObj.color === 'w' ? 'white' : 'black';
+        captured[capturingSide][moveObj.captured]++;
+      }
+    }
+    
+    return captured;
   }
 
   /**
@@ -425,11 +430,6 @@ class ChessGame {
     this.status = state.status;
     this.lastMove = state.lastMove;
     this.moveHistory = state.moveHistory;
-    
-    // Restore captured pieces if available, otherwise recalculate from state
-    if (state.capturedPieces) {
-      this.capturedPieces = state.capturedPieces;
-    }
     
     if (this.status === 'active') {
       this.startTimer();
