@@ -1,5 +1,7 @@
-# Compiled executables
+# Compiled executables (except pre-built launcher executables)
 *.exe
+!launcher.exe
+!launcher-console.exe
 
 # Go build artifacts
 *.test
@@ -7,12 +9,10 @@
 
 # Downloaded files (if testing locally)
 app/
-plugins/
 game-engine/
 runtime/
 package.json
 package-lock.json
-main.js
 
 # OS files
 .DS_Store

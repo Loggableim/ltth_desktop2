@@ -20,24 +20,27 @@ chmod +x build.sh
 ### 2. Dateien für Distribution
 
 Nach dem Build erhältst du:
-- `standalone-launcher.exe` (GUI Version) - **Dieses verteilen!**
-- `standalone-launcher-console.exe` (Debug Version) - Nur für Testing
+- `launcher.exe` (Windows GUI Version) - **Für Windows-Nutzer!**
+- `launcher` (Linux Version) - **Für Linux-Nutzer!**
+- `launcher-console.exe` (Windows Debug Version) - Nur für Testing
 
-**Größe:** ~8-9 MB
+**Größe:** ~8.5-8.8 MB
 
 ### 3. Upload auf ltth.app
 
-1. **Datei umbenennen (optional):**
-   ```
-   standalone-launcher.exe → LTTH-Standalone.exe
-   ```
+1. **Dateien vorbereiten:**
+   - Windows: `launcher.exe` (8.8 MB)
+   - Linux: `launcher` (8.5 MB)
 
 2. **Upload auf Server/CDN**
 
-3. **Download-Link erstellen:**
+3. **Download-Links erstellen:**
    ```html
-   <a href="/downloads/LTTH-Standalone.exe" download>
-     Download LTTH Standalone Launcher (8.8 MB)
+   <a href="/downloads/launcher.exe" download>
+     Download LTTH Launcher - Windows (8.8 MB)
+   </a>
+   <a href="/downloads/launcher" download>
+     Download LTTH Launcher - Linux (8.5 MB)
    </a>
    ```
 
@@ -51,24 +54,27 @@ Nach dem Build erhältst du:
 Der offizielle Standalone Launcher lädt automatisch die neueste Version von LTTH herunter.
 
 ## Features
-✅ Minimale Download-Größe (nur 8.8 MB)
+✅ Minimale Download-Größe (nur ~8.5-8.8 MB)
 ✅ Automatische Updates
 ✅ Node.js Installation inklusive
 ✅ Keine manuelle Installation nötig
+✅ Für Windows und Linux verfügbar
 
 ## Download
-[Download LTTH Standalone (8.8 MB)](link-zur-exe)
+[Download LTTH Launcher - Windows (8.8 MB)](link-zur-exe)
+[Download LTTH Launcher - Linux (8.5 MB)](link-zum-launcher)
 
 ## So funktioniert's
 1. Laden Sie den Launcher herunter
-2. Führen Sie die EXE-Datei aus
-3. Warten Sie, während der Launcher alles einrichtet
+2. Windows: Führen Sie launcher.exe aus / Linux: `chmod +x launcher && ./launcher`
+3. Warten Sie, während der Launcher alles einrichtet (~27-30 MB Download)
 4. LTTH startet automatisch im Browser
 
 ## Systemanforderungen
-- Windows 10/11 (64-bit)
+- **Windows:** Windows 10/11 (64-bit)
+- **Linux:** Ubuntu 20.04+ oder äquivalent (64-bit)
 - Internet-Verbindung
-- ~500 MB freier Speicherplatz
+- ~200 MB freier Speicherplatz (reduziert von ~500 MB)
 ```
 
 ### FAQ für Website
@@ -80,7 +86,7 @@ A: Der Launcher ist nur 8.8 MB groß und lädt alle benötigten Dateien beim ers
 A: Nein, der Launcher installiert automatisch eine portable Version von Node.js.
 
 **F: Wie lange dauert der erste Start?**
-A: Der erste Start dauert 2-5 Minuten, da alle Dateien heruntergeladen werden (~150 MB).
+A: Der erste Start dauert 1-3 Minuten, da alle Dateien heruntergeladen werden (~27-30 MB).
 
 **F: Gibt es Updates?**
 A: Ja, der Launcher lädt automatisch die neueste Version von GitHub.
@@ -97,7 +103,7 @@ Für bessere Vertrauenswürdigkeit kannst du die EXE signieren:
 1. **Zertifikat besorgen** (z.B. von DigiCert, Sectigo)
 2. **Signieren mit signtool:**
    ```bash
-   signtool sign /f certificate.pfx /p password /t http://timestamp.digicert.com standalone-launcher.exe
+   signtool sign /f certificate.pfx /p password /t http://timestamp.digicert.com launcher.exe
    ```
 
 ### Virus-Scanner
@@ -206,7 +212,7 @@ http.Post("https://ltth.app/api/launcher-errors", ...)
 ### Debug-Version
 
 Für Support-Zwecke kannst du auch die Console-Version bereitstellen:
-- `standalone-launcher-console.exe`
+- `launcher-console.exe` (Windows)
 - Zeigt alle Logs im Terminal
 - Gut für Troubleshooting
 

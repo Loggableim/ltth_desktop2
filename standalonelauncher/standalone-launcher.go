@@ -239,30 +239,62 @@ func (sl *StandaloneLauncher) filterRelevantFiles(items []GitHubTreeItem) []GitH
 	// Whitelist: Only download these directories and files
 	whitelistPrefixes := []string{
 		"app/",
-		"plugins/",
 		"game-engine/",
 		"package.json",
 		"package-lock.json",
-		"main.js",
 	}
 	
-	// Blacklist: Never download these
+	// Blacklist: Never download these (including all unnecessary directories)
 	blacklistPrefixes := []string{
+		// Executables
 		"launcher.exe",
 		"launcher-console.exe",
 		"dev_launcher.exe",
+		"main.js", // Root main.js is Electron entry point, not needed for standalone Node.js server
+		
+		// Runtime directories
 		"runtime/",
 		"logs/",
 		"data/",
 		"node_modules/",
+		
+		// Version control and CI
 		".git",
-		"build-src/",
 		".github/",
+		".gitignore",
+		
+		// Build and development
+		"build-src/",
+		"standalonelauncher/",
+		
+		// Documentation and info files
+		"infos/",
+		"docs/",
+		"docs_archive/",
+		"migration-guides/",
+		"screenshots/",
+		"images/",
 		"README.md",
 		"LICENSE",
 		"CHANGELOG",
-		".gitignore",
-		"standalonelauncher/",
+		".md", // All markdown files
+		
+		// Extra tools not needed for runtime
+		"animazingpal/",
+		"sidekick/",
+		"simplysign/",
+		"scripts/",
+		
+		// Test files
+		"app/test/",
+		"playwright.config.js",
+		
+		// App-specific unnecessary files
+		"app/CHANGELOG.md",
+		"app/README.md",
+		"app/LICENSE",
+		"app/docs/",
+		"app/wiki/", // User documentation, can be accessed online
 	}
 	
 	for _, item := range items {
@@ -273,7 +305,9 @@ func (sl *StandaloneLauncher) filterRelevantFiles(items []GitHubTreeItem) []GitH
 		// Check blacklist first
 		blacklisted := false
 		for _, prefix := range blacklistPrefixes {
-			if strings.HasPrefix(item.Path, prefix) {
+			// Check if it starts with the prefix (for directories/files)
+			// or if it ends with the suffix (for file extensions like .md)
+			if strings.HasPrefix(item.Path, prefix) || strings.HasSuffix(item.Path, prefix) {
 				blacklisted = true
 				break
 			}
@@ -598,14 +632,14 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 func (sl *StandaloneLauncher) startApplication(nodePath, appDir string) error {
 	sl.updateProgress(95, "Starte Anwendung...")
 	
-	mainJS := filepath.Join(appDir, "main.js")
-	cmd := exec.Command(nodePath, mainJS)
+	launchJS := filepath.Join(appDir, "launch.js")
+	cmd := exec.Command(nodePath, launchJS)
 	cmd.Dir = appDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	
-	sl.logger.Printf("Starting application: %s %s\n", nodePath, mainJS)
+	sl.logger.Printf("Starting application: %s %s\n", nodePath, launchJS)
 	
 	err := cmd.Start()
 	if err != nil {

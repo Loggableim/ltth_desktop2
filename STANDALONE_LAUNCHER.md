@@ -22,8 +22,9 @@ build.bat           # Windows
 ```
 
 **Output:**
-- `standalone-launcher.exe` (8.8 MB) - GUI Version → **Für Distribution**
-- `standalone-launcher-console.exe` (8.8 MB) - Debug Version
+- `launcher.exe` (8.8 MB) - Windows GUI Version → **Für Distribution**
+- `launcher` (8.5 MB) - Linux Version → **Für Distribution**
+- `launcher-console.exe` (8.8 MB) - Windows Debug Version
 
 ### Dokumentation
 
@@ -34,9 +35,9 @@ build.bat           # Windows
 
 ### Installation
 
-1. **Download** `standalone-launcher.exe` von [ltth.app](https://ltth.app)
-2. **Ausführen** - Doppelklick auf die EXE-Datei
-3. **Warten** - Launcher lädt automatisch alle Dateien (~150 MB)
+1. **Download** `launcher.exe` (Windows) oder `launcher` (Linux) von [ltth.app](https://ltth.app)
+2. **Ausführen** - Doppelklick auf die Datei (Windows) oder `./launcher` im Terminal (Linux)
+3. **Warten** - Launcher lädt automatisch alle nötigen Dateien (~27-30 MB)
 4. **Fertig** - LTTH startet automatisch im Browser
 
 ### Was passiert beim ersten Start?
@@ -87,12 +88,15 @@ build.bat           # Windows
 ### Für ltth.app
 
 1. Build den Launcher (siehe oben)
-2. Upload `standalone-launcher.exe` auf deinen Server/CDN
+2. Upload `launcher.exe` (Windows) und `launcher` (Linux) auf deinen Server/CDN
 3. Verlinke auf deiner Website:
 
 ```html
-<a href="/downloads/standalone-launcher.exe" download>
-  LTTH Standalone Launcher herunterladen (8.8 MB)
+<a href="/downloads/launcher.exe" download>
+  LTTH Launcher herunterladen - Windows (8.8 MB)
+</a>
+<a href="/downloads/launcher" download>
+  LTTH Launcher herunterladen - Linux (8.5 MB)
 </a>
 ```
 
