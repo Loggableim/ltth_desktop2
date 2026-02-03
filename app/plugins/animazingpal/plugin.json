@@ -1,7 +1,7 @@
 {
   "id": "animazingpal",
   "name": "AnimazingPal",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Integration mit Animaze für VTuber Avatar-Steuerung mit KI-Brain und Langzeit-Gedächtnis",
   "author": "copilot",
   "entry": "main.js",
