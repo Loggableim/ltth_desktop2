@@ -1,6 +1,6 @@
 /**
  * TTS Queue Manager
- * Manages TTS queue with prioritization, rate limiting, flood control, and deduplication
+ * Manages TTS queue with prioritization, rate limiting, flood control, deduplication, and pre-generation
  */
 class QueueManager {
     constructor(config, logger) {
@@ -20,14 +20,42 @@ class QueueManager {
         this.maxRecentHashes = 500; // Keep last 500 hashes
         this.hashExpirationMs = 60000; // Hashes expire after 60 seconds (matches TikTok module deduplication)
 
+        // Pre-generation system
+        this.preGenerationInProgress = new Map(); // Track ongoing pre-generations by item ID
+        this.preGenerateCount = 3; // Number of items to pre-generate
+        this.synthesizeCallback = null; // Callback for synthesis (set by TTSPlugin)
+
         // Queue statistics
         this.stats = {
             totalQueued: 0,
             totalPlayed: 0,
             totalDropped: 0,
             totalRateLimited: 0,
-            totalDuplicatesBlocked: 0
+            totalDuplicatesBlocked: 0,
+            preGenerationHits: 0,
+            preGenerationMisses: 0,
+            preGenerationErrors: 0
         };
+    }
+
+    /**
+     * Set synthesis callback for pre-generation
+     * @param {Function} callback - Async function(text, voice, engine, options) => audioData
+     */
+    setSynthesizeCallback(callback) {
+        this.synthesizeCallback = callback;
+        this.logger.info('Pre-generation synthesis callback registered');
+    }
+
+    /**
+     * Peek at next N items in queue without removing them
+     * @param {number} count - Number of items to peek at
+     * @returns {Array} Array of next items
+     */
+    peek(count = 1) {
+        // Sort to ensure correct order
+        this._sortQueue();
+        return this.queue.slice(0, count);
     }
 
     /**
@@ -189,9 +217,9 @@ class QueueManager {
         }
 
         this.isProcessing = true;
-        this.logger.info('TTS Queue processing started');
+        this.logger.info('TTS Queue processing started with pre-generation enabled');
 
-        this._processNext(playCallback);
+        this._processNextOptimized(playCallback);
     }
 
     /**
@@ -200,13 +228,78 @@ class QueueManager {
     stopProcessing() {
         this.isProcessing = false;
         this.currentItem = null;
-        this.logger.info('TTS Queue processing stopped');
+        // Cancel any pending pre-generations
+        this.preGenerationInProgress.clear();
+        this.logger.info('TTS Queue processing stopped, pre-generations cancelled');
     }
 
     /**
-     * Process next item in queue
+     * Trigger pre-generation for next N items in queue
      */
-    async _processNext(playCallback) {
+    async _triggerPreGeneration() {
+        if (!this.synthesizeCallback) {
+            return; // No callback registered, skip pre-generation
+        }
+
+        const nextItems = this.peek(this.preGenerateCount);
+        
+        for (const item of nextItems) {
+            // Skip if already has audio data or is streaming
+            if (item.audioData || item.isStreaming) {
+                continue;
+            }
+
+            // Skip if already pre-generating
+            if (this.preGenerationInProgress.has(item.id)) {
+                continue;
+            }
+
+            // Start pre-generation (fire and forget)
+            this._preGenerateItem(item);
+        }
+    }
+
+    /**
+     * Pre-generate audio for a single item
+     * @param {object} item - Queue item
+     */
+    async _preGenerateItem(item) {
+        const itemId = item.id;
+        
+        // Mark as in progress
+        this.preGenerationInProgress.set(itemId, true);
+        
+        try {
+            this.logger.debug(`[PRE-GEN] Starting pre-generation for item ${itemId}: "${item.text?.substring(0, 30)}..."`);
+            
+            const audioData = await this.synthesizeCallback(
+                item.text,
+                item.voice,
+                item.engine,
+                item.synthesisOptions || {}
+            );
+            
+            // Store audio data in the queue item
+            const queueItem = this.queue.find(q => q.id === itemId);
+            if (queueItem) {
+                queueItem.audioData = audioData;
+                this.logger.debug(`[PRE-GEN] Completed for item ${itemId}, audio length: ${audioData?.length || 0}`);
+            } else {
+                this.logger.debug(`[PRE-GEN] Item ${itemId} no longer in queue (may have been removed)`);
+            }
+            
+        } catch (error) {
+            this.stats.preGenerationErrors++;
+            this.logger.warn(`[PRE-GEN] Failed for item ${itemId}: ${error.message}`);
+        } finally {
+            this.preGenerationInProgress.delete(itemId);
+        }
+    }
+
+    /**
+     * Process next item in queue (optimized with pre-generation)
+     */
+    async _processNextOptimized(playCallback) {
         if (!this.isProcessing) {
             return;
         }
@@ -215,14 +308,26 @@ class QueueManager {
         const item = this.dequeue();
 
         if (!item) {
-            // Queue empty, check again in 1 second
-            setTimeout(() => this._processNext(playCallback), 1000);
+            // Queue empty, check again in 500ms (optimized from 1000ms)
+            setTimeout(() => this._processNextOptimized(playCallback), 500);
             return;
         }
 
         this.currentItem = item;
 
+        // Track pre-generation effectiveness
+        if (item.audioData && !item.isStreaming) {
+            this.stats.preGenerationHits++;
+            this.logger.debug(`[PRE-GEN] HIT: Audio ready for item ${item.id}`);
+        } else if (!item.isStreaming) {
+            this.stats.preGenerationMisses++;
+            this.logger.debug(`[PRE-GEN] MISS: Audio not ready for item ${item.id}`);
+        }
+
         try {
+            // Trigger pre-generation for upcoming items BEFORE playing current item
+            this._triggerPreGeneration();
+
             // Call play callback
             await playCallback(item);
 
@@ -234,8 +339,8 @@ class QueueManager {
         } finally {
             this.currentItem = null;
 
-            // Process next item
-            setTimeout(() => this._processNext(playCallback), 100);
+            // Process next item (optimized delay: 50ms instead of 100ms)
+            setTimeout(() => this._processNextOptimized(playCallback), 50);
         }
     }
 
@@ -375,9 +480,11 @@ class QueueManager {
         const count = this.queue.length;
         this.queue = [];
         this.currentItem = null;
+        // Cancel any pending pre-generations
+        this.preGenerationInProgress.clear();
         // Also clear deduplication cache when clearing queue
         this.clearDeduplicationCache();
-        this.logger.info(`Queue cleared: ${count} items removed, deduplication cache cleared`);
+        this.logger.info(`Queue cleared: ${count} items removed, pre-generations cancelled, deduplication cache cleared`);
         return count;
     }
 
@@ -418,13 +525,17 @@ class QueueManager {
                 id: this.currentItem.id,
                 username: this.currentItem.username,
                 text: this.currentItem.text.substring(0, 50),
-                priority: this.currentItem.priority
+                priority: this.currentItem.priority,
+                hasAudio: !!this.currentItem.audioData,
+                isPreGenerating: this.preGenerationInProgress.has(this.currentItem.id)
             } : null,
             nextItems: this.queue.slice(0, 5).map(item => ({
                 id: item.id,
                 username: item.username,
                 text: item.text.substring(0, 50),
-                priority: item.priority
+                priority: item.priority,
+                hasAudio: !!item.audioData,
+                isPreGenerating: this.preGenerationInProgress.has(item.id)
             }))
         };
     }
@@ -433,11 +544,18 @@ class QueueManager {
      * Get queue statistics
      */
     getStats() {
+        const totalPreGenAttempts = this.stats.preGenerationHits + this.stats.preGenerationMisses;
+        const preGenerationHitRate = totalPreGenAttempts > 0 
+            ? ((this.stats.preGenerationHits / totalPreGenAttempts) * 100).toFixed(1) + '%'
+            : 'N/A';
+
         return {
             ...this.stats,
             currentQueueSize: this.queue.length,
             rateLimitedUsers: this.userRateLimits.size,
-            recentHashesSize: this.recentHashes.size
+            recentHashesSize: this.recentHashes.size,
+            preGenerationHitRate: preGenerationHitRate,
+            activePreGenerations: this.preGenerationInProgress.size
         };
     }
 
@@ -450,7 +568,10 @@ class QueueManager {
             totalPlayed: 0,
             totalDropped: 0,
             totalRateLimited: 0,
-            totalDuplicatesBlocked: 0
+            totalDuplicatesBlocked: 0,
+            preGenerationHits: 0,
+            preGenerationMisses: 0,
+            preGenerationErrors: 0
         };
         this.logger.info('Queue statistics reset');
     }
