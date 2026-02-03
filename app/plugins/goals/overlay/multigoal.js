@@ -258,12 +258,27 @@ class MultiGoalOverlayRenderer {
     }
 
     /**
-     * Get template by ID (using client-side templates)
+     * Get template by ID
      */
-    getTemplate(templateId) {
-        // Import templates from shared file
-        const templates = window.GoalTemplates || {};
-        return templates[templateId] || templates['compact-bar'];
+    getTemplate(id) {
+        if (!window.GoalTemplates) {
+            console.error('GoalTemplates not loaded. Ensure templates-shared.js is loaded before multigoal.js');
+            return null;
+        }
+
+        const templateMap = {
+            'compact-bar': window.GoalTemplates.CompactBarTemplate,
+            'full-width': window.GoalTemplates.FullWidthTemplate,
+            'minimal-counter': window.GoalTemplates.MinimalCounterTemplate,
+            'circular-progress': window.GoalTemplates.CircularProgressTemplate,
+            'floating-pill': window.GoalTemplates.FloatingPillTemplate,
+            'vertical-meter': window.GoalTemplates.VerticalMeterTemplate,
+            'neon-glow': window.GoalTemplates.NeonGlowTemplate,
+            'hexagon-progress': window.GoalTemplates.HexagonProgressTemplate,
+            'glassy-card': window.GoalTemplates.GlassyCardTemplate
+        };
+
+        return templateMap[id] || templateMap['compact-bar'];
     }
 }
 
@@ -587,13 +602,3 @@ class WebGLAnimator {
         return texture;
     }
 }
-
-// Load templates from shared file
-const script = document.createElement('script');
-script.src = '/plugins/goals/templates-shared.js';
-script.onload = () => {
-    // Initialize overlay after templates are loaded
-    const renderer = new MultiGoalOverlayRenderer();
-    renderer.init();
-};
-document.head.appendChild(script);
