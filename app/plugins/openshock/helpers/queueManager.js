@@ -12,6 +12,7 @@ const EventEmitter = require('events');
 const SAFETY_MARGIN_MS = 200; // Safety buffer between commands to ensure complete execution
 const DEDUPLICATION_WINDOW_MS = 1000; // 1 second window for detecting duplicate commands
 const LOCK_TIMEOUT_MS = 10000; // 10 seconds max wait for lock acquisition
+const HASH_CLEANUP_THRESHOLD = 100; // Minimum hashes before triggering cleanup
 
 class QueueManager extends EventEmitter {
   /**
@@ -143,7 +144,7 @@ class QueueManager extends EventEmitter {
    */
   _cleanupCommandHashes(now) {
     // Only clean up occasionally to reduce overhead
-    if (this._commandHashes.size < 100) {
+    if (this._commandHashes.size < HASH_CLEANUP_THRESHOLD) {
       return;
     }
     
@@ -710,9 +711,15 @@ class QueueManager extends EventEmitter {
 
     // Lock is held, wait for it to be released with timeout
     return new Promise((resolve, reject) => {
+      // Create waiter object first so we can reference it in the timeout
+      const waiter = {
+        resolve: null,
+        timeoutId: null
+      };
+      
       const timeoutId = setTimeout(() => {
-        // Remove from waiters
-        const index = this._lockWaiters.findIndex(w => w.resolve === resolve);
+        // Remove this waiter from the queue
+        const index = this._lockWaiters.indexOf(waiter);
         if (index !== -1) {
           this._lockWaiters.splice(index, 1);
         }
@@ -725,14 +732,15 @@ class QueueManager extends EventEmitter {
         reject(new Error(`Lock acquisition timeout after ${LOCK_TIMEOUT_MS}ms`));
       }, LOCK_TIMEOUT_MS);
       
-      // Store both resolve and the timeout ID for cleanup
-      this._lockWaiters.push({
-        resolve: () => {
-          clearTimeout(timeoutId);
-          resolve();
-        },
-        timeoutId
-      });
+      // Set the resolve function that clears the timeout
+      waiter.resolve = () => {
+        clearTimeout(timeoutId);
+        resolve();
+      };
+      waiter.timeoutId = timeoutId;
+      
+      // Add to waiters queue
+      this._lockWaiters.push(waiter);
     });
   }
 

@@ -17,6 +17,7 @@ const SHOCK_MAX_INTENSITY = 100; // Maximum shock intensity
 const SHOCK_MIN_DURATION = 300; // Minimum shock duration (ms)
 const SHOCK_MAX_DURATION = 30000; // Maximum shock duration (ms)
 const SHOCK_DISPLAY_DELAY_MS = 500; // Delay before triggering shock to ensure result is visible first
+const OPENSHOCK_BATCH_CLEANUP_THRESHOLD = 50; // Minimum batches before triggering cleanup
 
 // Error messages (TODO: Move to localization system)
 const ERROR_MESSAGES = {
@@ -996,7 +997,7 @@ class WheelGame {
    */
   _cleanupOpenshockBatches(now) {
     // Only clean up occasionally to reduce overhead
-    if (this.openshockBatches.size < 50) {
+    if (this.openshockBatches.size < OPENSHOCK_BATCH_CLEANUP_THRESHOLD) {
       return;
     }
     

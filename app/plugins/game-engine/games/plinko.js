@@ -15,6 +15,7 @@ const OPENSHOCK_MIN_DURATION_MS = 300;
 const OPENSHOCK_MAX_DURATION_MS = 5000;
 const OPENSHOCK_MIN_INTENSITY = 1;
 const OPENSHOCK_MAX_INTENSITY = 100;
+const OPENSHOCK_BATCH_CLEANUP_THRESHOLD = 50; // Minimum batches before triggering cleanup
 
 class PlinkoGame {
   constructor(api, db, logger) {
@@ -861,7 +862,7 @@ class PlinkoGame {
    */
   _cleanupOpenshockBatches(now) {
     // Only clean up occasionally to reduce overhead
-    if (this.openshockBatches.size < 50) {
+    if (this.openshockBatches.size < OPENSHOCK_BATCH_CLEANUP_THRESHOLD) {
       return;
     }
     
