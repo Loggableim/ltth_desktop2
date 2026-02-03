@@ -1750,8 +1750,16 @@
                 const headers = { 'Content-Type': 'application/json' };
                 
                 // Add API key if useGlobalAuth is disabled
-                if (weatherConfig && !weatherConfig.useGlobalAuth && weatherConfig.apiKey) {
-                    headers['x-weather-key'] = weatherConfig.apiKey;
+                if (weatherConfig && !weatherConfig.useGlobalAuth) {
+                    if (weatherConfig.apiKey) {
+                        headers['x-weather-key'] = weatherConfig.apiKey;
+                    } else {
+                        // Warn if API key is required but missing
+                        console.warn('[Weather Control] API key required but not configured. Request may fail.');
+                        showStatus('status.effect_trigger_error', 'warning', { 
+                            error: 'API key not configured. Please check settings.' 
+                        });
+                    }
                 }
 
                 const response = await fetch('/api/weather/trigger', {

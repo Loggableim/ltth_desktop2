@@ -8,7 +8,7 @@
 const request = require('supertest');
 
 describe('Weather Control - Socket Event Emission', () => {
-    let app, server, io, pluginLoader, weatherPlugin;
+    let app, server, io, weatherPlugin;
     let socketEvents = [];
 
     beforeAll(async () => {
@@ -188,7 +188,7 @@ describe('Weather Control - Socket Event Emission', () => {
         expect(weatherEvent).toBeUndefined();
     });
 
-    test('Admin UI testEffect function should work without API key when useGlobalAuth is true', async () => {
+    test('POST /api/weather/trigger should emit event and return success when useGlobalAuth is true', async () => {
         // Simulate the exact request the admin UI sends
         const response = await request(app)
             .post('/api/weather/trigger')
