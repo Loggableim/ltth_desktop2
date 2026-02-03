@@ -5,7 +5,9 @@ Professional weather effects system for TikTok Live overlays with modern GPU-acc
 ## 🌦️ Features
 
 - **7 Weather Effects**: Rain, Snow, Storm, Fog, Thunder, Sunbeam, Glitch Clouds
+- **Live Preview Panel**: Test and visualize weather effects directly in the admin panel before using them on stream
 - **Modern Animations**: GPU-accelerated Canvas 2D rendering
+- **Performance Monitoring**: Real-time FPS counter, particle count, and performance warnings
 - **Permission System**: Role-based access control (Followers, Superfans, Subscribers, Team Members, Top Gifters)
 - **Rate Limiting**: Configurable spam protection (default: 10 requests/minute)
 - **WebSocket Integration**: Real-time event streaming to overlays
@@ -69,6 +71,40 @@ Add the overlay to OBS with proper transparency settings:
    - Position the browser source in your scene hierarchy appropriately
    - Use "Shutdown source when not visible" to save CPU/GPU when not needed
    - Lower FPS to 30 if you experience performance issues
+
+## 👁️ Live Weather Preview
+
+The Weather Control plugin now includes a **Live Preview Panel** in the admin interface, allowing you to test and visualize weather effects before using them on stream.
+
+### Features
+
+- **Real-time Preview Canvas**: 640x360px (16:9 aspect ratio) canvas showing exactly how effects will look
+- **Performance Monitoring**: 
+  - Live FPS counter
+  - Average FPS tracker
+  - Particle count display
+  - Active effects counter
+  - Performance warning when FPS drops below 30
+- **Interactive Controls**:
+  - **Start/Stop Preview**: Toggle preview rendering on/off
+  - **Test Effect Buttons**: Each weather effect card has a test button to preview that specific effect
+  - **Stop All**: Clear all active effects from the preview
+
+### How to Use
+
+1. Navigate to the Weather Control admin panel (`http://localhost:3000/weather-control/ui`)
+2. Find the **Live Weather Preview** section near the top
+3. Click **"Start Preview"** to begin rendering
+4. Use any of the **"Test Effect"** buttons in the Weather Effects section to preview specific effects
+5. Adjust intensity, duration, and permanent settings to see how they affect the preview
+6. Monitor the performance stats to ensure your configuration will run smoothly
+
+### Performance Tips
+
+- The preview uses the same rendering engine as the actual overlay
+- If average FPS drops below 30, you'll see a performance warning
+- Consider reducing particle intensity or limiting concurrent effects if performance is poor
+- The preview automatically stops when you close or navigate away from the page
 
 ## 💬 Chat Commands (GCCE Integration)
 
