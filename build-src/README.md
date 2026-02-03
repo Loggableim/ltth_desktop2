@@ -10,9 +10,45 @@ This directory contains the source code for the Windows launchers.
 ## Launcher Features
 
 ### GitHub API Auto-Update
-Der Launcher prüft automatisch bei jedem Start ob Updates verfügbar sind und lädt diese via GitHub API herunter.
 
-**Update-Mechanismus:**
+Der Launcher unterstützt zwei Update-Modi:
+
+#### 1. **Release-Modus (Standard, empfohlen)**
+Verwendet GitHub Releases für stabile Updates mit semantischer Versionierung.
+
+**Eigenschaften:**
+- Lädt nur stabile, getaggte Releases (z.B. v1.2.3)
+- Zeigt Release Notes im Update-Prompt
+- Vergleicht semantische Versionen (v1.0.0 < v1.1.0 < v2.0.0)
+- Version gespeichert in `runtime/version.txt`
+- Automatischer Fallback zu Commit-Modus bei Fehler
+- Ideal für normale Benutzer
+
+**Release Notes:**
+Beim Update-Prompt werden die ersten 10 Zeilen der Release Notes angezeigt:
+```
+===============================================
+  Update verfuegbar!
+===============================================
+
+Aktuelle Version: v1.0.0
+Neue Version:     v1.2.3
+
+Release Notes:
+---
+### 🎉 Neue Features
+- Feature A
+- Feature B
+... (gekuerzt)
+---
+
+Moechtest du das Update jetzt installieren? (J/N):
+```
+
+#### 2. **Commit-Modus (Legacy/Dev)**
+Verwendet Commit SHA für bleeding-edge Updates (alter Mechanismus).
+
+**Eigenschaften:**
 - Prüft bei jedem Start nach Updates (max. 1x pro 24h)
 - Vergleicht neuesten Commit SHA mit lokalem Stand (`runtime/version_sha.txt`)
 - User-Prompt für Update-Installation
@@ -23,10 +59,29 @@ Der Launcher prüft automatisch bei jedem Start ob Updates verfügbar sind und l
 - Automatische npm install nach Update falls nötig
 - Robuste Fehlerbehandlung (min. 90% Erfolgsrate)
 
+**Auto-Erkennung:**
+Der Launcher erkennt automatisch den richtigen Modus:
+1. **Umgebungsvariable:** `LTTH_UPDATE_MODE` (commit/release/auto)
+2. **version.txt existiert:** Release-Modus
+3. **version_sha.txt existiert:** Commit-Modus
+4. **Keins vorhanden:** Release-Modus (Standard)
+
+**Manuelles Setzen:**
+```bash
+# Release-Modus erzwingen
+set LTTH_UPDATE_MODE=release
+
+# Commit-Modus erzwingen (für Entwickler)
+set LTTH_UPDATE_MODE=commit
+
+# Auto-Erkennung (Standard)
+set LTTH_UPDATE_MODE=auto
+```
+
 **Rate Limiting:**
 - Max. 1 Update-Check pro 24h
 - Timestamp gespeichert in `runtime/last_update_check.txt`
-- Aktueller SHA gespeichert in `runtime/version_sha.txt`
+- Version/SHA gespeichert in `runtime/version.txt` oder `runtime/version_sha.txt`
 
 **Sicherheit:**
 - Keine Credentials nötig (GitHub API read-only)
@@ -70,11 +125,12 @@ LTTH_Desktop/
 │   │   ├── node.exe
 │   │   ├── npm.cmd
 │   │   ├── npx.cmd
-│   │   ├── version.txt          # "20.18.1"
+│   │   ├── version.txt              # "20.18.1" (Node.js Version)
 │   │   └── node_modules/
-│   ├── node.backup/              # Optional: Backup bei Update
-│   ├── version_sha.txt           # Aktueller Git Commit SHA
-│   └── last_update_check.txt     # Timestamp letzter Update-Check
+│   ├── node.backup/                  # Optional: Backup bei Update
+│   ├── version.txt                   # Git Release Version (z.B. "v1.2.3") - Release-Modus
+│   ├── version_sha.txt               # Git Commit SHA - Commit-Modus
+│   └── last_update_check.txt         # Timestamp letzter Update-Check
 ├── app/
 └── ...
 ```
