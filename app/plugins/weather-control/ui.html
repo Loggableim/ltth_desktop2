@@ -1288,6 +1288,9 @@
         let previewEngine = null;
         let previewActive = false;
         let previewStatsInterval = null;
+        
+        // Global config (loaded from server)
+        let weatherConfig = null;
 
         const translations = {
             en: {
@@ -1603,6 +1606,9 @@
 
                 if (data.success) {
                     const config = data.config;
+                    
+                    // Store config globally for use in testEffect()
+                    weatherConfig = config;
 
                     // Main settings
                     document.getElementById('enabled').checked = config.enabled;
@@ -1740,9 +1746,17 @@
                 const intensity = parseFloat(document.getElementById(`effect-${action}-intensity`).value);
                 const duration = parseInt(document.getElementById(`effect-${action}-duration`).value);
 
+                // Build headers
+                const headers = { 'Content-Type': 'application/json' };
+                
+                // Add API key if useGlobalAuth is disabled
+                if (weatherConfig && !weatherConfig.useGlobalAuth && weatherConfig.apiKey) {
+                    headers['x-weather-key'] = weatherConfig.apiKey;
+                }
+
                 const response = await fetch('/api/weather/trigger', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     // Don't send username for test requests to bypass permission checks
                     body: JSON.stringify({ action, intensity, duration })
                 });
