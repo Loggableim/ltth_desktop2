@@ -67,7 +67,7 @@ Der offizielle Standalone Launcher lädt automatisch die neueste Version von LTT
 ## So funktioniert's
 1. Laden Sie den Launcher herunter
 2. Windows: Führen Sie launcher.exe aus / Linux: `chmod +x launcher && ./launcher`
-3. Warten Sie, während der Launcher alles einrichtet (~35-45 MB Download statt ~150 MB)
+3. Warten Sie, während der Launcher alles einrichtet (~27-30 MB Download)
 4. LTTH startet automatisch im Browser
 
 ## Systemanforderungen
@@ -86,7 +86,7 @@ A: Der Launcher ist nur 8.8 MB groß und lädt alle benötigten Dateien beim ers
 A: Nein, der Launcher installiert automatisch eine portable Version von Node.js.
 
 **F: Wie lange dauert der erste Start?**
-A: Der erste Start dauert 1-3 Minuten, da alle Dateien heruntergeladen werden (~35-45 MB statt vorher ~150 MB).
+A: Der erste Start dauert 1-3 Minuten, da alle Dateien heruntergeladen werden (~27-30 MB).
 
 **F: Gibt es Updates?**
 A: Ja, der Launcher lädt automatisch die neueste Version von GitHub.

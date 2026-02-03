@@ -250,7 +250,7 @@ func (sl *StandaloneLauncher) filterRelevantFiles(items []GitHubTreeItem) []GitH
 		"launcher.exe",
 		"launcher-console.exe",
 		"dev_launcher.exe",
-		"main.js", // This is for Electron, not needed for standalone
+		"main.js", // Root main.js is Electron entry point, not needed for standalone Node.js server
 		
 		// Runtime directories
 		"runtime/",
@@ -305,7 +305,9 @@ func (sl *StandaloneLauncher) filterRelevantFiles(items []GitHubTreeItem) []GitH
 		// Check blacklist first
 		blacklisted := false
 		for _, prefix := range blacklistPrefixes {
-			if strings.HasPrefix(item.Path, prefix) || strings.Contains(item.Path, prefix) {
+			// Check if it starts with the prefix (for directories/files)
+			// or if it ends with the suffix (for file extensions like .md)
+			if strings.HasPrefix(item.Path, prefix) || strings.HasSuffix(item.Path, prefix) {
 				blacklisted = true
 				break
 			}

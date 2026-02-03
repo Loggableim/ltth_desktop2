@@ -37,7 +37,7 @@ build.bat           # Windows
 
 1. **Download** `launcher.exe` (Windows) oder `launcher` (Linux) von [ltth.app](https://ltth.app)
 2. **Ausführen** - Doppelklick auf die Datei (Windows) oder `./launcher` im Terminal (Linux)
-3. **Warten** - Launcher lädt automatisch alle nötigen Dateien (~35-45 MB statt ~150 MB)
+3. **Warten** - Launcher lädt automatisch alle nötigen Dateien (~27-30 MB)
 4. **Fertig** - LTTH startet automatisch im Browser
 
 ### Was passiert beim ersten Start?
