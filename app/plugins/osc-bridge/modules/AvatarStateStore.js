@@ -288,7 +288,7 @@ class AvatarStateStore {
             try {
                 listener(event);
             } catch (error) {
-                console.error('Error in AvatarStateStore listener:', error);
+                this.api.log('Error in AvatarStateStore listener: ' + error.message, 'error');
             }
         }
     }

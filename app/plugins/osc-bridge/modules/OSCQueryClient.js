@@ -9,6 +9,16 @@ const axios = require('axios');
 
 class OSCQueryClient {
     constructor(host = '127.0.0.1', port = 9001, logger = console) {
+        // Validate host
+        if (!host || typeof host !== 'string' || host.trim().length === 0) {
+            throw new Error('Invalid host: must be a non-empty string');
+        }
+        
+        // Validate port
+        if (typeof port !== 'number' || port < 1 || port > 65535 || !Number.isInteger(port)) {
+            throw new Error('Invalid port: must be an integer between 1 and 65535');
+        }
+        
         this.host = host;
         this.port = port;
         this.baseUrl = `http://${host}:${port}`;
@@ -42,6 +52,12 @@ class OSCQueryClient {
 
             // Query host info
             const hostInfoResponse = await axios.get(`${this.baseUrl}/?HOST_INFO`);
+            
+            // Add defensive null-check
+            if (!hostInfoResponse || !hostInfoResponse.data) {
+                throw new Error('Invalid host info response: no data received');
+            }
+            
             this.hostInfo = hostInfoResponse.data;
 
             // Discover avatar parameters
@@ -361,14 +377,23 @@ class OSCQueryClient {
 
         this.wsReconnectAttempts++;
         
+        // Exponential backoff: 2s, 4s, 8s, 16s, 32s
+        const baseDelay = this.reconnectDelay;
+        const exponentialDelay = baseDelay * Math.pow(2, this.wsReconnectAttempts - 1);
+        
+        // Add random jitter (±20%)
+        const jitter = exponentialDelay * 0.2 * (Math.random() * 2 - 1);
+        const delayWithJitter = Math.max(baseDelay, exponentialDelay + jitter);
+        
         setTimeout(() => {
             this.logger.info(`Attempting WebSocket reconnect (${this.wsReconnectAttempts}/${this.maxReconnectAttempts})`);
             this.subscribe();
-        }, this.reconnectDelay * this.wsReconnectAttempts);
+        }, delayWithJitter);
     }
 
     _parseType(typeString) {
         // OSC type tags: i=int32, f=float32, s=string, b=blob, T=true, F=false, etc.
+        // Extended type tags: h=int64, d=double, c=char, r=RGBA, m=MIDI, N=Nil, I=Infinity
         if (!typeString) return 'unknown';
         
         const typeMap = {
@@ -377,7 +402,14 @@ class OSCQueryClient {
             's': 'string',
             'b': 'blob',
             'T': 'bool',
-            'F': 'bool'
+            'F': 'bool',
+            'h': 'int64',
+            'd': 'double',
+            'c': 'char',
+            'r': 'rgba',
+            'm': 'midi',
+            'N': 'nil',
+            'I': 'infinity'
         };
         
         return typeMap[typeString] || typeString;
