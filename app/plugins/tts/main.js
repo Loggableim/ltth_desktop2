@@ -520,6 +520,11 @@ class TTSPlugin {
             // Register TikTok events (for chat messages)
             this._registerTikTokEvents();
 
+            // Register synthesis callback for pre-generation
+            this.queueManager.setSynthesizeCallback(async (text, voice, engine, options) => {
+                return this._synthesizeForPreGeneration(text, voice, engine, options);
+            });
+
             // Start queue processing
             this.queueManager.startProcessing(async (item) => {
                 await this._playAudio(item);
@@ -2777,6 +2782,41 @@ class TTSPlugin {
     }
 
     /**
+     * Synthesize audio for pre-generation (used by queue manager)
+     * @private
+     */
+    async _synthesizeForPreGeneration(text, voice, engine, options = {}) {
+        const ttsEngine = this.engines[engine];
+        
+        if (!ttsEngine) {
+            throw new Error(`Engine not available: ${engine}`);
+        }
+        
+        this._logDebug('PRE_GEN', 'Synthesizing for pre-generation', {
+            text: text.substring(0, 50),
+            voice,
+            engine
+        });
+        
+        try {
+            const audioData = await ttsEngine.synthesize(text, voice, this.config.speed, options);
+            
+            this._logDebug('PRE_GEN', 'Pre-generation synthesis complete', {
+                audioLength: audioData?.length || 0,
+                engine
+            });
+            
+            return audioData;
+        } catch (error) {
+            this._logDebug('PRE_GEN', 'Pre-generation synthesis failed', {
+                error: error.message,
+                engine
+            });
+            throw error;
+        }
+    }
+
+    /**
      * Play audio (called by queue processor)
      */
     async _playAudio(item) {
@@ -2803,6 +2843,33 @@ class TTSPlugin {
                 source: item.source || 'unknown',
                 isStreaming: item.isStreaming || false
             };
+
+            // Check if audio needs on-demand synthesis (pre-generation failed or not complete)
+            if (!item.audioData && !item.isStreaming) {
+                this._logDebug('PLAYBACK', 'No pre-generated audio, synthesizing on-demand', {
+                    id: item.id,
+                    engine: item.engine
+                });
+                
+                const ttsEngine = this.engines[item.engine];
+                if (ttsEngine) {
+                    try {
+                        item.audioData = await ttsEngine.synthesize(
+                            item.text,
+                            item.voice,
+                            this.config.speed,
+                            item.synthesisOptions || {}
+                        );
+                        this._logDebug('PLAYBACK', 'On-demand synthesis complete', {
+                            id: item.id,
+                            audioLength: item.audioData?.length || 0
+                        });
+                    } catch (synthError) {
+                        this.logger.error(`On-demand synthesis failed: ${synthError.message}`);
+                        throw synthError;
+                    }
+                }
+            }
 
             // Handle streaming mode
             if (item.isStreaming) {
