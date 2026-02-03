@@ -121,6 +121,12 @@ class ExpressionController {
 
         try {
             for (let i = 0; i < combo.length; i++) {
+                // Check if combo was aborted
+                if (!this.isPlayingCombo) {
+                    this.logger.info('⏹️ Combo aborted');
+                    return false;
+                }
+                
                 const step = combo[i];
                 
                 // Validate step
@@ -191,7 +197,7 @@ class ExpressionController {
         // Release all active expressions
         for (const key of this.activeExpressions) {
             const [type, slot] = key.split('_');
-            this.triggerExpression(type, parseInt(slot), false);
+            this.triggerExpression(type, parseInt(slot, 10), false);
         }
         
         this.activeExpressions.clear();
@@ -217,7 +223,7 @@ class ExpressionController {
         let count = 0;
         for (const key of this.activeExpressions) {
             const [type, slot] = key.split('_');
-            this.triggerExpression(type, parseInt(slot), false);
+            this.triggerExpression(type, parseInt(slot, 10), false);
             count++;
         }
         this.activeExpressions.clear();

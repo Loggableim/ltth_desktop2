@@ -138,6 +138,48 @@ class ParameterPresetManager {
 }
 
 /**
+ * Token Bucket Rate Limiter
+ * Limits OSC message rate to prevent overload
+ */
+class RateLimiter {
+    constructor(maxPerSecond = 100) {
+        this.maxTokens = maxPerSecond;
+        this.tokens = maxPerSecond;
+        this.lastRefill = Date.now();
+        this.refillRate = maxPerSecond / 1000; // tokens per ms
+    }
+
+    tryConsume(count = 1) {
+        this._refill();
+        
+        if (this.tokens >= count) {
+            this.tokens -= count;
+            return true;
+        }
+        
+        return false;
+    }
+
+    _refill() {
+        const now = Date.now();
+        const elapsed = now - this.lastRefill;
+        const tokensToAdd = elapsed * this.refillRate;
+        
+        this.tokens = Math.min(this.maxTokens, this.tokens + tokensToAdd);
+        this.lastRefill = now;
+    }
+
+    getRemainingTokens() {
+        this._refill();
+        return Math.floor(this.tokens);
+    }
+
+    getCapacity() {
+        return this.maxTokens;
+    }
+}
+
+/**
  * OSC-Bridge Plugin für VRChat-Integration
  *
  * Permanente OSC-Brücke zwischen TikTok-Events und VRChat-Avataren.
@@ -197,6 +239,7 @@ class OSCBridgePlugin {
         this.messageBatcher = new MessageBatcher(10); // 10ms batch window
         this.parameterCache = new ParameterCache(5000); // 5s TTL
         this.presetManager = new ParameterPresetManager(api);
+        this.rateLimiter = new RateLimiter(100); // 100 messages per second default
         
         // Modular components (initialized later)
         this.oscQueryClient = null; // OSCQueryClient instance
@@ -298,6 +341,10 @@ class OSCBridgePlugin {
             maxPacketSize: 65536,
             giftMappings: [], // Array of {giftId, giftName, action, params}
             avatars: [], // Array of {id, name, avatarId, description}
+            favorites: {
+                avatars: [],
+                maxFavorites: 10
+            },
             // Performance features
             messageBatching: {
                 enabled: true,
@@ -306,6 +353,11 @@ class OSCBridgePlugin {
             parameterCaching: {
                 enabled: true,
                 ttl: 5000 // ms
+            },
+            // Rate Limiting
+            rateLimiting: {
+                enabled: true,
+                maxPerSecond: 100 // Max OSC messages per second
             },
             // OSCQuery Auto-Discovery
             oscQuery: {
@@ -1005,6 +1057,148 @@ class OSCBridgePlugin {
                 res.status(500).json({ success: false, error: error.message });
             }
         });
+
+        // Feature #11: Health Check Endpoint
+        this.api.registerRoute('get', '/api/osc/health', (req, res) => {
+            const uptime = this.stats.startTime ? Date.now() - this.stats.startTime : 0;
+            const messageRate = uptime > 0 ? (this.stats.messagesSent / (uptime / 1000)) : 0;
+            const memUsage = process.memoryUsage();
+            
+            res.json({
+                status: this.isRunning ? 'healthy' : 'stopped',
+                uptime: uptime,
+                latency: this.stats.lastMessageSent ? Date.now() - this.stats.lastMessageSent.timestamp : null,
+                messageRate: Math.round(messageRate * 100) / 100,
+                memoryUsage: Math.round(memUsage.heapUsed / 1024 / 1024 * 100) / 100, // MB
+                vrchatConnected: this.isRunning && this.udpPort !== null
+            });
+        });
+
+        // Feature #12: Preset Export/Import
+        this.api.registerRoute('get', '/api/osc/presets/export', (req, res) => {
+            const presets = this.presetManager.getAllPresets();
+            const exportData = {
+                version: '1.0',
+                exportedAt: new Date().toISOString(),
+                presets: presets
+            };
+            
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Content-Disposition', `attachment; filename="osc-presets-${Date.now()}.json"`);
+            res.json(exportData);
+        });
+
+        this.api.registerRoute('post', '/api/osc/presets/import', async (req, res) => {
+            try {
+                const { presets } = req.body;
+                
+                if (!presets || !Array.isArray(presets)) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Invalid import data: presets array required' 
+                    });
+                }
+                
+                let imported = 0;
+                for (const preset of presets) {
+                    if (preset.name && preset.parameters) {
+                        await this.presetManager.savePreset(
+                            preset.name,
+                            preset.parameters,
+                            preset.description || ''
+                        );
+                        imported++;
+                    }
+                }
+                
+                res.json({ 
+                    success: true, 
+                    imported: imported,
+                    total: presets.length
+                });
+            } catch (error) {
+                this.logger.error('Preset import failed:', error);
+                res.status(500).json({ success: false, error: error.message });
+            }
+        });
+
+        // Feature #13: Avatar Favorites System
+        this.api.registerRoute('get', '/api/osc/favorites', async (req, res) => {
+            const config = await this.api.getConfig('config') || this.getDefaultConfig();
+            const favorites = config.favorites?.avatars || [];
+            res.json({ success: true, favorites: favorites });
+        });
+
+        this.api.registerRoute('post', '/api/osc/favorites/:avatarId', async (req, res) => {
+            try {
+                if (!this.config.favorites) {
+                    this.config.favorites = { avatars: [], maxFavorites: 10 };
+                }
+                
+                const { avatarId } = req.params;
+                const maxFavorites = this.config.favorites.maxFavorites || 10;
+                
+                // Check if already in favorites
+                if (this.config.favorites.avatars.includes(avatarId)) {
+                    return res.json({ 
+                        success: false, 
+                        error: 'Avatar already in favorites' 
+                    });
+                }
+                
+                // Check max favorites limit
+                if (this.config.favorites.avatars.length >= maxFavorites) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: `Maximum ${maxFavorites} favorites reached` 
+                    });
+                }
+                
+                // Add to favorites
+                this.config.favorites.avatars.push(avatarId);
+                await this.api.setConfig('config', this.config);
+                
+                this.logger.info(`⭐ Added avatar ${avatarId} to favorites`);
+                res.json({ 
+                    success: true, 
+                    favorites: this.config.favorites.avatars 
+                });
+            } catch (error) {
+                this.logger.error('Add to favorites failed:', error);
+                res.status(500).json({ success: false, error: error.message });
+            }
+        });
+
+        this.api.registerRoute('delete', '/api/osc/favorites/:avatarId', async (req, res) => {
+            try {
+                if (!this.config.favorites) {
+                    this.config.favorites = { avatars: [], maxFavorites: 10 };
+                }
+                
+                const { avatarId } = req.params;
+                const index = this.config.favorites.avatars.indexOf(avatarId);
+                
+                if (index === -1) {
+                    return res.json({ 
+                        success: false, 
+                        error: 'Avatar not in favorites' 
+                    });
+                }
+                
+                // Remove from favorites
+                this.config.favorites.avatars.splice(index, 1);
+                await this.api.setConfig('config', this.config);
+                
+                this.logger.info(`❌ Removed avatar ${avatarId} from favorites`);
+                res.json({ 
+                    success: true, 
+                    favorites: this.config.favorites.avatars 
+                });
+            } catch (error) {
+                this.logger.error('Remove from favorites failed:', error);
+                res.status(500).json({ success: false, error: error.message });
+            }
+        });
     }
 
     registerSocketEvents() {
@@ -1127,6 +1321,12 @@ class OSCBridgePlugin {
         try {
             if (!this.isValidAddress(address)) {
                 this.logger.warn(`Blocked OSC send to suspicious address: ${address}`);
+                return false;
+            }
+
+            // Apply rate limiting
+            if (!this.rateLimiter.tryConsume(1)) {
+                this.logger.warn('Rate limit exceeded, message dropped');
                 return false;
             }
 

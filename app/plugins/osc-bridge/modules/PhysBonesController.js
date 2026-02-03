@@ -18,6 +18,9 @@ class PhysBonesController {
         this.activeAnimations = new Map(); // Map<animationId, {interval, bone, type}>
         this.animationIdCounter = 0;
         
+        // Track pending timeouts for cleanup
+        this.pendingTimeouts = new Set();
+        
         // Animation frame rate
         this.FPS = 60;
         this.frameTime = 1000 / this.FPS; // ~16.67ms
@@ -375,9 +378,12 @@ class PhysBonesController {
         // Grab: instant on, delayed off
         this.setParameter(boneName, 'IsGrabbed', 1);
         
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
             this.setParameter(boneName, 'IsGrabbed', 0);
+            this.pendingTimeouts.delete(timeoutId);
         }, duration);
+        
+        this.pendingTimeouts.add(timeoutId);
 
         return null; // No continuous animation
     }
@@ -427,6 +433,11 @@ class PhysBonesController {
 
     destroy() {
         this.stopAllAnimations();
+        // Clear all pending timeouts
+        for (const timeoutId of this.pendingTimeouts) {
+            clearTimeout(timeoutId);
+        }
+        this.pendingTimeouts.clear();
         this.discoveredBones.clear();
     }
 }
