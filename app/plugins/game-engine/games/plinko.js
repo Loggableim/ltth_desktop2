@@ -32,6 +32,12 @@ class PlinkoGame {
     this.activeBalls = new Map(); // ballId -> { username, bet, timestamp }
     this.batchTrackers = new Map(); // batchId -> { remaining, totalBet, totalWinnings, slots: [] }
     
+    // OpenShock batch deduplication tracking
+    // Prevents duplicate multi-device commands within a time window
+    // Key format: "username:deviceIds:type:intensity:duration"
+    this.openshockBatches = new Map(); // batchKey -> timestamp
+    this.openshockBatchWindow = 5000; // 5 second window for batch deduplication
+    
     // Ball ID counter
     this.ballIdCounter = 0;
     
@@ -809,6 +815,64 @@ class PlinkoGame {
   }
 
   /**
+   * Generate a batch key for OpenShock command deduplication
+   * @private
+   * @param {string} username - Username
+   * @param {Array<string>} deviceIds - Device IDs (sorted)
+   * @param {string} type - Command type
+   * @param {number} intensity - Intensity value
+   * @param {number} duration - Duration in ms
+   * @returns {string} Batch key
+   */
+  _getOpenshockBatchKey(username, deviceIds, type, intensity, duration) {
+    // Sort device IDs to ensure consistent key regardless of order
+    const sortedDevices = [...deviceIds].sort().join(',');
+    return `${username}:${sortedDevices}:${type}:${intensity}:${duration}`;
+  }
+
+  /**
+   * Check if an OpenShock batch is a duplicate within the deduplication window
+   * @private
+   * @param {string} batchKey - Batch key
+   * @returns {boolean} True if duplicate
+   */
+  _isDuplicateOpenshockBatch(batchKey) {
+    const now = Date.now();
+    const lastBatchTime = this.openshockBatches.get(batchKey);
+    
+    if (lastBatchTime && (now - lastBatchTime) < this.openshockBatchWindow) {
+      // Duplicate batch within window
+      return true;
+    }
+    
+    // Not a duplicate, update timestamp
+    this.openshockBatches.set(batchKey, now);
+    
+    // Clean up old batches to prevent memory leak
+    this._cleanupOpenshockBatches(now);
+    
+    return false;
+  }
+
+  /**
+   * Clean up old OpenShock batch tracking entries
+   * @private
+   * @param {number} now - Current timestamp
+   */
+  _cleanupOpenshockBatches(now) {
+    // Only clean up occasionally to reduce overhead
+    if (this.openshockBatches.size < 50) {
+      return;
+    }
+    
+    for (const [key, timestamp] of this.openshockBatches.entries()) {
+      if ((now - timestamp) > this.openshockBatchWindow) {
+        this.openshockBatches.delete(key);
+      }
+    }
+  }
+
+  /**
    * Trigger OpenShock reward for the user
    */
   async triggerOpenshockReward(username, reward, slotIndex) {
@@ -879,6 +943,19 @@ class PlinkoGame {
 
       if (targetDeviceIds.length === 0) {
         this.logger.warn('No device IDs configured for OpenShock reward');
+        return false;
+      }
+
+      // Check for duplicate batch within deduplication window
+      const batchKey = this._getOpenshockBatchKey(username, targetDeviceIds, type, intensity, duration);
+      if (this._isDuplicateOpenshockBatch(batchKey)) {
+        this.logger.info(`[Plinko] Duplicate OpenShock batch blocked for ${username}`, {
+          deviceCount: targetDeviceIds.length,
+          type,
+          intensity,
+          duration,
+          windowMs: this.openshockBatchWindow
+        });
         return false;
       }
 

@@ -99,6 +99,10 @@ class OpenShockPlugin {
         // Log-Buffer für Frontend
         this.eventLog = [];
         this.maxEventLog = 500;
+        
+        // Debounce timer for queue updates
+        this._queueUpdateDebounceTimer = null;
+        this._queueUpdateDebounceDelay = 50; // 50ms debounce
     }
 
     /**
@@ -2650,17 +2654,28 @@ class OpenShockPlugin {
     }
 
     /**
-     * Queue-Update broadcasten
+     * Queue-Update broadcasten mit Debouncing
+     * Coalesces multiple rapid updates into a single broadcast after 50ms
      */
     _broadcastQueueUpdate() {
-        const status = this.queueManager.getQueueStatus();
-        const queueItems = this.queueManager.getQueueItems();
+        // Clear existing timer if any
+        if (this._queueUpdateDebounceTimer) {
+            clearTimeout(this._queueUpdateDebounceTimer);
+        }
         
-        this.api.emit('openshock:queue:update', {
-            ...status,
-            queueItems: queueItems,
-            currentItem: this.queueManager.currentlyProcessingItem
-        });
+        // Set new timer to broadcast after debounce delay
+        this._queueUpdateDebounceTimer = setTimeout(() => {
+            this._queueUpdateDebounceTimer = null;
+            
+            const status = this.queueManager.getQueueStatus();
+            const queueItems = this.queueManager.getQueueItems();
+            
+            this.api.emit('openshock:queue:update', {
+                ...status,
+                queueItems: queueItems,
+                currentItem: this.queueManager.currentlyProcessingItem
+            });
+        }, this._queueUpdateDebounceDelay);
     }
 
     /**
@@ -2723,6 +2738,12 @@ class OpenShockPlugin {
     async destroy() {
         try {
             this.api.log('OpenShock Plugin shutting down...', 'info');
+
+            // Clear debounce timer
+            if (this._queueUpdateDebounceTimer) {
+                clearTimeout(this._queueUpdateDebounceTimer);
+                this._queueUpdateDebounceTimer = null;
+            }
 
             // Stats interval stoppen
             if (this.statsInterval) {
