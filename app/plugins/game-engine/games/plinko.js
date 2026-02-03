@@ -9,6 +9,7 @@
 const CLEANUP_INTERVAL_MS = 30000; // 30 seconds
 const MAX_BALL_AGE_MS = 120000; // 2 minutes
 const MIN_FLIGHT_TIME_MS = 1000; // Minimum time a ball must be in flight (anti-cheat)
+const RATE_LIMIT_MAX_AGE_MS = 60000; // 1 minute - cleanup old rate limit entries
 
 // OpenShock safety limits
 const OPENSHOCK_MIN_DURATION_MS = 300;
@@ -53,6 +54,10 @@ class PlinkoGame {
 
     // Cached config to avoid repeated DB reads
     this.cachedConfig = null;
+    
+    // Rate limit tracking - initialize in constructor to prevent memory leak 
+    // from dynamic creation in spawnBalls() with no cleanup
+    this.rateLimitMap = new Map(); // username -> timestamp
   }
 
   /**
@@ -489,7 +494,6 @@ class PlinkoGame {
     const rateKey = username;
     const rateLimitMs = config.physicsSettings.rateLimitMs || 800;
     if (!isTest) {
-      if (!this.rateLimitMap) this.rateLimitMap = new Map();
       const last = this.rateLimitMap.get(rateKey) || 0;
       if (now - last < rateLimitMs) {
         return { success: false, error: 'Please wait before dropping another ball' };
@@ -1094,6 +1098,23 @@ class PlinkoGame {
 
     if (oldBalls.length > 0) {
       this.logger.info(`🧹 Cleaned up ${oldBalls.length} stuck Plinko balls`);
+    }
+    
+    // Clean up rate limit map (remove entries older than RATE_LIMIT_MAX_AGE_MS)
+    const oldRateLimitKeys = [];
+    
+    for (const [key, timestamp] of this.rateLimitMap.entries()) {
+      if (now - timestamp > RATE_LIMIT_MAX_AGE_MS) {
+        oldRateLimitKeys.push(key);
+      }
+    }
+    
+    for (const key of oldRateLimitKeys) {
+      this.rateLimitMap.delete(key);
+    }
+    
+    if (oldRateLimitKeys.length > 0) {
+      this.logger.debug(`🧹 Cleaned up ${oldRateLimitKeys.length} old rate limit entries`);
     }
   }
 
