@@ -4,6 +4,10 @@ let currentConfig = {};
 let animazeData = {};
 let isConnected = false;
 
+// Toast queue for sequential messages
+let toastQueue = [];
+let toastShowing = false;
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   fetchStatus();
@@ -80,7 +84,7 @@ function setupEventListeners() {
   if (sendChatpalBtn) sendChatpalBtn.addEventListener('click', sendChatpalMessage);
 
   // Event actions
-  ['follow', 'share', 'subscribe', 'like'].forEach(event => {
+  ['follow', 'share', 'subscribe', 'like', 'gift', 'chat'].forEach(event => {
     const enabled = document.getElementById(`${event}Enabled`);
     if (enabled) enabled.addEventListener('change', () => updateEventAction(event));
 
@@ -244,6 +248,11 @@ function updateStatus(data) {
   updateEventActionUI('share');
   updateEventActionUI('subscribe');
   updateEventActionUI('like');
+  updateEventActionUI('gift');
+  updateEventActionUI('chat');
+  
+  // Update Override Behaviors UI
+  updateOverridesUI(data.overrideBehaviors || []);
   
   // Update Animaze data UI
   updateAnimazeDataUI();
@@ -585,6 +594,21 @@ function switchTab(tabName) {
 }
 
 function showToast(message, type = 'info') {
+  toastQueue.push({ message, type });
+  if (!toastShowing) {
+    processToastQueue();
+  }
+}
+
+function processToastQueue() {
+  if (toastQueue.length === 0) {
+    toastShowing = false;
+    return;
+  }
+  
+  toastShowing = true;
+  const { message, type } = toastQueue.shift();
+  
   const toast = document.getElementById('toast');
   const toastMessage = document.getElementById('toastMessage');
   toastMessage.textContent = message;
@@ -599,7 +623,11 @@ function showToast(message, type = 'info') {
   }
   
   toast.classList.remove('hidden');
-  setTimeout(() => toast.classList.add('hidden'), 5000); // Show errors longer
+  
+  setTimeout(() => {
+    toast.classList.add('hidden');
+    processToastQueue();
+  }, type === 'error' ? 5000 : 3000);
 }
 
 function addGiftMapping() {
@@ -1280,6 +1308,49 @@ async function deletePersonaFromSelector() {
   }
 }
 
+// ==================== Override Behaviors ====================
+
+function updateOverridesUI(overrideBehaviors = []) {
+  const overridesList = document.getElementById('overridesList');
+  if (!overridesList) return;
+  
+  if (overrideBehaviors.length === 0) {
+    overridesList.innerHTML = '<p class="text-gray-400">Keine Override Behaviors verfügbar</p>';
+    return;
+  }
+  
+  overridesList.innerHTML = overrideBehaviors.map(behavior => `
+    <div class="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+      <span class="text-sm">${behavior}</span>
+      <label class="switch">
+        <input type="checkbox" data-behavior="${behavior}" onchange="toggleOverride('${behavior}', this.checked)">
+        <span class="slider"></span>
+      </label>
+    </div>
+  `).join('');
+}
+
+async function toggleOverride(behavior, enabled) {
+  try {
+    const response = await fetch('/api/animazingpal/override', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ behavior, value: enabled })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      showToast(`${behavior}: ${enabled ? 'Aktiviert' : 'Deaktiviert'}`);
+    } else {
+      showToast('Fehler: ' + result.error, 'error');
+    }
+  } catch (error) {
+    showToast('Fehler beim Umschalten: ' + error.message, 'error');
+  }
+}
+
 // Make functions available globally
 window.editPersona = editPersona;
 window.deletePersona = deletePersona;
+window.toggleOverride = toggleOverride;
