@@ -1,4 +1,6 @@
 const axios = require('axios');
+const WebSocket = require('ws');
+const msgpack = require('@msgpack/msgpack');
 
 /**
  * Fish.audio TTS Engine (Official API)
@@ -1245,6 +1247,250 @@ class FishSpeechEngine {
                 throw error;
             }
         }
+    }
+
+    /**
+     * WebSocket-based streaming for true low-latency TTS
+     * Uses Fish.audio Live TTS API: wss://api.fish.audio/v1/tts/live
+     * 
+     * Protocol (MessagePack serialized):
+     * 1. Client sends StartEvent with TTS config
+     * 2. Client sends TextChunk events (optional: multiple)
+     * 3. Client sends FlushEvent to force synthesis
+     * 4. Client sends StopEvent to end session
+     * 5. Server sends AudioChunk events with audio bytes
+     * 6. Server sends FinishEvent when done
+     * 
+     * @param {string} text - Text to synthesize
+     * @param {string} voiceId - Voice ID or reference ID
+     * @param {object} options - Synthesis options
+     * @param {function} options.onChunk - Callback for each audio chunk (for real-time playback)
+     * @param {function} options.onStart - Callback when stream starts
+     * @param {function} options.onEnd - Callback when stream ends
+     * @returns {Promise<{chunks: Buffer[], format: string, totalBytes: number}>}
+     */
+    async synthesizeWebSocket(text, voiceId = 'fish-sarah', options = {}) {
+        // Get built-in voices
+        const builtInVoices = FishSpeechEngine.getVoices();
+        
+        // Merge with custom voices if provided
+        const customVoices = options.customVoices || {};
+        const allVoices = { ...builtInVoices, ...customVoices };
+        
+        const voiceConfig = allVoices[voiceId];
+
+        // Get the reference_id - either from voice config or use voiceId directly if it's a valid reference ID
+        let referenceId;
+        
+        if (voiceConfig?.reference_id) {
+            // Voice found in config - use its reference_id
+            referenceId = voiceConfig.reference_id;
+            this.logger.debug(`Fish.audio TTS WebSocket: Using voice '${voiceId}' with reference_id: ${referenceId}`);
+        } else if (this._isValidReferenceId(voiceId)) {
+            // voiceId looks like a raw reference ID (32-char hex) - use it directly
+            referenceId = voiceId;
+            this.logger.info(`Fish.audio TTS WebSocket: Using raw reference_id: ${referenceId}`);
+        } else {
+            // Invalid voice - log warning and fall back to default
+            this.logger.warn(`Fish.audio TTS WebSocket: Invalid voice ID: ${voiceId}, falling back to default`);
+            referenceId = FishSpeechEngine.DEFAULT_REFERENCE_ID;
+        }
+
+        // Process emotion injection if provided
+        let processedText = text;
+        if (options.emotion && this.isValidEmotion(options.emotion)) {
+            // Add emotion marker at the beginning of the text if not already present
+            if (!text.trim().startsWith('(')) {
+                processedText = `(${options.emotion}) ${text}`;
+                this.logger.info(`Fish.audio TTS WebSocket: Injecting emotion '${options.emotion}' into text`);
+            }
+        }
+
+        // Extract parameters
+        const format = options.format || 'mp3';
+        const normalize = options.normalize !== undefined ? options.normalize : true;
+        const latency = 'balanced'; // Use balanced latency for streaming
+        const chunkLength = options.chunk_length || 200;
+        const mp3Bitrate = options.mp3_bitrate || 128;
+
+        this.logger.info(`Fish.audio TTS WebSocket: Starting with voice=${voiceId}, reference_id=${referenceId}, format=${format}, latency=${latency}`);
+
+        return new Promise((resolve, reject) => {
+            const wsUrl = `wss://api.fish.audio/v1/tts/live`;
+            const ws = new WebSocket(wsUrl, {
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`
+                }
+            });
+
+            const chunks = [];
+            let totalBytes = 0;
+            let hasStarted = false;
+            let timeout;
+
+            // Set connection timeout
+            const connectionTimeout = setTimeout(() => {
+                if (!hasStarted) {
+                    this.logger.error('Fish.audio TTS WebSocket: Connection timeout');
+                    ws.close();
+                    reject(new Error('WebSocket connection timeout'));
+                }
+            }, this.timeout);
+
+            ws.on('open', () => {
+                clearTimeout(connectionTimeout);
+                this.logger.debug('Fish.audio TTS WebSocket: Connection established');
+
+                try {
+                    // Build request body
+                    const requestBody = {
+                        text: '',  // Empty initially, will send via TextChunk
+                        reference_id: referenceId,
+                        format: format,
+                        mp3_bitrate: mp3Bitrate,
+                        normalize: normalize,
+                        latency: latency,
+                        chunk_length: chunkLength
+                    };
+
+                    // If format is opus, add opus_bitrate
+                    if (format === 'opus') {
+                        requestBody.opus_bitrate = FishSpeechEngine.OPUS_AUTO_BITRATE;
+                    }
+
+                    // Send StartEvent
+                    const startEvent = {
+                        event: 'start',
+                        request: requestBody
+                    };
+                    ws.send(msgpack.encode(startEvent));
+                    this.logger.debug('Fish.audio TTS WebSocket: StartEvent sent');
+
+                    // Send TextChunk
+                    const textEvent = {
+                        event: 'text',
+                        text: processedText
+                    };
+                    ws.send(msgpack.encode(textEvent));
+                    this.logger.debug('Fish.audio TTS WebSocket: TextChunk sent');
+
+                    // Send FlushEvent to force synthesis
+                    const flushEvent = {
+                        event: 'flush'
+                    };
+                    ws.send(msgpack.encode(flushEvent));
+                    this.logger.debug('Fish.audio TTS WebSocket: FlushEvent sent');
+
+                    // Call onStart callback if provided
+                    if (options.onStart && typeof options.onStart === 'function') {
+                        options.onStart();
+                    }
+
+                    hasStarted = true;
+
+                    // Set response timeout
+                    timeout = setTimeout(() => {
+                        this.logger.error('Fish.audio TTS WebSocket: Response timeout');
+                        ws.close();
+                        reject(new Error('WebSocket response timeout'));
+                    }, this.timeout * 2); // Double timeout for response
+
+                } catch (error) {
+                    this.logger.error(`Fish.audio TTS WebSocket: Error sending events - ${error.message}`);
+                    ws.close();
+                    reject(error);
+                }
+            });
+
+            ws.on('message', (data) => {
+                try {
+                    // Decode MessagePack
+                    const message = msgpack.decode(new Uint8Array(data));
+                    
+                    if (message.event === 'audio') {
+                        // Reset timeout on each message
+                        if (timeout) clearTimeout(timeout);
+                        timeout = setTimeout(() => {
+                            this.logger.error('Fish.audio TTS WebSocket: Response timeout');
+                            ws.close();
+                            reject(new Error('WebSocket response timeout'));
+                        }, this.timeout * 2);
+
+                        // Audio chunk received
+                        const audioBuffer = Buffer.from(message.audio);
+                        chunks.push(audioBuffer);
+                        totalBytes += audioBuffer.length;
+
+                        this.logger.debug(`Fish.audio TTS WebSocket: Audio chunk received (${audioBuffer.length} bytes, total: ${totalBytes})`);
+
+                        // Call onChunk callback if provided
+                        if (options.onChunk && typeof options.onChunk === 'function') {
+                            const base64Chunk = audioBuffer.toString('base64');
+                            const isFirst = chunks.length === 1;
+                            options.onChunk(base64Chunk, isFirst);
+                        }
+
+                    } else if (message.event === 'finish') {
+                        // Stream finished
+                        if (timeout) clearTimeout(timeout);
+                        this.logger.info(`Fish.audio TTS WebSocket: Stream finished (reason: ${message.reason}, chunks: ${chunks.length}, bytes: ${totalBytes})`);
+
+                        // Send StopEvent
+                        const stopEvent = {
+                            event: 'stop'
+                        };
+                        ws.send(msgpack.encode(stopEvent));
+                        this.logger.debug('Fish.audio TTS WebSocket: StopEvent sent');
+
+                        // Call onEnd callback if provided
+                        if (options.onEnd && typeof options.onEnd === 'function') {
+                            options.onEnd(chunks.length, totalBytes);
+                        }
+
+                        ws.close();
+                        resolve({
+                            chunks: chunks,
+                            format: format,
+                            totalBytes: totalBytes
+                        });
+
+                    } else if (message.event === 'error') {
+                        // Error received from server
+                        if (timeout) clearTimeout(timeout);
+                        this.logger.error(`Fish.audio TTS WebSocket: Server error - ${message.message}`);
+                        ws.close();
+                        reject(new Error(`Fish.audio WebSocket error: ${message.message}`));
+                    } else {
+                        // Unknown event
+                        this.logger.warn(`Fish.audio TTS WebSocket: Unknown event type - ${message.event}`);
+                    }
+
+                } catch (error) {
+                    this.logger.error(`Fish.audio TTS WebSocket: Error decoding message - ${error.message}`);
+                }
+            });
+
+            ws.on('error', (error) => {
+                if (timeout) clearTimeout(timeout);
+                clearTimeout(connectionTimeout);
+                this.logger.error(`Fish.audio TTS WebSocket: Connection error - ${error.message}`);
+                reject(new Error(`Fish.audio WebSocket error: ${error.message}`));
+            });
+
+            ws.on('close', (code, reason) => {
+                if (timeout) clearTimeout(timeout);
+                clearTimeout(connectionTimeout);
+                const reasonStr = reason ? reason.toString() : 'No reason provided';
+                this.logger.debug(`Fish.audio TTS WebSocket: Connection closed (code: ${code}, reason: ${reasonStr})`);
+                
+                // If closed before completion, reject if not already resolved
+                if (!hasStarted) {
+                    reject(new Error('WebSocket closed before starting'));
+                } else if (chunks.length === 0) {
+                    reject(new Error('WebSocket closed without receiving audio data'));
+                }
+            });
+        });
     }
 
     /**

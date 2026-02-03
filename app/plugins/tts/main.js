@@ -2813,96 +2813,188 @@ class TTSPlugin {
 
                 try {
                     const ttsEngine = this.engines[item.engine];
-                    if (!ttsEngine || !ttsEngine.synthesizeStream) {
+                    
+                    // Use WebSocket streaming for Fish.audio, fallback to HTTP streaming for others
+                    const useWebSocket = item.engine === 'fishaudio' && ttsEngine && ttsEngine.synthesizeWebSocket;
+                    
+                    if (!ttsEngine || (!useWebSocket && !ttsEngine.synthesizeStream)) {
                         throw new Error(`Streaming not supported for engine: ${item.engine}`);
                     }
 
-                    // Start streaming synthesis
-                    const streamResult = await ttsEngine.synthesizeStream(
-                        item.text,
-                        item.voice,
-                        item.speed,
-                        item.synthesisOptions || {}
-                    );
+                    let streamResult;
+                    
+                    if (useWebSocket) {
+                        // WebSocket-based streaming for Fish.audio (true low-latency)
+                        this._logDebug('PLAYBACK', 'Using WebSocket streaming for Fish.audio', {
+                            id: item.id
+                        });
 
-                    this._logDebug('PLAYBACK', 'Stream connection established', {
-                        id: item.id,
-                        format: streamResult.format
-                    });
+                        // Prepare synthesis options with custom voices
+                        const synthesisOptions = {
+                            ...(item.synthesisOptions || {}),
+                            customVoices: this.config.customFishVoices,
+                            onChunk: (base64Chunk, isFirst) => {
+                                this.api.emit('tts:stream:chunk', {
+                                    id: item.id,
+                                    chunk: base64Chunk,
+                                    isFirst: isFirst,
+                                    volume: item.volume,
+                                    speed: item.speed,
+                                    format: 'mp3',
+                                    duckOther: this.config.duckOtherAudio,
+                                    duckVolume: this.config.duckVolume
+                                });
 
-                    // Emit playback start event now that stream has started
-                    this.api.emit('tts:playback:started', {
-                        id: item.id,
-                        username: item.username,
-                        text: item.text,
-                        isStreaming: true
-                    });
+                                this._logDebug('PLAYBACK', 'WebSocket chunk emitted', {
+                                    id: item.id,
+                                    isFirst: isFirst
+                                });
+                            },
+                            onStart: () => {
+                                this._logDebug('PLAYBACK', 'WebSocket stream started', {
+                                    id: item.id
+                                });
+                            },
+                            onEnd: (totalChunks, totalBytes) => {
+                                this.api.emit('tts:stream:end', {
+                                    id: item.id,
+                                    totalChunks: totalChunks,
+                                    totalBytes: totalBytes,
+                                    format: 'mp3'
+                                });
 
-                    if (this.api.pluginLoader && typeof this.api.pluginLoader.emit === 'function') {
-                        try {
-                            this.api.pluginLoader.emit('tts:playback:started', playbackMeta);
-                        } catch (error) {
-                            this.logger.warn(`TTS: Failed to broadcast playback start to plugins: ${error.message}`);
+                                this._logDebug('PLAYBACK', 'WebSocket stream ended', {
+                                    id: item.id,
+                                    totalChunks: totalChunks,
+                                    totalBytes: totalBytes
+                                });
+                            }
+                        };
+
+                        // Emit playback start event before synthesis
+                        this.api.emit('tts:playback:started', {
+                            id: item.id,
+                            username: item.username,
+                            text: item.text,
+                            isStreaming: true
+                        });
+
+                        if (this.api.pluginLoader && typeof this.api.pluginLoader.emit === 'function') {
+                            try {
+                                this.api.pluginLoader.emit('tts:playback:started', playbackMeta);
+                            } catch (error) {
+                                this.logger.warn(`TTS: Failed to broadcast playback start to plugins: ${error.message}`);
+                            }
                         }
+
+                        // Start WebSocket streaming
+                        streamResult = await ttsEngine.synthesizeWebSocket(
+                            item.text,
+                            item.voice,
+                            synthesisOptions
+                        );
+
+                        this._logDebug('PLAYBACK', 'WebSocket stream completed', {
+                            id: item.id,
+                            format: streamResult.format,
+                            totalBytes: streamResult.totalBytes
+                        });
+
+                    } else {
+                        // HTTP streaming for other engines
+                        this._logDebug('PLAYBACK', 'Using HTTP streaming', {
+                            id: item.id
+                        });
+
+                        // Start streaming synthesis
+                        streamResult = await ttsEngine.synthesizeStream(
+                            item.text,
+                            item.voice,
+                            item.speed,
+                            item.synthesisOptions || {}
+                        );
+
+                        this._logDebug('PLAYBACK', 'Stream connection established', {
+                            id: item.id,
+                            format: streamResult.format
+                        });
+
+                        // Emit playback start event now that stream has started
+                        this.api.emit('tts:playback:started', {
+                            id: item.id,
+                            username: item.username,
+                            text: item.text,
+                            isStreaming: true
+                        });
+
+                        if (this.api.pluginLoader && typeof this.api.pluginLoader.emit === 'function') {
+                            try {
+                                this.api.pluginLoader.emit('tts:playback:started', playbackMeta);
+                            } catch (error) {
+                                this.logger.warn(`TTS: Failed to broadcast playback start to plugins: ${error.message}`);
+                            }
+                        }
+
+                        // Process the HTTP stream
+                        const stream = streamResult.stream;
+                        const chunks = [];
+                        let totalBytes = 0;
+
+                        // Handle stream data
+                        stream.on('data', (chunk) => {
+                            chunks.push(chunk);
+                            totalBytes += chunk.length;
+                            
+                            // Convert chunk to Base64 and emit immediately
+                            const base64Chunk = chunk.toString('base64');
+                            this.api.emit('tts:stream:chunk', {
+                                id: item.id,
+                                chunk: base64Chunk,
+                                isFirst: chunks.length === 1,
+                                volume: item.volume,
+                                speed: item.speed,
+                                format: streamResult.format || 'mp3',
+                                duckOther: this.config.duckOtherAudio,
+                                duckVolume: this.config.duckVolume
+                            });
+
+                            this._logDebug('PLAYBACK', 'Stream chunk emitted', {
+                                id: item.id,
+                                chunkNumber: chunks.length,
+                                chunkSize: chunk.length,
+                                totalBytes: totalBytes
+                            });
+                        });
+
+                        // Wait for stream to complete
+                        await new Promise((resolve, reject) => {
+                            stream.on('end', () => {
+                                this._logDebug('PLAYBACK', 'Stream completed', {
+                                    id: item.id,
+                                    totalChunks: chunks.length,
+                                    totalBytes: totalBytes
+                                });
+                                
+                                // Signal to client that stream is complete
+                                this.api.emit('tts:stream:end', {
+                                    id: item.id,
+                                    totalChunks: chunks.length,
+                                    totalBytes: totalBytes,
+                                    format: streamResult.format || 'mp3'
+                                });
+                                
+                                resolve();
+                            });
+
+                            stream.on('error', (error) => {
+                                this._logDebug('PLAYBACK', 'Stream error', {
+                                    id: item.id,
+                                    error: error.message
+                                });
+                                reject(error);
+                            });
+                        });
                     }
-
-                    // Process the stream
-                    const stream = streamResult.stream;
-                    const chunks = [];
-                    let totalBytes = 0;
-
-                    // Handle stream data
-                    stream.on('data', (chunk) => {
-                        chunks.push(chunk);
-                        totalBytes += chunk.length;
-                        
-                        // Convert chunk to Base64 and emit immediately
-                        const base64Chunk = chunk.toString('base64');
-                        this.api.emit('tts:stream:chunk', {
-                            id: item.id,
-                            chunk: base64Chunk,
-                            isFirst: chunks.length === 1,
-                            volume: item.volume,
-                            speed: item.speed,
-                            duckOther: this.config.duckOtherAudio,
-                            duckVolume: this.config.duckVolume
-                        });
-
-                        this._logDebug('PLAYBACK', 'Stream chunk emitted', {
-                            id: item.id,
-                            chunkNumber: chunks.length,
-                            chunkSize: chunk.length,
-                            totalBytes: totalBytes
-                        });
-                    });
-
-                    // Wait for stream to complete
-                    await new Promise((resolve, reject) => {
-                        stream.on('end', () => {
-                            this._logDebug('PLAYBACK', 'Stream completed', {
-                                id: item.id,
-                                totalChunks: chunks.length,
-                                totalBytes: totalBytes
-                            });
-                            
-                            // Signal to client that stream is complete
-                            this.api.emit('tts:stream:end', {
-                                id: item.id,
-                                totalChunks: chunks.length,
-                                totalBytes: totalBytes
-                            });
-                            
-                            resolve();
-                        });
-
-                        stream.on('error', (error) => {
-                            this._logDebug('PLAYBACK', 'Stream error', {
-                                id: item.id,
-                                error: error.message
-                            });
-                            reject(error);
-                        });
-                    });
 
                     // Estimate playback duration based on realistic speech rate
                     const baseDelay = Math.ceil(item.text.length * 100); // 100ms per character
