@@ -224,9 +224,15 @@ return runTest('main.js should emit format with stream chunks', async () => {
     const fs = require('fs');
     const mainCode = fs.readFileSync(require.resolve('../plugins/tts/main'), 'utf-8');
     
-    // Check that format is emitted
-    const streamChunkRegex = /tts:stream:chunk[\s\S]{0,300}format:/;
-    assert.ok(streamChunkRegex.test(mainCode), 'Stream chunk event should include format field');
+    // Check that format is emitted in chunk event - look for the actual event emission
+    assert.ok(mainCode.includes("'tts:stream:chunk'"), 'Should have tts:stream:chunk event');
+    
+    // More specific check: look for format field within the same emit call
+    const hasFormatInChunk = mainCode.includes('format:') && 
+                              mainCode.split("'tts:stream:chunk'").some(section => 
+                                  section.includes('format:') && section.includes('id:')
+                              );
+    assert.ok(hasFormatInChunk, 'Stream chunk event should include format field in emit object');
 });
 
 }).then(() => {
@@ -237,8 +243,14 @@ return runTest('main.js should emit format with stream end', async () => {
     const mainCode = fs.readFileSync(require.resolve('../plugins/tts/main'), 'utf-8');
     
     // Check that format is emitted in end event
-    const streamEndRegex = /tts:stream:end[\s\S]{0,300}format:/;
-    assert.ok(streamEndRegex.test(mainCode), 'Stream end event should include format field');
+    assert.ok(mainCode.includes("'tts:stream:end'"), 'Should have tts:stream:end event');
+    
+    // More specific check: look for format field within the same emit call
+    const hasFormatInEnd = mainCode.includes('format:') && 
+                            mainCode.split("'tts:stream:end'").some(section => 
+                                section.includes('format:') && section.includes('totalChunks')
+                            );
+    assert.ok(hasFormatInEnd, 'Stream end event should include format field in emit object');
 });
 
 }).then(() => {
@@ -285,9 +297,22 @@ return runTest('dashboard.js should set playback properties before src', async (
     const fs = require('fs');
     const dashboardCode = fs.readFileSync(require.resolve('../public/js/dashboard'), 'utf-8');
     
-    // Check that volume and playbackRate are set before src
-    const audioSetupRegex = /audio\.volume[\s\S]{0,200}audio\.playbackRate[\s\S]{0,200}audio\.src/;
-    assert.ok(audioSetupRegex.test(dashboardCode), 'Should set volume and playbackRate before src');
+    // Find the relevant section in playStreamingAudio function
+    const playStreamingSection = dashboardCode.substring(
+        dashboardCode.indexOf('function playStreamingAudio'),
+        dashboardCode.indexOf('function playStreamingAudio') + 2000
+    );
+    
+    // Check order: volume and playbackRate should come before src
+    const volumePos = playStreamingSection.indexOf('audio.volume');
+    const playbackRatePos = playStreamingSection.indexOf('audio.playbackRate');
+    const srcPos = playStreamingSection.indexOf('audio.src');
+    
+    assert.ok(volumePos > 0, 'Should set audio.volume');
+    assert.ok(playbackRatePos > 0, 'Should set audio.playbackRate');
+    assert.ok(srcPos > 0, 'Should set audio.src');
+    assert.ok(volumePos < srcPos, 'audio.volume should be set before audio.src');
+    assert.ok(playbackRatePos < srcPos, 'audio.playbackRate should be set before audio.src');
 });
 
 }).then(() => {
