@@ -57,7 +57,6 @@ Der Launcher lädt nur die relevanten Dateien herunter:
 - `game-engine/` - Spiel-Engine
 - `package.json` - Dependencies
 - `package-lock.json` - Locked Dependencies
-- `main.js` - Einstiegspunkt
 
 ❌ **Nicht heruntergeladen:**
 - Build-Dateien und Quellcode
@@ -76,8 +75,7 @@ standalone-launcher.exe
 ├── runtime/
 │   └── node/              # Portable Node.js (falls installiert)
 ├── package.json
-├── package-lock.json
-└── main.js
+└── package-lock.json
 ```
 
 ## 🛠️ Für Entwickler
