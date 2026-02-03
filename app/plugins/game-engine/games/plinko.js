@@ -53,6 +53,9 @@ class PlinkoGame {
 
     // Cached config to avoid repeated DB reads
     this.cachedConfig = null;
+    
+    // Rate limit tracking - initialize to prevent memory leak
+    this.rateLimitMap = new Map(); // username -> timestamp
   }
 
   /**
@@ -489,7 +492,6 @@ class PlinkoGame {
     const rateKey = username;
     const rateLimitMs = config.physicsSettings.rateLimitMs || 800;
     if (!isTest) {
-      if (!this.rateLimitMap) this.rateLimitMap = new Map();
       const last = this.rateLimitMap.get(rateKey) || 0;
       if (now - last < rateLimitMs) {
         return { success: false, error: 'Please wait before dropping another ball' };
@@ -1094,6 +1096,24 @@ class PlinkoGame {
 
     if (oldBalls.length > 0) {
       this.logger.info(`🧹 Cleaned up ${oldBalls.length} stuck Plinko balls`);
+    }
+    
+    // Clean up rate limit map (remove entries older than 1 minute)
+    const rateLimitMaxAge = 60000; // 1 minute
+    const oldRateLimitKeys = [];
+    
+    for (const [key, timestamp] of this.rateLimitMap.entries()) {
+      if (now - timestamp > rateLimitMaxAge) {
+        oldRateLimitKeys.push(key);
+      }
+    }
+    
+    for (const key of oldRateLimitKeys) {
+      this.rateLimitMap.delete(key);
+    }
+    
+    if (oldRateLimitKeys.length > 0) {
+      this.logger.debug(`🧹 Cleaned up ${oldRateLimitKeys.length} old rate limit entries`);
     }
   }
 

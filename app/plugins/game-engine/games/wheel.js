@@ -418,6 +418,11 @@ class WheelGame {
         wheelName: config.name
       });
       
+      // Notify unified queue that processing is complete (even though it failed)
+      if (this.unifiedQueue) {
+        this.unifiedQueue.completeProcessing();
+      }
+      
       return { success: false, error: 'Segment count changed during queue' };
     }
 
@@ -429,6 +434,12 @@ class WheelGame {
       this.logger.error(`Invalid winning segment index ${winningSegmentIndex} (total segments: ${config.segments.length}, wheelId: ${wheelId}, spinId: ${spinId})`);
       this.isSpinning = false;
       this.currentSpin = null;
+      
+      // Notify unified queue that processing is complete (even though it failed)
+      if (this.unifiedQueue) {
+        this.unifiedQueue.completeProcessing();
+      }
+      
       return { success: false, error: 'Invalid segment calculation' };
     }
     
@@ -439,6 +450,12 @@ class WheelGame {
       this.logger.error(`Winning segment has no text (index: ${winningSegmentIndex}, wheelId: ${wheelId}, spinId: ${spinId})`);
       this.isSpinning = false;
       this.currentSpin = null;
+      
+      // Notify unified queue that processing is complete (even though it failed)
+      if (this.unifiedQueue) {
+        this.unifiedQueue.completeProcessing();
+      }
+      
       return { success: false, error: 'Invalid winning segment' };
     }
     
