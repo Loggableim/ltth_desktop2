@@ -464,6 +464,40 @@
       background: #fff3cd;
       border-left: 4px solid #ffc107;
     }
+
+    /* Tags Styling */
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 10px;
+      min-height: 32px;
+      padding: 5px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+    }
+
+    .tag {
+      background: #667eea;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .tag .remove-tag {
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 1.2em;
+      line-height: 1;
+    }
+
+    .tag .remove-tag:hover {
+      color: #ffcccc;
+    }
   </style>
 </head>
 <body>
@@ -643,15 +677,29 @@
           </div>
 
           <div class="form-group">
+            <label>Tags:</label>
+            <div id="tagsContainer" class="tags-container"></div>
+            <input type="text" id="tagInput" placeholder="Tag eingeben + Enter" onkeypress="handleTagInput(event)">
+          </div>
+
+          <div class="form-group">
             <label style="display: flex; align-items: center; gap: 10px;">
               <input type="checkbox" id="isFavorite">
               ⭐ Mark as Favorite
             </label>
           </div>
 
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 10px;">
+              <input type="checkbox" id="isModerator">
+              🛡️ Als Moderator markieren
+            </label>
+          </div>
+
           <div style="display: flex; gap: 10px;">
             <button type="submit" class="btn btn-primary">💾 Save Changes</button>
             <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button type="button" class="btn btn-secondary" onclick="refreshProfilePicture()">🔄 Refresh Avatar</button>
           </div>
         </form>
       </div>
@@ -666,6 +714,7 @@
     let currentSort = 'total_coins_spent';
     let currentSearch = '';
     let currentViewer = null;
+    let currentTags = [];
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
@@ -812,7 +861,7 @@
           </td>
           <td>@${v.tiktok_username}</td>
           <td>${v.display_name || v.tiktok_username}</td>
-          <td>${v.is_vip ? `<span class="vip-badge vip-${v.vip_tier.toLowerCase()}">${v.vip_tier}</span>` : '-'}</td>
+          <td>${v.is_vip && v.vip_tier ? `<span class="vip-badge vip-${v.vip_tier.toLowerCase()}">${v.vip_tier}</span>` : '-'}</td>
           <td>${formatDate(v.last_seen_at)}</td>
           <td>${v.total_visits}</td>
           <td>${formatDuration(v.total_watchtime_seconds)}</td>
@@ -878,7 +927,7 @@
       
       // VIP badge
       const vipBadge = document.getElementById('modalVipBadge');
-      if (viewer.is_vip) {
+      if (viewer.is_vip && viewer.vip_tier) {
         vipBadge.innerHTML = `<span class="vip-badge vip-${viewer.vip_tier.toLowerCase()}">${viewer.vip_tier} VIP since ${formatDate(viewer.vip_since)}</span>`;
       } else {
         vipBadge.innerHTML = '';
@@ -913,6 +962,11 @@
       document.getElementById('birthday').value = viewer.birthday || '';
       document.getElementById('notes').value = viewer.notes || '';
       document.getElementById('isFavorite').checked = viewer.is_favorite === 1;
+      document.getElementById('isModerator').checked = viewer.is_moderator === 1;
+      
+      // Tags
+      currentTags = viewer.tags || [];
+      renderTags();
     }
 
     // Close modal
@@ -931,7 +985,9 @@
           discord_username: document.getElementById('discordUsername').value,
           birthday: document.getElementById('birthday').value,
           notes: document.getElementById('notes').value,
-          is_favorite: document.getElementById('isFavorite').checked ? 1 : 0
+          is_favorite: document.getElementById('isFavorite').checked ? 1 : 0,
+          is_moderator: document.getElementById('isModerator').checked ? 1 : 0,
+          tags: currentTags
         };
 
         const response = await fetch(`/api/viewer-profiles/${currentViewer.tiktok_username}`, {
@@ -980,6 +1036,62 @@
         filter: currentFilter
       });
       window.open(`/api/viewer-profiles/export?${params}`, '_blank');
+    }
+
+    // Tag Management Functions
+    function renderTags() {
+      const container = document.getElementById('tagsContainer');
+      if (!currentTags || currentTags.length === 0) {
+        container.innerHTML = '<span style="color: #999; font-size: 0.9em;">No tags</span>';
+        return;
+      }
+      container.innerHTML = currentTags.map((tag, i) => 
+        `<span class="tag">${tag}<span class="remove-tag" onclick="removeTag(${i})">×</span></span>`
+      ).join('');
+    }
+
+    function addTag(tag) {
+      tag = tag.trim().toLowerCase();
+      if (tag && !currentTags.includes(tag)) {
+        currentTags.push(tag);
+        renderTags();
+      }
+    }
+
+    function removeTag(index) {
+      currentTags.splice(index, 1);
+      renderTags();
+    }
+
+    function handleTagInput(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const input = document.getElementById('tagInput');
+        if (input.value.trim()) {
+          addTag(input.value);
+          input.value = '';
+        }
+      }
+    }
+
+    // Refresh Profile Picture
+    async function refreshProfilePicture() {
+      if (!currentViewer) return;
+      
+      try {
+        socket.emit('viewer-profiles:refresh-avatar', { 
+          username: currentViewer.tiktok_username 
+        });
+        showNotification('🔄 Profile picture refresh requested');
+        
+        // Reload viewer data after a short delay
+        setTimeout(() => {
+          openViewerModal(currentViewer.tiktok_username);
+        }, 1000);
+      } catch (error) {
+        console.error('Error refreshing avatar:', error);
+        showNotification('❌ Error refreshing avatar');
+      }
     }
 
     // Show notification

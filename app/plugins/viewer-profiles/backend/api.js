@@ -63,6 +63,11 @@ class ViewerProfilesAPI {
       this.getActiveSessions(req, res);
     });
 
+    // Get available TTS voices
+    this.api.registerRoute('GET', '/api/viewer-profiles/tts/voices', (req, res) => {
+      this.getTTSVoices(req, res);
+    });
+
     // Now register parameterized routes (less specific, must come after)
 
     // Get viewer heatmap
@@ -168,16 +173,42 @@ class ViewerProfilesAPI {
       const username = req.params.username;
       const updates = {};
 
-      // Only allow updating certain fields
-      const allowedFields = [
-        'tts_voice', 'discord_username', 'birthday', 'notes',
-        'tags', 'is_favorite', 'is_blocked', 'is_moderator'
-      ];
+      // Field validators
+      const validators = {
+        tts_voice: (v) => typeof v === 'string' || v === null || v === '',
+        discord_username: (v) => typeof v === 'string' || v === null || v === '',
+        birthday: (v) => {
+          if (v === null || v === '') return true;
+          // YYYY-MM-DD format
+          return /^\d{4}-\d{2}-\d{2}$/.test(v);
+        },
+        notes: (v) => typeof v === 'string' || v === null || v === '',
+        tags: (v) => Array.isArray(v),
+        is_favorite: (v) => typeof v === 'number' && (v === 0 || v === 1),
+        is_blocked: (v) => typeof v === 'number' && (v === 0 || v === 1),
+        is_moderator: (v) => typeof v === 'number' && (v === 0 || v === 1)
+      };
+
+      const allowedFields = Object.keys(validators);
+      const errors = [];
 
       for (const field of allowedFields) {
         if (req.body[field] !== undefined) {
-          updates[field] = field === 'tags' ? JSON.stringify(req.body[field]) : req.body[field];
+          const value = req.body[field];
+          if (!validators[field](value)) {
+            errors.push(`Invalid value for field '${field}'`);
+            continue;
+          }
+          updates[field] = field === 'tags' ? JSON.stringify(value) : value;
         }
+      }
+
+      if (errors.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: errors
+        });
       }
 
       const viewer = this.db.updateViewer(username, updates);
@@ -466,6 +497,45 @@ class ViewerProfilesAPI {
     );
 
     return [headers, ...rows].join('\n');
+  }
+
+  /**
+   * Get available TTS voices
+   */
+  getTTSVoices(req, res) {
+    try {
+      // Try to get TTS plugin instance if available
+      let voices = [];
+      
+      if (this.api.getPluginInstance) {
+        const ttsPlugin = this.api.getPluginInstance('tts');
+        if (ttsPlugin && ttsPlugin.getAvailableVoices) {
+          voices = ttsPlugin.getAvailableVoices();
+        }
+      }
+
+      // Fallback to default voices if TTS plugin not available
+      if (voices.length === 0) {
+        voices = [
+          { value: '', label: 'Default' },
+          { value: 'de_001', label: 'German Male' },
+          { value: 'de_002', label: 'German Female' },
+          { value: 'en_us_001', label: 'English US Male' },
+          { value: 'en_us_002', label: 'English US Female' }
+        ];
+      }
+
+      res.json({
+        success: true,
+        data: voices
+      });
+    } catch (error) {
+      this.api.log(`Error getting TTS voices: ${error.message}`, 'error');
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
   }
 }
 

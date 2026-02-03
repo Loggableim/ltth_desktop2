@@ -126,12 +126,37 @@ class BirthdayManager {
         // Mark as notified
         this.notifiedToday.add(username);
 
-        // Optional: Send chat message (if configured)
-        // this.api.sendChatMessage(`🎂 Happy Birthday ${viewer.display_name}! 🎉`);
+        // Send birthday greeting
+        this.sendBirthdayGreeting(viewer);
       }
 
     } catch (error) {
       this.api.log(`Error checking viewer birthday: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Send birthday greeting via TTS and/or Chat
+   */
+  sendBirthdayGreeting(viewer) {
+    try {
+      const config = this.api.getConfig('birthday-config') || {};
+      const greetingTemplate = config.greetingTemplate || '🎂 Happy Birthday {displayName}! 🎉';
+      const message = greetingTemplate
+        .replace('{displayName}', viewer.display_name || viewer.tiktok_username)
+        .replace('{username}', viewer.tiktok_username)
+        .replace('{age}', this.calculateAge(viewer.birthday) || '?');
+
+      // Emit event for other plugins (TTS, Chat, etc.)
+      this.api.emit('viewer-profiles:birthday-greeting', {
+        viewer,
+        message,
+        age: this.calculateAge(viewer.birthday)
+      });
+
+      this.api.log(`🎂 Birthday greeting sent for ${viewer.tiktok_username}: ${message}`, 'info');
+    } catch (error) {
+      this.api.log(`Error sending birthday greeting: ${error.message}`, 'error');
     }
   }
 

@@ -549,25 +549,50 @@ class ViewerProfilesDatabase {
    * Get viewers with upcoming birthdays
    */
   getUpcomingBirthdays(days = 7) {
-    // Get viewers whose birthday is within the next N days
-    return this.db.prepare(`
-      SELECT *,
-        CASE 
-          WHEN substr(birthday, 6, 5) = strftime('%m-%d', 'now') THEN 0
-          WHEN substr(birthday, 6, 5) > strftime('%m-%d', 'now') 
-            THEN julianday('now', '+' || (
-              julianday(strftime('%Y', 'now') || '-' || substr(birthday, 6, 5)) - julianday('now')
-            ) || ' days')
-          ELSE julianday('now', '+' || (
-              julianday(strftime('%Y', 'now', '+1 year') || '-' || substr(birthday, 6, 5)) - julianday('now')
-            ) || ' days')
-        END as days_until
-      FROM viewer_profiles
-      WHERE birthday IS NOT NULL
-        AND birthday != ''
-      HAVING days_until >= 0 AND days_until <= ?
-      ORDER BY days_until ASC
-    `).all(days);
+    const results = [];
+    
+    // Get all viewers with birthday
+    const viewers = this.db.prepare(`
+      SELECT * FROM viewer_profiles
+      WHERE birthday IS NOT NULL AND birthday != ''
+    `).all();
+
+    for (const viewer of viewers) {
+      const daysUntil = this.calculateDaysUntilBirthday(viewer.birthday);
+      if (daysUntil >= 0 && daysUntil <= days) {
+        results.push({
+          ...viewer,
+          days_until: daysUntil
+        });
+      }
+    }
+
+    return results.sort((a, b) => a.days_until - b.days_until);
+  }
+
+  /**
+   * Calculate days until next birthday
+   */
+  calculateDaysUntilBirthday(birthday) {
+    if (!birthday) return -1;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const [year, month, day] = birthday.split('-').map(Number);
+    
+    // Birthday this year
+    let nextBirthday = new Date(today.getFullYear(), month - 1, day);
+    
+    // If already passed, next year
+    if (nextBirthday < today) {
+      nextBirthday = new Date(today.getFullYear() + 1, month - 1, day);
+    }
+    
+    const diffTime = nextBirthday - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays;
   }
 
   /**
