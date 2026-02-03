@@ -1,0 +1,28 @@
+# Compiled executables
+*.exe
+
+# Go build artifacts
+*.test
+*.out
+
+# Downloaded files (if testing locally)
+app/
+plugins/
+game-engine/
+runtime/
+package.json
+package-lock.json
+main.js
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
