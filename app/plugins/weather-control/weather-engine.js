@@ -309,7 +309,7 @@
       }
     }
 
-    update(deltaTime, intensity = 1.0, dimensions = null, globalWind = 0) {
+    update(deltaTime, intensity = 1.0, dimensions = null, globalWind = 0, currentTime = Date.now()) {
       const speed = deltaTime / 16.67; // Normalize to 60fps
       const w = dimensions?.width || window.innerWidth;
       const h = dimensions?.height || window.innerHeight;
@@ -323,7 +323,7 @@
           // Wind influence
           this.wind = globalWind + (Math.random() - 0.5) * 2;
           // Turbulence (subtle randomness)
-          this.turbulence = Math.sin(Date.now() * 0.01 + this.x * 0.1) * 0.5;
+          this.turbulence = Math.sin(currentTime * 0.01 + this.x * 0.1) * 0.5;
           
           this.x += (this.speedX + this.wind + this.turbulence) * speed;
           this.y += this.speedY * speed * intensity;
@@ -335,7 +335,8 @@
           
           // Update splash particles
           if (this.splashParticles.length > 0) {
-            for (const splash of this.splashParticles) {
+            for (let i = 0, len = this.splashParticles.length; i < len; i++) {
+              const splash = this.splashParticles[i];
               splash.x += splash.vx * speed;
               splash.y += splash.vy * speed;
               splash.vy += 0.2 * speed; // gravity
@@ -423,8 +424,11 @@
               this.x, this.y,
               this.x - this.speedX * 2, this.y - this.length
             );
-            gradient.addColorStop(0, this.color || (this.type === 'storm' ? '#6ba3d6' : '#a0c4e8'));
-            gradient.addColorStop(1, this.color?.replace(/[\d.]+\)/, '0)') || (this.type === 'storm' ? 'rgba(107, 163, 214, 0)' : 'rgba(160, 196, 232, 0)'));
+            const baseColor = this.color || (this.type === 'storm' ? 'rgba(107, 163, 214, ' + this.alpha + ')' : 'rgba(160, 196, 232, ' + this.alpha + ')');
+            const transparentColor = this.type === 'storm' ? 'rgba(107, 163, 214, 0)' : 'rgba(160, 196, 232, 0)';
+            
+            gradient.addColorStop(0, baseColor);
+            gradient.addColorStop(1, transparentColor);
             
             ctx.strokeStyle = gradient;
             ctx.lineWidth = this.width;
@@ -778,13 +782,16 @@
         if (this.state.fpsHistory.length > 60) this.state.fpsHistory.shift();
       }
       
+      // Get current time once for this frame
+      const currentTime = Date.now();
+      
       // Fixed timestep accumulation
       this.state.accumulator += deltaTime;
       this.state.accumulator = Math.min(this.state.accumulator, MAX_ACCUMULATED);
       
       // Update physics with fixed timestep
       while (this.state.accumulator >= FIXED_TIMESTEP) {
-        this.updatePhysics(FIXED_TIMESTEP);
+        this.updatePhysics(FIXED_TIMESTEP, currentTime);
         this.state.accumulator -= FIXED_TIMESTEP;
       }
       
@@ -819,9 +826,9 @@
     /**
      * Update physics with fixed timestep
      */
-    updatePhysics(deltaTime) {
+    updatePhysics(deltaTime, currentTime) {
       // Update global wind (slow sine wave)
-      this.globalWind = Math.sin(Date.now() * 0.0005) * 3;
+      this.globalWind = Math.sin(currentTime * 0.0005) * 3;
       
       // Update particles - use Set iteration to avoid splice in hot path
       for (const particle of this.state.particles) {
@@ -832,7 +839,7 @@
         );
         const intensity = effect ? effect.intensity : 1.0;
         
-        particle.update(deltaTime, intensity, this.dimensions, this.globalWind);
+        particle.update(deltaTime, intensity, this.dimensions, this.globalWind, currentTime);
       }
       
       // Clean up inactive particles (done here, not in render loop)

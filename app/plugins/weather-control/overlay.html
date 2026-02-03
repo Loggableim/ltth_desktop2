@@ -633,7 +633,7 @@
                 }
             }
 
-            update(deltaTime, intensity = 1.0, dimensions = null, globalWindParam = 0) {
+            update(deltaTime, intensity = 1.0, dimensions = null, globalWindParam = 0, currentTime = Date.now()) {
                 const speed = deltaTime / 16.67;
                 const w = dimensions?.width || window.innerWidth;
                 const h = dimensions?.height || window.innerHeight;
@@ -644,7 +644,7 @@
                 switch (this.type) {
                     case 'rain':
                         this.wind = globalWindParam + (Math.random() - 0.5) * 2;
-                        this.turbulence = Math.sin(Date.now() * 0.01 + this.x * 0.1) * 0.5;
+                        this.turbulence = Math.sin(currentTime * 0.01 + this.x * 0.1) * 0.5;
                         
                         this.x += (this.speedX + this.wind + this.turbulence) * speed;
                         this.y += this.speedY * speed * intensity;
@@ -654,7 +654,8 @@
                         }
                         
                         if (this.splashParticles.length > 0) {
-                            for (const splash of this.splashParticles) {
+                            for (let i = 0; i < this.splashParticles.length; i++) {
+                                const splash = this.splashParticles[i];
                                 splash.x += splash.vx * speed;
                                 splash.y += splash.vy * speed;
                                 splash.vy += 0.2 * speed;
@@ -725,7 +726,7 @@
                 }
             }
 
-            draw(alpha = 1.0) {
+            draw() {
                 if (!this.active || !ctx) return;
                 
                 ctx.save();
@@ -739,8 +740,10 @@
                             this.x, this.y,
                             this.x - this.speedX * 2, this.y - this.length
                         );
-                        gradient.addColorStop(0, this.color || (this.type === 'storm' ? '#6ba3d6' : '#a0c4e8'));
-                        gradient.addColorStop(1, this.color?.replace(/[\d.]+\)/, '0)') || (this.type === 'storm' ? 'rgba(107, 163, 214, 0)' : 'rgba(160, 196, 232, 0)'));
+                        const baseColor = this.color || (this.type === 'storm' ? 'rgba(107, 163, 214, ' + this.alpha + ')' : 'rgba(160, 196, 232, ' + this.alpha + ')');
+                        const transparentColor = this.type === 'storm' ? 'rgba(107, 163, 214, 0)' : 'rgba(160, 196, 232, 0)';
+                        gradient.addColorStop(0, baseColor);
+                        gradient.addColorStop(1, transparentColor);
                         
                         ctx.strokeStyle = gradient;
                         ctx.lineWidth = this.width;
@@ -1261,8 +1264,8 @@
         };
 
         // Update physics with fixed timestep
-        function updatePhysics(deltaTime) {
-            globalWind = Math.sin(Date.now() * 0.0005) * 3;
+        function updatePhysics(deltaTime, currentTime) {
+            globalWind = Math.sin(currentTime * 0.0005) * 3;
             
             for (const particle of state.particles) {
                 if (!particle.active) continue;
@@ -1273,7 +1276,7 @@
                 const intensity = effect ? effect.intensity : 1.0;
                 const dimensions = { width: window.innerWidth, height: window.innerHeight };
                 
-                particle.update(deltaTime, intensity, dimensions, globalWind);
+                particle.update(deltaTime, intensity, dimensions, globalWind, currentTime);
             }
             
             state.particles = state.particles.filter(p => p.active);
@@ -1292,7 +1295,7 @@
                 particle.x = renderX;
                 particle.y = renderY;
                 
-                particle.draw(alpha);
+                particle.draw();
                 
                 particle.x = origX;
                 particle.y = origY;
@@ -1318,8 +1321,9 @@
             state.accumulator += deltaTime;
             state.accumulator = Math.min(state.accumulator, MAX_ACCUMULATED);
             
+            const currentTime = Date.now();
             while (state.accumulator >= FIXED_TIMESTEP) {
-                updatePhysics(FIXED_TIMESTEP);
+                updatePhysics(FIXED_TIMESTEP, currentTime);
                 state.accumulator -= FIXED_TIMESTEP;
             }
             
@@ -1328,7 +1332,7 @@
 
             for (let i = state.activeEffects.length - 1; i >= 0; i--) {
                 const effect = state.activeEffects[i];
-                const elapsed = Date.now() - effect.startTime;
+                const elapsed = currentTime - effect.startTime;
                 const isPermanent = effect.permanent === true;
                 
                 if (!isPermanent && elapsed > effect.duration + 1000) {
@@ -1652,72 +1656,6 @@
             ctx.restore();
         }
 
-        // OLD glitch clouds code - keeping for compatibility
-        function drawGlitchClouds_OLD(effect) {
-            ctx.save();
-            
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            
-            // Generate random glitch lines
-            if (Math.random() > 0.88) {
-                const lineCount = 2 + Math.floor(Math.random() * 6);
-                for (let i = 0; i < lineCount; i++) {
-                    effect.glitchLines.push({
-                        y: Math.random() * h,
-                        height: 1 + Math.random() * 15,
-                        color: ['#ff00ff', '#00ffff', '#ffff00', '#ff0000'][Math.floor(Math.random() * 4)],
-                        offset: (Math.random() - 0.5) * 30,
-                        life: 2 + Math.floor(Math.random() * 3),
-                        alpha: 0.2 + Math.random() * 0.3
-                    });
-                }
-            }
-
-            // Draw and update glitch lines
-            effect.glitchLines = effect.glitchLines.filter(line => {
-                if (line.life <= 0) return false;
-                
-                ctx.fillStyle = line.color;
-                ctx.globalAlpha = line.alpha * effect.intensity * (line.life / 5);
-                ctx.fillRect(line.offset, line.y, w, line.height);
-                
-                line.life--;
-                line.offset += (Math.random() - 0.5) * 5; // Jitter
-                return true;
-            });
-
-            // Add digital noise overlay
-            if (Math.random() > 0.75) {
-                const noiseIntensity = effect.intensity * 0.05;
-                ctx.globalAlpha = noiseIntensity;
-                
-                // Create noise pattern
-                for (let i = 0; i < 50; i++) {
-                    const x = Math.random() * w;
-                    const y = Math.random() * h;
-                    const size = 1 + Math.random() * 3;
-                    const brightness = Math.random() * 255;
-                    
-                    ctx.fillStyle = `rgb(${brightness}, ${brightness}, ${brightness})`;
-                    ctx.fillRect(x, y, size, size);
-                }
-            }
-
-            // RGB split effect occasionally
-            if (Math.random() > 0.92) {
-                const splitAmount = 3 * effect.intensity;
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = w;
-                tempCanvas.height = h;
-                const tempCtx = tempCanvas.getContext('2d');
-                
-                // This would require storing the current frame, simplified for now
-                ctx.globalAlpha = 0.3 * effect.intensity;
-            }
-            
-            ctx.restore();
-        }
 
         // Debug info display with enhanced metrics
         function updateDebugInfo() {
