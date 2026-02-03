@@ -9,6 +9,12 @@
 (function(global) {
   'use strict';
 
+  // Visual effect constants
+  const FOG_MAX_ALPHA = 0.25;           // Maximum alpha for fog particles
+  const SNOWFLAKE_SPARKLE_CHANCE = 0.04; // 4% chance of sparkle per frame
+  const GLITCH_LINE_FREQUENCY = 0.2;    // 20% chance of glitch lines per frame
+  const DIGITAL_NOISE_FREQUENCY = 0.25; // 25% chance of digital noise per frame
+
   /**
    * Particle class with optimized rendering
    */
@@ -117,7 +123,7 @@
           this.life += speed;
           // Smooth fade in/out using sine wave
           const lifePercent = this.life / this.maxLife;
-          this.alpha = Math.sin(lifePercent * Math.PI) * 0.25;
+          this.alpha = Math.sin(lifePercent * Math.PI) * FOG_MAX_ALPHA;
           if (this.life > this.maxLife) {
             this.reset({ width: w, height: h });
           }
@@ -168,7 +174,7 @@
           ctx.fill();
           
           // Add sparkle effect occasionally
-          if (Math.random() > 0.96) {
+          if (Math.random() < SNOWFLAKE_SPARKLE_CHANCE) {
             ctx.fillStyle = '#ffffdd';
             ctx.globalAlpha = 0.9;
             ctx.beginPath();
@@ -478,7 +484,7 @@
       const h = this.dimensions.height;
       
       // Draw random glitch lines
-      if (Math.random() > 0.8) {
+      if (Math.random() < GLITCH_LINE_FREQUENCY) {
         const lineCount = Math.floor(5 + Math.random() * 10);
         for (let i = 0; i < lineCount; i++) {
           const y = Math.random() * h;
@@ -492,7 +498,7 @@
       }
       
       // Add digital noise overlay
-      if (Math.random() > 0.75) {
+      if (Math.random() < DIGITAL_NOISE_FREQUENCY) {
         const noiseIntensity = effect.intensity * 0.05;
         this.ctx.globalAlpha = noiseIntensity;
         

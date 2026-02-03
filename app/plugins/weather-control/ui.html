@@ -627,9 +627,9 @@
                             <span>▶️</span>
                             <span id="togglePreviewText" data-i18n-key="buttons.preview_on">Start Preview</span>
                         </button>
-                        <button class="btn btn-secondary" id="testCurrentEffectBtn">
-                            <span>🎬</span>
-                            <span data-i18n-key="buttons.test_effect">Test Current Effect</span>
+                        <button class="btn btn-secondary" id="testRainEffectBtn">
+                            <span>🌧️</span>
+                            <span data-i18n-key="buttons.test_rain">Test Rain Effect</span>
                         </button>
                         <button class="btn btn-danger" id="stopAllPreviewBtn">
                             <span>⏹️</span>
@@ -1306,6 +1306,7 @@
                 'cards.preview.title': 'Live Weather Preview',
                 'buttons.preview_on': 'Start Preview',
                 'buttons.preview_off': 'Stop Preview',
+                'buttons.test_rain': 'Test Rain Effect',
                 'buttons.test_effect': 'Test Effect',
                 'buttons.stop_all': 'Stop All',
                 'preview.fps': 'FPS',
@@ -1409,6 +1410,7 @@
                 'cards.preview.title': 'Live-Wettervorschau',
                 'buttons.preview_on': 'Vorschau starten',
                 'buttons.preview_off': 'Vorschau stoppen',
+                'buttons.test_rain': 'Regen-Effekt testen',
                 'buttons.test_effect': 'Effekt testen',
                 'buttons.stop_all': 'Alle stoppen',
                 'preview.fps': 'FPS',
@@ -2150,7 +2152,7 @@
             
             // Setup preview control buttons
             document.getElementById('togglePreviewBtn').addEventListener('click', togglePreview);
-            document.getElementById('testCurrentEffectBtn').addEventListener('click', testRainEffect);
+            document.getElementById('testRainEffectBtn').addEventListener('click', testRainEffect);
             document.getElementById('stopAllPreviewBtn').addEventListener('click', stopAllPreviewEffects);
             
             // Add effect test buttons for each weather effect card
