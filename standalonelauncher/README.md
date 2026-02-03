@@ -20,8 +20,8 @@ Der Standalone Launcher ist eine **kleine, eigenständige Anwendung** (~6-8 MB),
 
 ### Für Endnutzer
 
-1. **Download:** Lade `standalone-launcher.exe` von [ltth.app](https://ltth.app) herunter
-2. **Ausführen:** Doppelklick auf `standalone-launcher.exe`
+1. **Download:** Lade `launcher.exe` (Windows) oder `launcher` (Linux) von [ltth.app](https://ltth.app) herunter
+2. **Ausführen:** Doppelklick auf die Datei (Windows) oder `./launcher` im Terminal (Linux)
 3. **Warten:** Der Launcher lädt automatisch alle Dateien herunter
 4. **Fertig:** Die Anwendung startet automatisch im Browser
 
@@ -101,8 +101,9 @@ chmod +x build.sh
 
 ### Build-Output
 
-- `standalone-launcher.exe` - GUI Version (für Distribution)
-- `standalone-launcher-console.exe` - Console Version (für Debugging)
+- `launcher.exe` - Windows GUI Version (für Distribution)
+- `launcher-console.exe` - Windows Console Version (für Debugging)
+- `launcher` - Linux Version (für Distribution)
 
 ### Entwicklung
 
@@ -117,11 +118,14 @@ require github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 
 **Kompilierung:**
 ```bash
-# GUI Version (kein Konsolenfenster)
-go build -o standalone-launcher.exe -ldflags "-H windowsgui -s -w" standalone-launcher.go
+# Windows GUI Version (kein Konsolenfenster)
+go build -o launcher.exe -ldflags "-H windowsgui -s -w" standalone-launcher.go
 
-# Console Version (mit Konsolenfenster für Debugging)
-go build -o standalone-launcher-console.exe -ldflags "-s -w" standalone-launcher.go
+# Windows Console Version (mit Konsolenfenster für Debugging)
+go build -o launcher-console.exe -ldflags "-s -w" standalone-launcher.go
+
+# Linux Version
+GOOS=linux GOARCH=amd64 go build -o launcher -ldflags "-s -w" standalone-launcher.go
 ```
 
 **Flags:**
