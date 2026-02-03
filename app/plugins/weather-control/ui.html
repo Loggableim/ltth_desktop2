@@ -1287,7 +1287,6 @@
         // Preview engine
         let previewEngine = null;
         let previewActive = false;
-        let previewUpdateTimer = null;
 
         const translations = {
             en: {
@@ -2154,23 +2153,6 @@
                 const effectType = btn.getAttribute('data-test-effect');
                 btn.addEventListener('click', () => testEffect(effectType));
             });
-            
-            // Add live preview update listeners for all effect controls
-            effects.forEach(effect => {
-                const intensitySlider = document.getElementById(`effect-${effect}-intensity`);
-                const durationInput = document.getElementById(`effect-${effect}-duration`);
-                const permanentCheckbox = document.getElementById(`effect-${effect}-permanent`);
-                
-                if (intensitySlider) {
-                    intensitySlider.addEventListener('input', () => debouncedPreviewUpdate());
-                }
-                if (durationInput) {
-                    durationInput.addEventListener('input', () => debouncedPreviewUpdate());
-                }
-                if (permanentCheckbox) {
-                    permanentCheckbox.addEventListener('change', () => debouncedPreviewUpdate());
-                }
-            });
         }
         
         /**
@@ -2186,13 +2168,15 @@
                 btn.classList.remove('btn-primary');
                 btn.classList.add('btn-success');
                 btn.querySelector('span:first-child').textContent = '⏸️';
-                text.textContent = 'Stop Preview';
+                text.setAttribute('data-i18n-key', 'buttons.preview_off');
+                text.textContent = i18nTranslate('buttons.preview_off');
             } else {
                 previewEngine.stop();
                 btn.classList.remove('btn-success');
                 btn.classList.add('btn-primary');
                 btn.querySelector('span:first-child').textContent = '▶️';
-                text.textContent = 'Start Preview';
+                text.setAttribute('data-i18n-key', 'buttons.preview_on');
+                text.textContent = i18nTranslate('buttons.preview_on');
             }
         }
         
@@ -2219,10 +2203,11 @@
         }
         
         /**
-         * Test the currently selected effect (placeholder for future feature)
+         * Test the default rain effect
+         * Note: This button tests the rain effect. Use individual "Test Effect" 
+         * buttons on each weather effect card to test specific effects with their configured settings.
          */
         function testCurrentEffect() {
-            // For now, just test rain as default
             testEffect('rain');
         }
         
@@ -2258,22 +2243,6 @@
             } else {
                 warning.classList.remove('show');
             }
-        }
-        
-        /**
-         * Debounced preview update for live config changes
-         */
-        function debouncedPreviewUpdate() {
-            if (!previewActive) return;
-            
-            if (previewUpdateTimer) {
-                clearTimeout(previewUpdateTimer);
-            }
-            
-            previewUpdateTimer = setTimeout(() => {
-                // This could be extended to auto-update the preview when config changes
-                // For now, users need to manually test effects
-            }, 300);
         }
 
         // Event listeners for gift mapping buttons

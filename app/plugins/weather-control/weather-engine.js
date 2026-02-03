@@ -184,7 +184,6 @@
             this.x, this.y, 0,
             this.x, this.y, this.size
           );
-          const color = `hsl(${this.hue}, 15%, 75%)`;
           gradient.addColorStop(0, `hsla(${this.hue}, 15%, 75%, ${this.alpha})`);
           gradient.addColorStop(0.5, `hsla(${this.hue}, 15%, 70%, ${this.alpha * 0.5})`);
           gradient.addColorStop(1, 'rgba(180, 180, 200, 0)');
