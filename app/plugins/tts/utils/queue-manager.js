@@ -217,7 +217,8 @@ class QueueManager {
         }
 
         this.isProcessing = true;
-        this.logger.info('TTS Queue processing started with pre-generation enabled');
+        const preGenStatus = this.synthesizeCallback ? 'with pre-generation enabled' : '(pre-generation not configured)';
+        this.logger.info(`TTS Queue processing started ${preGenStatus}`);
 
         this._processNextOptimized(playCallback);
     }
