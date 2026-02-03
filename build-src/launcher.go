@@ -750,6 +750,7 @@ func writeLocalVersion(version string) error {
 
 // compareVersions compares two semantic version strings
 // Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+// Note: Invalid version parts default to 0 for graceful degradation
 func compareVersions(v1, v2 string) int {
 	// Remove "v" prefix if present
 	v1 = strings.TrimPrefix(v1, "v")
@@ -769,12 +770,14 @@ func compareVersions(v1, v2 string) int {
 		if i < len(parts1) {
 			// Extract numeric part (ignore pre-release suffixes like "-beta")
 			numStr := strings.Split(parts1[i], "-")[0]
-			n1, _ = strconv.Atoi(numStr) // Default to 0 on error
+			// Ignore parsing errors - invalid parts default to 0 for graceful comparison
+			n1, _ = strconv.Atoi(numStr)
 		}
 		
 		if i < len(parts2) {
 			numStr := strings.Split(parts2[i], "-")[0]
-			n2, _ = strconv.Atoi(numStr) // Default to 0 on error
+			// Ignore parsing errors - invalid parts default to 0 for graceful comparison
+			n2, _ = strconv.Atoi(numStr)
 		}
 		
 		if n1 > n2 {
@@ -897,7 +900,10 @@ func checkForReleasesUpdate() (*UpdateInfo, error) {
 	localVersion, err := getLocalVersion()
 	if err != nil {
 		// First installation - save current version
-		writeLocalVersion(release.TagName)
+		if writeErr := writeLocalVersion(release.TagName); writeErr != nil {
+			// Log but don't fail - update check can continue
+			fmt.Printf("Warning: Failed to write version file: %v\n", writeErr)
+		}
 		return &UpdateInfo{
 			Available:      false,
 			CurrentVersion: release.TagName,
