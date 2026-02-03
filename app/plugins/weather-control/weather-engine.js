@@ -417,97 +417,103 @@
       switch (this.type) {
         case 'rain':
         case 'storm':
-          // Motion blur via gradient along velocity vector
-          const gradient = ctx.createLinearGradient(
-            this.x, this.y,
-            this.x - this.speedX * 2, this.y - this.length
-          );
-          gradient.addColorStop(0, this.color || (this.type === 'storm' ? '#6ba3d6' : '#a0c4e8'));
-          gradient.addColorStop(1, this.color?.replace(/[\d.]+\)/, '0)') || (this.type === 'storm' ? 'rgba(107, 163, 214, 0)' : 'rgba(160, 196, 232, 0)'));
-          
-          ctx.strokeStyle = gradient;
-          ctx.lineWidth = this.width;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(this.x, this.y);
-          ctx.lineTo(this.x - this.speedX * 2, this.y - this.length);
-          ctx.stroke();
-          
-          // Draw splash particles
-          if (this.type === 'rain' && this.splashParticles.length > 0) {
-            this.splashParticles.forEach(splash => {
-              ctx.globalAlpha = splash.life * 0.6;
-              ctx.fillStyle = 'rgba(180, 210, 240, 1)';
-              ctx.beginPath();
-              ctx.arc(splash.x, splash.y, splash.size, 0, Math.PI * 2);
-              ctx.fill();
-            });
+          {
+            // Motion blur via gradient along velocity vector
+            const gradient = ctx.createLinearGradient(
+              this.x, this.y,
+              this.x - this.speedX * 2, this.y - this.length
+            );
+            gradient.addColorStop(0, this.color || (this.type === 'storm' ? '#6ba3d6' : '#a0c4e8'));
+            gradient.addColorStop(1, this.color?.replace(/[\d.]+\)/, '0)') || (this.type === 'storm' ? 'rgba(107, 163, 214, 0)' : 'rgba(160, 196, 232, 0)'));
+            
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = this.width;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.x - this.speedX * 2, this.y - this.length);
+            ctx.stroke();
+            
+            // Draw splash particles
+            if (this.type === 'rain' && this.splashParticles.length > 0) {
+              this.splashParticles.forEach(splash => {
+                ctx.globalAlpha = splash.life * 0.6;
+                ctx.fillStyle = 'rgba(180, 210, 240, 1)';
+                ctx.beginPath();
+                ctx.arc(splash.x, splash.y, splash.size, 0, Math.PI * 2);
+                ctx.fill();
+              });
+            }
           }
           break;
         
         case 'snow':
-          ctx.save();
-          ctx.translate(this.x, this.y);
-          ctx.rotate(this.rotation);
-          
-          // Use Koch snowflake if available, otherwise fallback to simple star
-          if (this.snowflakePoints && this.snowflakePoints.length > 0) {
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            for (let i = 0; i < this.snowflakePoints.length; i++) {
-              const x = this.snowflakePoints[i].x * this.size;
-              const y = this.snowflakePoints[i].y * this.size;
-              if (i === 0) {
-                ctx.moveTo(x, y);
-              } else {
-                ctx.lineTo(x, y);
+          {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+            
+            // Use Koch snowflake if available, otherwise fallback to simple star
+            if (this.snowflakePoints && this.snowflakePoints.length > 0) {
+              ctx.fillStyle = '#ffffff';
+              ctx.beginPath();
+              for (let i = 0; i < this.snowflakePoints.length; i++) {
+                const x = this.snowflakePoints[i].x * this.size;
+                const y = this.snowflakePoints[i].y * this.size;
+                if (i === 0) {
+                  ctx.moveTo(x, y);
+                } else {
+                  ctx.lineTo(x, y);
+                }
               }
-            }
-            ctx.closePath();
-            ctx.fill();
-          } else {
-            // Fallback to simple 6-point star
-            const points = 6;
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            for (let i = 0; i < points; i++) {
-              const angle = (i * Math.PI * 2) / points;
-              const x = Math.cos(angle) * this.size;
-              const y = Math.sin(angle) * this.size;
-              if (i === 0) {
-                ctx.moveTo(x, y);
-              } else {
-                ctx.lineTo(x, y);
+              ctx.closePath();
+              ctx.fill();
+            } else {
+              // Fallback to simple 6-point star
+              const points = 6;
+              ctx.fillStyle = '#ffffff';
+              ctx.beginPath();
+              for (let i = 0; i < points; i++) {
+                const angle = (i * Math.PI * 2) / points;
+                const x = Math.cos(angle) * this.size;
+                const y = Math.sin(angle) * this.size;
+                if (i === 0) {
+                  ctx.moveTo(x, y);
+                } else {
+                  ctx.lineTo(x, y);
+                }
               }
+              ctx.closePath();
+              ctx.fill();
             }
-            ctx.closePath();
-            ctx.fill();
+            
+            // Add sparkle effect occasionally
+            if (Math.random() < SNOWFLAKE_SPARKLE_CHANCE) {
+              ctx.fillStyle = '#ffffdd';
+              ctx.globalAlpha = 0.9;
+              ctx.beginPath();
+              ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            
+            ctx.restore();
           }
-          
-          // Add sparkle effect occasionally
-          if (Math.random() < SNOWFLAKE_SPARKLE_CHANCE) {
-            ctx.fillStyle = '#ffffdd';
-            ctx.globalAlpha = 0.9;
-            ctx.beginPath();
-            ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          
-          ctx.restore();
           break;
         
         case 'fog':
-          const gradient = ctx.createRadialGradient(
-            this.x, this.y, 0,
-            this.x, this.y, this.size
-          );
-          gradient.addColorStop(0, `hsla(${this.hue}, 15%, 75%, ${this.alpha})`);
-          gradient.addColorStop(0.5, `hsla(${this.hue}, 15%, 70%, ${this.alpha * 0.5})`);
-          gradient.addColorStop(1, 'rgba(180, 180, 200, 0)');
-          ctx.fillStyle = gradient;
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-          ctx.fill();
+          {
+            const gradient = ctx.createRadialGradient(
+              this.x, this.y, 0,
+              this.x, this.y, this.size
+            );
+            gradient.addColorStop(0, `hsla(${this.hue}, 15%, 75%, ${this.alpha})`);
+            gradient.addColorStop(0.5, `hsla(${this.hue}, 15%, 70%, ${this.alpha * 0.5})`);
+            gradient.addColorStop(1, 'rgba(180, 180, 200, 0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+          }
           break;
       }
       

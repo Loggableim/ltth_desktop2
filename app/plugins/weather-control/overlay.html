@@ -734,6 +734,7 @@
                 switch (this.type) {
                     case 'rain':
                     case 'storm':
+                    {
                         const gradient = ctx.createLinearGradient(
                             this.x, this.y,
                             this.x - this.speedX * 2, this.y - this.length
@@ -759,8 +760,10 @@
                             });
                         }
                         break;
+                    }
                     
                     case 'snow':
+                    {
                         ctx.save();
                         ctx.translate(this.x, this.y);
                         ctx.rotate(this.rotation);
@@ -807,8 +810,10 @@
                         
                         ctx.restore();
                         break;
+                    }
                     
                     case 'fog':
+                    {
                         const fogGradient = ctx.createRadialGradient(
                             this.x, this.y, 0,
                             this.x, this.y, this.size
@@ -821,6 +826,7 @@
                         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                         ctx.fill();
                         break;
+                    }
                 }
                 
                 ctx.restore();

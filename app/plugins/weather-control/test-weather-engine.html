@@ -75,8 +75,16 @@
         <span>Active Effects: <strong id="active">0</strong></span>
     </div>
     
+    <div class="stats" style="font-size: 0.9em; color: #888;">
+        <span>Rain Pool: <strong id="pool-rain">0/0</strong></span>
+        <span>Snow Pool: <strong id="pool-snow">0/0</strong></span>
+        <span>Storm Pool: <strong id="pool-storm">0/0</strong></span>
+        <span>Fog Pool: <strong id="pool-fog">0/0</strong></span>
+    </div>
+    
     <div style="text-align: center; margin: 20px;">
         <p id="status">Status: Idle</p>
+        <p style="font-size: 0.9em; color: #888;">Test new performance features: Object pooling, fixed timestep, Koch snowflakes, HDR sunbeams, procedural lightning</p>
     </div>
     
     <script src="weather-engine.js"></script>
@@ -105,6 +113,13 @@
             document.getElementById('avg-fps').textContent = engine.getAverageFPS();
             document.getElementById('particles').textContent = engine.getParticleCount();
             document.getElementById('active').textContent = engine.getActiveEffects().length;
+            
+            // Update pool stats
+            const poolStats = engine.getPoolStats();
+            document.getElementById('pool-rain').textContent = `${poolStats.rain.active}/${poolStats.rain.total}`;
+            document.getElementById('pool-snow').textContent = `${poolStats.snow.active}/${poolStats.snow.total}`;
+            document.getElementById('pool-storm').textContent = `${poolStats.storm.active}/${poolStats.storm.total}`;
+            document.getElementById('pool-fog').textContent = `${poolStats.fog.active}/${poolStats.fog.total}`;
         }, 100);
         
         function toggleEngine() {
