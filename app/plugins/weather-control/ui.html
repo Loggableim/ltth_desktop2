@@ -1287,6 +1287,7 @@
         // Preview engine
         let previewEngine = null;
         let previewActive = false;
+        let previewStatsInterval = null;
 
         const translations = {
             en: {
@@ -2125,10 +2126,15 @@
                 return;
             }
             
+            // Prevent multiple initializations
+            if (previewEngine) {
+                console.warn('Preview already initialized');
+                return;
+            }
+            
             // Create weather engine with lightning callback
             previewEngine = new window.WeatherEngine(canvas, {
                 maxParticles: 500,
-                fpsCap: 60,
                 debug: false,
                 onLightning: (intensity) => {
                     // Flash effect for thunder in preview
@@ -2140,12 +2146,12 @@
                 }
             });
             
-            // Update preview stats periodically
-            setInterval(updatePreviewStats, 100);
+            // Update preview stats periodically and store interval ID
+            previewStatsInterval = setInterval(updatePreviewStats, 100);
             
             // Setup preview control buttons
             document.getElementById('togglePreviewBtn').addEventListener('click', togglePreview);
-            document.getElementById('testCurrentEffectBtn').addEventListener('click', testCurrentEffect);
+            document.getElementById('testCurrentEffectBtn').addEventListener('click', testRainEffect);
             document.getElementById('stopAllPreviewBtn').addEventListener('click', stopAllPreviewEffects);
             
             // Add effect test buttons for each weather effect card
@@ -2203,11 +2209,10 @@
         }
         
         /**
-         * Test the default rain effect
-         * Note: This button tests the rain effect. Use individual "Test Effect" 
-         * buttons on each weather effect card to test specific effects with their configured settings.
+         * Test rain effect with default settings
+         * This is a quick test button for the most common effect
          */
-        function testCurrentEffect() {
+        function testRainEffect() {
             testEffect('rain');
         }
         
@@ -2266,6 +2271,16 @@
             
             // Initialize preview
             initPreview();
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (previewStatsInterval) {
+                clearInterval(previewStatsInterval);
+            }
+            if (previewEngine) {
+                previewEngine.destroy();
+            }
         });
     </script>
 </body>
