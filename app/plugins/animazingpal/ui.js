@@ -11,6 +11,7 @@ let toastShowing = false;
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   fetchStatus();
+  loadPersonalities();
   
   // Socket events
   socket.on('animazingpal:status', (data) => {
@@ -1260,8 +1261,33 @@ async function createPersona() {
   const personaName = prompt('Neuer Persona Name:');
   if (!personaName) return;
 
-  showToast('Persona Editor wird implementiert...', 'info');
-  // Stub for future implementation
+  const systemPrompt = prompt('System Prompt (Persönlichkeitsbeschreibung):');
+  if (!systemPrompt) return;
+
+  try {
+    const response = await fetch('/api/animazingpal/brain/personality/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        name: personaName,
+        system_prompt: systemPrompt,
+        language: 'de',
+        temperature: 0.8
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast('Persona erstellt');
+      // Reload personalities list
+      loadPersonalities();
+    } else {
+      showToast('Fehler: ' + result.error, 'error');
+    }
+  } catch (error) {
+    showToast('Fehler beim Erstellen: ' + error.message, 'error');
+  }
 }
 
 async function editPersonaFromSelector() {
@@ -1273,8 +1299,60 @@ async function editPersonaFromSelector() {
     return;
   }
 
-  showToast('Persona Editor wird implementiert...', 'info');
-  // Stub for future implementation
+  const systemPrompt = prompt(`Neuer System Prompt für "${selectedPersona}":`);
+  if (!systemPrompt) return;
+
+  try {
+    const response = await fetch(`/api/animazingpal/brain/personality/${selectedPersona}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        system_prompt: systemPrompt
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast('Persona aktualisiert');
+    } else {
+      showToast('Fehler: ' + result.error, 'error');
+    }
+  } catch (error) {
+    showToast('Fehler beim Bearbeiten: ' + error.message, 'error');
+  }
+}
+
+async function loadPersonalities() {
+  try {
+    const response = await fetch('/api/animazingpal/brain/personalities');
+    const data = await response.json();
+    
+    if (data.success) {
+      const personaSelector = document.getElementById('personaSelector');
+      const activePersonality = document.getElementById('activePersonality');
+      
+      // Update persona selector
+      personaSelector.innerHTML = '<option value="">Persona auswählen...</option>';
+      data.personalities.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.name;
+        option.textContent = p.name;
+        personaSelector.appendChild(option);
+      });
+      
+      // Update active personality selector
+      activePersonality.innerHTML = '<option value="">Keine ausgewählt</option>';
+      data.personalities.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.name;
+        option.textContent = p.name;
+        activePersonality.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load personalities:', error);
+  }
 }
 
 async function deletePersonaFromSelector() {
@@ -1300,6 +1378,7 @@ async function deletePersonaFromSelector() {
     if (result.success) {
       showToast('Persona gelöscht');
       personaSelector.value = '';
+      loadPersonalities();
     } else {
       showToast('Fehler: ' + result.error, 'error');
     }
