@@ -516,3 +516,34 @@ When working on this repository:
 ---
 
 *This instructions file helps GitHub Copilot provide better suggestions aligned with the project's conventions and standards.*
+
+---
+
+## 🏷️ Version Release Workflow
+
+When preparing a new version release:
+
+1. **Update version numbers** in:
+   - `/package.json` (root)
+   - `/app/package.json`
+   - `/README.md` (badge + footer)
+   - `/infos/llm_start_here.md` (metadata table)
+
+2. **Update CHANGELOG.md**:
+   - Move all `[Unreleased]` items to new version section
+   - Use format: `## [X.Y.Z] - YYYY-MM-DD`
+   - Group changes: Added, Changed, Fixed, Security, Technical
+
+3. **Update app/CHANGELOG.md** (backend-specific changes)
+
+4. **Create Git tag and push**:
+   ```bash
+   git tag v1.3.0
+   git push origin v1.3.0
+   ```
+
+5. **GitHub Actions automatically creates release** using `.github/workflows/release.yml`
+
+6. **Verify release** at https://github.com/Loggableim/ltth_desktop2/releases
+
+---

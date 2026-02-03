@@ -7,21 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-02-03
+
+### Added
+
+#### 🧠 **AnimazingPal Brain Engine** - Advanced AI Memory System
+- **Langzeit-Gedächtnis**: Persistent memory storage with SQLite database
+- **Vector Memory**: Semantic similarity search using embeddings (cosine similarity)
+- **User Profiles**: Tracks viewer habits, preferences, and interaction history
+- **Streamer Personalities**: 5 pre-defined personalities (Freundlicher Streamer, Gaming Pro, Entertainer, Chill Vibes, Anime Fan)
+- **GPT Integration**: OpenAI API support (GPT-4o-mini, GPT-5 Nano compatible)
+- **Memory Archival**: Automatic compression and archiving of old memories after 7 days
+- **Memory Decay**: Importance score decay over 90 days, auto-pruning after 30 days
+- **Auto-Response**: Configurable auto-responses for chat, gifts, follows, shares
+- **Rate Limiting**: Configurable max responses per minute, chat response probability
+- **API Endpoints**: 15+ endpoints for brain status, personalities, memories, user profiles
+- Files: `animazingpal/brain-engine.js`, `animazingpal/personality-manager.js`, `animazingpal/vector-memory.js`
+
+#### ⚡ **AnimazingPal Batch Processing** - Outbox System
+- **Event Batching**: Collects multiple TikTok events (gifts, likes, follows) in time windows
+- **Natural Speech Flow**: Combines events into coherent messages (e.g., "Thank you John for the Rose, Sarah for the Heart, and Mike for following!")
+- **Configurable Window**: Default 8 seconds batch window, max 8 items, max 320 characters
+- **Hold System**: Pauses batching during active speech or mic usage
+- **Duplicate Prevention**: TTL-based event deduplication (600s default)
+- **Activity Tracking**: Speech state and mic state monitoring with duration tracking
+- Configuration: `outbox.windowSeconds`, `outbox.maxItems`, `outbox.maxChars`, `outbox.separator`
+
+#### 🎯 **AnimazingPal Relevance Detection** - Smart Chat Filtering
+- **Question Detection**: Recognizes questions with keywords (warum, wie, was, why, how, what, etc.)
+- **Greeting Recognition**: Detects greetings (hallo, hi, hey, servus, moin, etc.) with cooldown (360s)
+- **Thanks Detection**: Recognizes thank you messages (danke, thanks, merci, gracias, etc.)
+- **Spam Filtering**: Ignores commands (!cam, /help), URLs, repeated characters, emojis-only messages
+- **Score-Based**: Relevance score 0-1, configurable reply threshold (default 0.6)
+- **API Endpoint**: `POST /api/animazingpal/relevance/test` - Test relevance score for any text
+- Configuration: `relevance.minLength`, `relevance.replyThreshold`, `relevance.respondToGreetings`, `relevance.greetingCooldown`
+
+#### 💬 **AnimazingPal Response Engine** - GPT-Powered Replies
+- **Contextual Responses**: Uses user history and memory context for personalized replies
+- **Quick Acknowledgments**: Fast responses for greetings, thanks, and gifts without full GPT calls
+- **Response Caching**: 5-minute TTL cache to prevent duplicate API calls
+- **Length Limiting**: Max 18 words per response for natural TTS pacing
+- **ChatPal Integration**: Seamless integration with Animaze ChatPal for TTS output
+- **Echo Mode Fallback**: Optional TTS-only mode without GPT processing
+
+#### 📊 **New AnimazingPal API Endpoints**
+- `GET /api/animazingpal/activity` - Speech/Mic/Batcher status
+- `POST /api/animazingpal/batch/flush` - Manual batch queue flush
+- `GET /api/animazingpal/relevance/test` - Test relevance score
+- `POST /api/animazingpal/memory/decay` - Trigger memory decay manually
+- `GET /api/animazingpal/memory/stats` - Extended memory statistics
+- `GET /api/animazingpal/brain/status` - Brain engine status
+- `POST /api/animazingpal/brain/config` - Configure brain settings
+- `POST /api/animazingpal/brain/test` - Test GPT connection
+- `GET /api/animazingpal/brain/personalities` - List all personalities
+- `POST /api/animazingpal/brain/personality/set` - Activate personality
+- `POST /api/animazingpal/brain/personality/create` - Create custom personality
+- `GET /api/animazingpal/brain/memories/search` - Search memories semantically
+- `GET /api/animazingpal/brain/user/:username` - Get user profile
+- `POST /api/animazingpal/brain/chat` - Manual chat response
+- `POST /api/animazingpal/brain/archive` - Archive old memories
+
+### Changed
+- **AnimazingPal README.md**: Expanded documentation to 443 lines with comprehensive Brain Engine docs
+- **AnimazingPal Architecture**: Event-driven system with batching, relevance detection, and memory decay
+- **AnimazingPal Performance**: Optimized response caching and batch processing for reduced API calls
+
 ### Fixed
-- **Weather Control Plugin - OBS Overlay Transparency**
+- **Weather Control Plugin - OBS Overlay Transparency** (moved from Unreleased)
   - Fixed black background issue in OBS HUD overlay
   - Added explicit transparency settings to HTML, body, canvas, and container elements
   - Updated canvas context initialization with `premultipliedAlpha: true` for proper alpha blending
   - Ensured canvas maintains transparent background during initialization and resize
   - OBS now properly displays only weather effects without any background color
-- **Goals Plugin Display Issues**
+- **Goals Plugin Display Issues** (moved from Unreleased)
   - Fixed coin goal displaying values twice due to duplicate socket broadcasts
   - Fixed format function bug where 999999 displayed as "1000.0K" instead of "999K"
   - Simplified `broadcastGoalValueChanged()` to eliminate duplicate socket events (50% performance improvement)
   - Updated number formatting for cleaner display: numbers >= 10K now show without decimals (e.g., "50K" instead of "50.0K")
   - Ensured consistency between ClarityHUD and Goals overlays
   - Added comprehensive test suite (`goals-display-fix.test.js`) with 7 test cases
-  - See `LIVE_GOALS_DISPLAY_FIX.md` for detailed technical documentation
+
+### Technical
+- **Dependencies**: OpenAI API integration for Brain Engine
+- **Database Schema**: New tables for brain memories, user profiles, personality configs
+- **Performance**: Memory decay reduces database size by auto-archiving old entries
+- **Architecture**: Modular design with separate engines for batch processing, relevance detection, response generation
 
 ## [1.2.2] - 2025-12-15
 
