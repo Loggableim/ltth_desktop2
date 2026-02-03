@@ -425,6 +425,7 @@ class QueueManager extends EventEmitter {
         if (!item) {
           // Queue is empty, stop processing
           this.logger.debug('[QueueManager] Queue is empty, stopping processing');
+          this.emit('queue-empty');
           break;
         }
 
@@ -713,8 +714,7 @@ class QueueManager extends EventEmitter {
     return new Promise((resolve, reject) => {
       // Create waiter object first so we can reference it in the timeout
       const waiter = {
-        resolve: null,
-        timeoutId: null
+        resolve: null
       };
       
       const timeoutId = setTimeout(() => {
@@ -737,7 +737,6 @@ class QueueManager extends EventEmitter {
         clearTimeout(timeoutId);
         resolve();
       };
-      waiter.timeoutId = timeoutId;
       
       // Add to waiters queue
       this._lockWaiters.push(waiter);
