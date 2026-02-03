@@ -915,6 +915,13 @@ function copyToClipboard(text) {
     });
 }
 
+// ========================================
+// GLOBALE FUNKTIONEN FÜR INLINE ONCLICK
+// ========================================
+window.editMultiGoal = editMultiGoal;
+window.deleteMultiGoal = deleteMultiGoal;
+window.copyToClipboard = copyToClipboard;
+
 // Initialize on load - show goals tab by default
 window.addEventListener('DOMContentLoaded', () => {
     switchTab('goals');
