@@ -3,7 +3,7 @@
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Node.js](https://img.shields.io/badge/Node.js-18.0.0+-green.svg)](https://nodejs.org/)
 [![Electron](https://img.shields.io/badge/Electron-33.0.0+-blue.svg)](https://www.electronjs.org/)
-[![Version](https://img.shields.io/badge/Version-1.2.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.3.0-blue.svg)](CHANGELOG.md)
 
 Professional TikTok-compatible LIVE streaming tool with overlays, alerts, Text-to-Speech, automation, and an extensive plugin ecosystem. Built with Node.js, Express.js, Socket.IO, and Electron.
 
@@ -58,8 +58,18 @@ Dieses Tool wird von mir als Solo-Entwickler zusammen mit Claude AI entwickelt. 
 - Modulare plugin-basierte Architektur
 - Einfach erweiterbar mit eigener Funktionalität
 - **31 eingebaute Plugins** (6 Early Beta, 10 Beta, 8 Alpha, 7 Final)
+- **AnimazingPal v1.3** mit Brain Engine (KI-Gedächtnis, Persönlichkeiten, Batch Processing)
 - WebGPU-Engine für GPU-beschleunigte Effekte
 - Global Chat Command Engine (GCCE)
+
+### 🤖 AnimazingPal Brain Engine (v1.3 NEU)
+- **KI-Langzeitgedächtnis** mit semantischer Vektorsuche
+- **Persönlichkeiten-System** (5 vordefiniert + Custom)
+- **User-Profile** mit Beziehungs-Tracking
+- **Batch Processing** für natürlichen Sprachfluss
+- **Relevanz-Erkennung** (Fragen, Grüße, Spam-Filter)
+- **GPT-Powered Antworten** (GPT-4o-mini, GPT-5 Nano)
+- **Memory Decay** mit Auto-Archivierung
 
 ---
 
@@ -371,4 +381,4 @@ Dieses Tool nutzt öffentliche APIs und ist nicht offiziell von TikTok unterstü
 
 **Made with ❤️ by PupCid & Claude AI**
 
-**Version 1.2.0** - Repository Cleanup & Documentation Consolidation
+**Version 1.3.0** - AnimazingPal Brain Engine & Enhanced Features

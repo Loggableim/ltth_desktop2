@@ -7,8 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-02-03
+
+### Added
+- **AnimazingPal Brain Engine** - Advanced AI-powered memory and personality system for VTuber avatars
+  - Persistent long-term memory with semantic vector search
+  - User profile tracking with relationship history
+  - 5 pre-defined streamer personalities + custom personality creator
+  - GPT-powered contextual responses (GPT-4o-mini, GPT-5 Nano)
+  - Memory decay and archival system (7-day archive, 90-day decay, 30-day pruning)
+  - Auto-response configuration for chat, gifts, follows, shares
+  - Rate limiting and response probability controls
+  - 15+ API endpoints for brain management
+- **AnimazingPal Batch Processing (Outbox System)** - Natural speech flow for combined events
+  - 8-second batch window for collecting events (configurable)
+  - Max 8 items per batch, max 320 characters
+  - Automatic pause during speech/mic activity
+  - TTL-based event deduplication (600s)
+- **AnimazingPal Relevance Detection** - Intelligent chat message filtering
+  - Question detection with keyword matching
+  - Greeting and thanks recognition with cooldowns
+  - Spam filtering (commands, URLs, emoji-only, repeated chars)
+  - Score-based relevance (0-1) with configurable threshold (0.6)
+- **AnimazingPal Response Engine** - GPT-powered reply generation
+  - Contextual responses using user history and memories
+  - Quick acknowledgments for greetings/thanks/gifts
+  - 5-minute response caching to reduce API calls
+  - Max 18-word responses for natural TTS pacing
+- **AnimazingPal Enhanced API** - 15 new endpoints for brain/batch/relevance management
+  - Activity status, batch flushing, relevance testing
+  - Memory decay triggers, extended statistics
+  - Brain status, config, personality management
+  - Memory search, user profiles, chat responses
+
+### Changed
+- **AnimazingPal Documentation** - Expanded README to 443 lines with full Brain Engine documentation
+- **AnimazingPal Architecture** - Modular event-driven system with separate engines for batching, relevance, and responses
+
 ### Fixed
-- **Gift Duplicate Detection** - Fixed bug where first gift was always recognized twice in Live Event Log
+- **Gift Duplicate Detection** (moved from Unreleased, originally reported 2026-01-06)
   - Root cause: TikTok sends gift events twice (popup/animation + chat log entry) with identical `createTime` timestamps
   - Previous implementation generated new timestamps with `new Date().toISOString()`, causing deduplication to fail
   - **Solution:** Use TikTok's original `createTime` timestamp instead of generating new ones

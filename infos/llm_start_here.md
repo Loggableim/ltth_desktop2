@@ -1,6 +1,6 @@
 # 🚀 LLM Start Here - PupCid's Little TikTool Helper (LTTH)
 
-**Last Updated:** 2026-01-20  
+**Last Updated:** 2026-02-03  
 **For:** AI Assistants, LLMs, GitHub Copilot  
 **Purpose:** Comprehensive technical guide for working with this codebase
 
@@ -30,7 +30,7 @@ Before making any changes, read these files in order:
 | **Name** | PupCid's Little TikTool Helper (LTTH) |
 | **Type** | Electron Desktop App + Node.js Backend |
 | **License** | CC-BY-NC-4.0 (Non-Commercial) |
-| **Version** | 1.2.2 |
+| **Version** | 1.3.0 |
 | **Developer** | Solo developer + Claude AI |
 | **Stack** | Node.js 18-23, Express, Socket.IO, SQLite, Electron 33+ |
 | **Architecture** | Plugin-based modular system |
