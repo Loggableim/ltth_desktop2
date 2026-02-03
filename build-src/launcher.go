@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -33,6 +34,14 @@ const (
 	
 	// Update download settings
 	minUpdateSuccessRate = 90.0 // Minimum percentage of files that must download successfully
+	
+	// Update modes
+	updateModeAuto    = "auto"    // Auto-detect based on existing files
+	updateModeRelease = "release" // Stable releases (default)
+	updateModeCommit  = "commit"  // Bleeding edge (legacy/dev)
+	
+	// Version file
+	versionFile = "runtime/version.txt"
 )
 
 // GitHub API response structures for auto-update
@@ -64,6 +73,35 @@ type GitHubBlob struct {
 	Content  string `json:"content"`
 	Encoding string `json:"encoding"` // "base64"
 	Size     int    `json:"size"`
+}
+
+// GitHub Release API response structure
+type GitHubRelease struct {
+	TagName         string    `json:"tag_name"`          // "v1.2.3"
+	Name            string    `json:"name"`              // "Release 1.2.3"
+	Body            string    `json:"body"`              // Markdown release notes
+	PublishedAt     time.Time `json:"published_at"`
+	TarballURL      string    `json:"tarball_url"`
+	ZipballURL      string    `json:"zipball_url"`
+	TargetCommitish string    `json:"target_commitish"` // Usually "main"
+	
+	// Optional: Pre-built binaries
+	Assets []struct {
+		Name               string `json:"name"`
+		Size               int    `json:"size"`
+		BrowserDownloadURL string `json:"browser_download_url"`
+		ContentType        string `json:"content_type"`
+	} `json:"assets"`
+}
+
+// Unified update information
+type UpdateInfo struct {
+	Available      bool
+	CurrentVersion string
+	LatestVersion  string
+	ReleaseNotes   string
+	PublishedAt    time.Time
+	CommitSHA      string // For blob API download
 }
 
 // writeCounter tracks download progress
@@ -677,6 +715,109 @@ func writeLocalCommitSHA(sha string) error {
 	return os.WriteFile(shaFilePath, []byte(sha), 0644)
 }
 
+// ============================================
+// Version Management (Releases-based)
+// ============================================
+
+// getVersionFilePath returns the path to runtime/version.txt
+func getVersionFilePath() string {
+	exePath, _ := os.Executable()
+	return filepath.Join(filepath.Dir(exePath), versionFile)
+}
+
+// getLocalVersion reads the current version from runtime/version.txt
+func getLocalVersion() (string, error) {
+	data, err := os.ReadFile(getVersionFilePath())
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// writeLocalVersion writes the version to runtime/version.txt
+func writeLocalVersion(version string) error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	
+	exeDir := filepath.Dir(exePath)
+	runtimeDir := filepath.Join(exeDir, "runtime")
+	os.MkdirAll(runtimeDir, 0755)
+	
+	return os.WriteFile(getVersionFilePath(), []byte(version), 0644)
+}
+
+// compareVersions compares two semantic version strings
+// Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+// Note: Invalid version parts default to 0 for graceful degradation
+func compareVersions(v1, v2 string) int {
+	// Remove "v" prefix if present
+	v1 = strings.TrimPrefix(v1, "v")
+	v2 = strings.TrimPrefix(v2, "v")
+	
+	parts1 := strings.Split(v1, ".")
+	parts2 := strings.Split(v2, ".")
+	
+	maxLen := len(parts1)
+	if len(parts2) > maxLen {
+		maxLen = len(parts2)
+	}
+	
+	for i := 0; i < maxLen; i++ {
+		var n1, n2 int
+		
+		if i < len(parts1) {
+			// Extract numeric part (ignore pre-release suffixes like "-beta")
+			numStr := strings.Split(parts1[i], "-")[0]
+			// Ignore parsing errors - invalid parts default to 0 for graceful comparison
+			n1, _ = strconv.Atoi(numStr)
+		}
+		
+		if i < len(parts2) {
+			numStr := strings.Split(parts2[i], "-")[0]
+			// Ignore parsing errors - invalid parts default to 0 for graceful comparison
+			n2, _ = strconv.Atoi(numStr)
+		}
+		
+		if n1 > n2 {
+			return 1
+		}
+		if n1 < n2 {
+			return -1
+		}
+	}
+	
+	return 0
+}
+
+// detectUpdateMode auto-detects the appropriate update mode
+// Priority: ENV var > version.txt exists > version_sha.txt exists > default
+func detectUpdateMode() string {
+	// Priority 1: Explicit environment variable
+	if mode := os.Getenv("LTTH_UPDATE_MODE"); mode != "" {
+		return mode
+	}
+	
+	// Priority 2: version.txt exists → Release Mode
+	if _, err := os.Stat(getVersionFilePath()); err == nil {
+		return updateModeRelease
+	}
+	
+	// Priority 3: version_sha.txt exists → Commit Mode
+	exePath, err := os.Executable()
+	if err == nil {
+		exeDir := filepath.Dir(exePath)
+		shaFilePath := filepath.Join(exeDir, versionSHAFile)
+		if _, err := os.Stat(shaFilePath); err == nil {
+			return updateModeCommit
+		}
+	}
+	
+	// Default: Release Mode
+	return updateModeRelease
+}
+
 // getLatestCommitSHA fetches the latest commit SHA from GitHub
 func getLatestCommitSHA() (string, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/commits/%s",
@@ -708,20 +849,135 @@ func getLatestCommitSHA() (string, error) {
 	return commit.SHA, nil
 }
 
-// checkForUpdates checks if an update is available
-func checkForUpdates() (bool, string, error) {
-	// 1. Check rate limiting
-	if !shouldCheckForUpdates() {
-		return false, "", nil
+// ============================================
+// GitHub Releases API Integration
+// ============================================
+
+// getLatestRelease fetches the latest release from GitHub
+func getLatestRelease() (*GitHubRelease, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest",
+		githubAPIURL, githubOwner, githubRepo)
+	
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
 	}
 	
-	// 2. Get latest commit SHA from GitHub
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("no releases found")
+	}
+	
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+	
+	var release GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, err
+	}
+	
+	return &release, nil
+}
+
+// checkForReleasesUpdate checks for updates using GitHub Releases
+func checkForReleasesUpdate() (*UpdateInfo, error) {
+	// Get latest release from GitHub
+	release, err := getLatestRelease()
+	if err != nil {
+		return nil, err
+	}
+	
+	// Get local version
+	localVersion, err := getLocalVersion()
+	if err != nil {
+		// First installation - save current version
+		if writeErr := writeLocalVersion(release.TagName); writeErr != nil {
+			// Log but don't fail - update check can continue
+			fmt.Printf("Warning: Failed to write version file: %v\n", writeErr)
+		}
+		return &UpdateInfo{
+			Available:      false,
+			CurrentVersion: release.TagName,
+			LatestVersion:  release.TagName,
+		}, nil
+	}
+	
+	// Compare versions
+	updateAvailable := compareVersions(release.TagName, localVersion) > 0
+	
+	// Get commit SHA from the release for downloading
+	commitSHA := ""
+	if updateAvailable {
+		// Fetch the commit SHA from the target commitish
+		commitSHA, err = getLatestCommitSHA()
+		if err != nil {
+			// If we can't get commit SHA, we can't download the update
+			return nil, fmt.Errorf("failed to get commit SHA for download: %v", err)
+		}
+	}
+	
+	return &UpdateInfo{
+		Available:      updateAvailable,
+		CurrentVersion: localVersion,
+		LatestVersion:  release.TagName,
+		ReleaseNotes:   release.Body,
+		PublishedAt:    release.PublishedAt,
+		CommitSHA:      commitSHA,
+	}, nil
+}
+
+// checkForUpdates checks if an update is available (unified for both modes)
+// Returns: hasUpdate, commitSHA, releaseInfo (may be nil), error
+func checkForUpdates() (bool, string, *UpdateInfo, error) {
+	// 1. Check rate limiting
+	if !shouldCheckForUpdates() {
+		return false, "", nil, nil
+	}
+	
+	// 2. Detect update mode
+	mode := detectUpdateMode()
+	
+	// 3. Check for updates based on mode
+	if mode == updateModeRelease {
+		// Release mode - use GitHub Releases API
+		updateInfo, err := checkForReleasesUpdate()
+		if err != nil {
+			// Fallback to commit mode on error
+			hasUpdate, sha, err := checkForCommitUpdates()
+			return hasUpdate, sha, nil, err
+		}
+		
+		if updateInfo.Available {
+			return true, updateInfo.CommitSHA, updateInfo, nil
+		}
+		
+		updateLastCheckTime()
+		return false, "", nil, nil
+	}
+	
+	// Commit mode (legacy/dev) - use commit SHA checking
+	hasUpdate, sha, err := checkForCommitUpdates()
+	return hasUpdate, sha, nil, err
+}
+
+// checkForCommitUpdates checks for updates using commit SHA (legacy mode)
+func checkForCommitUpdates() (bool, string, error) {
+	// Get latest commit SHA from GitHub
 	latestSHA, err := getLatestCommitSHA()
 	if err != nil {
 		return false, "", err
 	}
 	
-	// 3. Read local SHA
+	// Read local SHA
 	localSHA, err := getLocalCommitSHA()
 	if err != nil {
 		// First installation - save current SHA
@@ -729,7 +985,7 @@ func checkForUpdates() (bool, string, error) {
 		return false, "", nil
 	}
 	
-	// 4. Compare
+	// Compare
 	if localSHA != latestSHA {
 		return true, latestSHA, nil
 	}
@@ -948,7 +1204,7 @@ func main() {
 	
 	// === Auto-Update Check ===
 	fmt.Println("Pruefe auf Updates...")
-	hasUpdate, latestSHA, err := checkForUpdates()
+	hasUpdate, latestSHA, updateInfo, err := checkForUpdates()
 	if err != nil {
 		fmt.Printf("⚠️  Update-Pruefung fehlgeschlagen: %v\n", err)
 		fmt.Println("Fahre mit lokalem Stand fort...")
@@ -958,6 +1214,32 @@ func main() {
 		fmt.Println("  Update verfuegbar!")
 		fmt.Println("===============================================")
 		fmt.Println()
+		
+		// Show version information if available
+		if updateInfo != nil {
+			fmt.Printf("Aktuelle Version: %s\n", updateInfo.CurrentVersion)
+			fmt.Printf("Neue Version:     %s\n", updateInfo.LatestVersion)
+			fmt.Println()
+			
+			// Show release notes if available (max 10 lines)
+			if updateInfo.ReleaseNotes != "" {
+				fmt.Println("Release Notes:")
+				fmt.Println("---")
+				lines := strings.Split(updateInfo.ReleaseNotes, "\n")
+				maxLines := 10
+				if len(lines) > maxLines {
+					for i := 0; i < maxLines; i++ {
+						fmt.Println(lines[i])
+					}
+					fmt.Println("... (gekuerzt)")
+				} else {
+					fmt.Println(updateInfo.ReleaseNotes)
+				}
+				fmt.Println("---")
+				fmt.Println()
+			}
+		}
+		
 		// Accept update with "J" (Ja), "Y" (Yes), or just pressing Enter for convenience
 		fmt.Print("Moechtest du das Update jetzt installieren? (J/N): ")
 		
@@ -971,6 +1253,10 @@ func main() {
 				fmt.Printf("❌ Update fehlgeschlagen: %v\n", err)
 				fmt.Println("Fahre mit lokalem Stand fort...")
 			} else {
+				// Write version file if we have version info
+				if updateInfo != nil && updateInfo.LatestVersion != "" {
+					writeLocalVersion(updateInfo.LatestVersion)
+				}
 				fmt.Println("Hinweis: npm install wird automatisch ausgefuehrt falls noetig...")
 				fmt.Println()
 			}

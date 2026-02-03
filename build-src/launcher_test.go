@@ -175,3 +175,121 @@ func TestUpdateLastCheckTime(t *testing.T) {
 		t.Errorf("Check file content is not a valid RFC3339 timestamp: %v", err)
 	}
 }
+
+// ============================================
+// Tests for GitHub Releases functionality
+// ============================================
+
+// Test compareVersions semantic version comparison
+func TestCompareVersions(t *testing.T) {
+	tests := []struct {
+		v1       string
+		v2       string
+		expected int
+	}{
+		{"1.0.0", "1.0.0", 0},
+		{"1.0.0", "1.0.1", -1},
+		{"1.0.1", "1.0.0", 1},
+		{"1.1.0", "1.0.9", 1},
+		{"2.0.0", "1.9.9", 1},
+		{"v1.0.0", "v1.0.0", 0},
+		{"v1.2.3", "1.2.3", 0},
+		{"1.0.0", "v1.0.0", 0},
+		{"1.0.0-beta", "1.0.0", 0}, // Pre-release tags are ignored
+		{"1.0", "1.0.0", 0},
+		{"1", "1.0.0", 0},
+	}
+
+	for _, test := range tests {
+		result := compareVersions(test.v1, test.v2)
+		if result != test.expected {
+			t.Errorf("compareVersions(%q, %q) = %d, expected %d", 
+				test.v1, test.v2, result, test.expected)
+		}
+	}
+}
+
+// Test getLocalVersion and writeLocalVersion
+func TestVersionReadWrite(t *testing.T) {
+	// Get the test executable directory
+	exePath, err := os.Executable()
+	if err != nil {
+		t.Fatalf("Failed to get executable path: %v", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	
+	// Create runtime directory
+	runtimeDir := filepath.Join(exeDir, "runtime")
+	os.MkdirAll(runtimeDir, 0755)
+	defer os.RemoveAll(runtimeDir) // Clean up
+	
+	testVersion := "v1.2.3"
+	
+	// Write version
+	err = writeLocalVersion(testVersion)
+	if err != nil {
+		t.Fatalf("Failed to write version: %v", err)
+	}
+	defer os.Remove(getVersionFilePath()) // Clean up
+	
+	// Read version
+	readVersion, err := getLocalVersion()
+	if err != nil {
+		t.Fatalf("Failed to read version: %v", err)
+	}
+	
+	// Compare
+	if readVersion != testVersion {
+		t.Errorf("Expected version %s, got %s", testVersion, readVersion)
+	}
+}
+
+// Test detectUpdateMode auto-detection
+func TestDetectUpdateMode(t *testing.T) {
+	// Get the test executable directory
+	exePath, err := os.Executable()
+	if err != nil {
+		t.Fatalf("Failed to get executable path: %v", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	
+	// Create runtime directory
+	runtimeDir := filepath.Join(exeDir, "runtime")
+	os.MkdirAll(runtimeDir, 0755)
+	defer os.RemoveAll(runtimeDir) // Clean up
+	
+	// Test 1: No files exist - should default to release mode
+	mode := detectUpdateMode()
+	if mode != updateModeRelease {
+		t.Errorf("Expected %s mode when no files exist, got %s", updateModeRelease, mode)
+	}
+	
+	// Test 2: version.txt exists - should use release mode
+	writeLocalVersion("v1.0.0")
+	defer os.Remove(getVersionFilePath())
+	
+	mode = detectUpdateMode()
+	if mode != updateModeRelease {
+		t.Errorf("Expected %s mode when version.txt exists, got %s", updateModeRelease, mode)
+	}
+	
+	// Test 3: Remove version.txt, add version_sha.txt - should use commit mode
+	os.Remove(getVersionFilePath())
+	writeLocalCommitSHA("abc123")
+	defer os.Remove(filepath.Join(exeDir, versionSHAFile))
+	
+	mode = detectUpdateMode()
+	if mode != updateModeCommit {
+		t.Errorf("Expected %s mode when version_sha.txt exists, got %s", updateModeCommit, mode)
+	}
+	
+	// Test 4: Environment variable override
+	os.Setenv("LTTH_UPDATE_MODE", "commit")
+	defer os.Unsetenv("LTTH_UPDATE_MODE")
+	
+	mode = detectUpdateMode()
+	if mode != updateModeCommit {
+		t.Errorf("Expected %s mode from env var, got %s", updateModeCommit, mode)
+	}
+}
+

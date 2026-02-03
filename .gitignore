@@ -11,6 +11,10 @@ build/
 # Ignore all exe files in build-src (these are build outputs)
 build-src/*.exe
 
+# Test binaries
+build-src/*_test
+build-src/*.test
+
 # Environment
 .env
 .env.local
