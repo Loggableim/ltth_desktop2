@@ -40,6 +40,37 @@ describe('OSCQueryClient', () => {
             expect(customClient.baseUrl).toBe('http://192.168.1.100:8080');
             customClient.destroy();
         });
+
+        // Fix #4: Port/Host Validation Tests
+        test('should reject invalid port (too high)', () => {
+            expect(() => {
+                new OSCQueryClient('127.0.0.1', 70000, mockLogger);
+            }).toThrow('Invalid port: must be an integer between 1 and 65535');
+        });
+
+        test('should reject invalid port (too low)', () => {
+            expect(() => {
+                new OSCQueryClient('127.0.0.1', 0, mockLogger);
+            }).toThrow('Invalid port: must be an integer between 1 and 65535');
+        });
+
+        test('should reject invalid port (not a number)', () => {
+            expect(() => {
+                new OSCQueryClient('127.0.0.1', 'invalid', mockLogger);
+            }).toThrow('Invalid port: must be an integer between 1 and 65535');
+        });
+
+        test('should reject invalid host (empty string)', () => {
+            expect(() => {
+                new OSCQueryClient('', 9001, mockLogger);
+            }).toThrow('Invalid host: must be a non-empty string');
+        });
+
+        test('should reject invalid host (null)', () => {
+            expect(() => {
+                new OSCQueryClient(null, 9001, mockLogger);
+            }).toThrow('Invalid host: must be a non-empty string');
+        });
     });
 
     describe('Parameter Management', () => {
@@ -65,6 +96,15 @@ describe('OSCQueryClient', () => {
             expect(client._parseType('T')).toBe('bool');
             expect(client._parseType('F')).toBe('bool');
             expect(client._parseType('unknown')).toBe('unknown');
+            
+            // Fix #9: Extended OSC type tags
+            expect(client._parseType('h')).toBe('int64');
+            expect(client._parseType('d')).toBe('double');
+            expect(client._parseType('c')).toBe('char');
+            expect(client._parseType('r')).toBe('rgba');
+            expect(client._parseType('m')).toBe('midi');
+            expect(client._parseType('N')).toBe('nil');
+            expect(client._parseType('I')).toBe('infinity');
         });
 
         test('should parse access values correctly', () => {

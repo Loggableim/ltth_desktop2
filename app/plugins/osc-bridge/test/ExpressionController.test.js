@@ -264,6 +264,27 @@ describe('ExpressionController', () => {
             expect(result).toBe(true);
             expect(controller.isPlayingCombo).toBe(false);
         });
+
+        // Fix #3: Race condition test - combo should abort when stopped
+        test('should abort combo when stopCombo is called', async () => {
+            const combo = [
+                { type: 'Emote', slot: 0, duration: 100 },
+                { type: 'Emote', slot: 1, duration: 100 },
+                { type: 'Emote', slot: 2, duration: 100 }
+            ];
+            
+            const comboPromise = controller.playCombo(combo);
+            
+            // Stop combo mid-execution
+            await new Promise(resolve => setTimeout(resolve, 50));
+            controller.stopCombo();
+            
+            const result = await comboPromise;
+            
+            // Combo should return false when aborted
+            expect(result).toBe(false);
+            expect(controller.isPlayingCombo).toBe(false);
+        });
     });
 
     describe('Release All', () => {
