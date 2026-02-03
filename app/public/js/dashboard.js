@@ -3448,6 +3448,20 @@ function playDashboardTTS(data) {
 }
 
 /**
+ * Get audio MIME type based on format
+ */
+function getAudioMimeType(format) {
+    const mimeTypes = {
+        'mp3': 'audio/mpeg',
+        'wav': 'audio/wav',
+        'opus': 'audio/opus',
+        'pcm': 'audio/pcm',
+        'ogg': 'audio/ogg'
+    };
+    return mimeTypes[format] || 'audio/mpeg';
+}
+
+/**
  * Handle incoming TTS stream chunks
  */
 function handleStreamChunk(data) {
@@ -3468,6 +3482,7 @@ function handleStreamChunk(data) {
             chunks: [],
             volume: null,
             speed: null,
+            format: null,
             playbackStarted: false
         });
     }
@@ -3483,9 +3498,11 @@ function handleStreamChunk(data) {
     if (data.isFirst) {
         buffer.volume = data.volume;
         buffer.speed = data.speed;
+        buffer.format = data.format || 'mp3';  // Store format
         console.log(`🎵 [Dashboard] Stream started for ${data.id}`, {
             volume: buffer.volume,
-            speed: buffer.speed
+            speed: buffer.speed,
+            format: buffer.format
         });
     }
 }
@@ -3527,7 +3544,8 @@ function playStreamingAudio(id) {
     
     try {
         console.log(`🎵 [Dashboard] Playing streaming audio for ${id}`, {
-            chunkCount: buffer.chunks.length
+            chunkCount: buffer.chunks.length,
+            format: buffer.format
         });
         
         // Combine all chunks into a single Uint8Array
@@ -3539,8 +3557,9 @@ function playStreamingAudio(id) {
             offset += chunk.length;
         }
         
-        // Create blob and audio URL
-        const blob = new Blob([combined], { type: 'audio/mpeg' });
+        // Create blob with correct MIME type based on format
+        const mimeType = getAudioMimeType(buffer.format);
+        const blob = new Blob([combined], { type: mimeType });
         const audioUrl = URL.createObjectURL(blob);
         
         // Get audio element and configure playback
@@ -3551,9 +3570,10 @@ function playStreamingAudio(id) {
             return;
         }
         
-        audio.src = audioUrl;
+        // Set playback properties BEFORE setting src for better compatibility
         audio.volume = (buffer.volume || 80) / 100;
         audio.playbackRate = buffer.speed || 1.0;
+        audio.src = audioUrl;
         
         // Start playback
         audio.play().then(() => {
