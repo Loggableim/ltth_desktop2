@@ -487,6 +487,90 @@
         .fade-in {
             animation: fadeIn 0.4s ease-out;
         }
+
+        /* Preview Section Styles */
+        .preview-container {
+            background: var(--color-bg-tertiary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--color-border);
+        }
+
+        .preview-canvas-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto 1rem;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: var(--shadow-xl);
+        }
+
+        #preview-canvas {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16 / 9;
+            display: block;
+            background: #000;
+        }
+
+        .preview-controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .preview-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.75rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--color-border);
+        }
+
+        .preview-stat {
+            text-align: center;
+            padding: 0.5rem;
+            background: var(--color-bg-secondary);
+            border-radius: 8px;
+            border: 1px solid var(--color-border);
+        }
+
+        .preview-stat-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--color-accent-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .preview-stat-label {
+            font-size: 0.813rem;
+            color: var(--color-text-secondary);
+        }
+
+        .preview-warning {
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-top: 0.75rem;
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            color: #eab308;
+        }
+
+        .preview-warning.show {
+            display: flex;
+        }
+
+        .preview-warning i {
+            font-size: 1.25rem;
+        }
     </style>
 </head>
 <body>
@@ -523,6 +607,60 @@
             <div class="stat-card">
                 <div class="stat-value" id="connectionStatus">⚪</div>
                 <div class="stat-label" data-i18n-key="stats.connection">Connection</div>
+            </div>
+        </div>
+
+        <!-- Live Preview Section -->
+        <div class="card fade-in">
+            <div class="card-header">
+                <span>👁️</span>
+                <h3 data-i18n-key="cards.preview.title">Live Weather Preview</h3>
+            </div>
+            <div class="card-body">
+                <div class="preview-container">
+                    <div class="preview-canvas-wrapper">
+                        <canvas id="preview-canvas"></canvas>
+                    </div>
+                    
+                    <div class="preview-controls">
+                        <button class="btn btn-primary" id="togglePreviewBtn">
+                            <span>▶️</span>
+                            <span id="togglePreviewText" data-i18n-key="buttons.preview_on">Start Preview</span>
+                        </button>
+                        <button class="btn btn-secondary" id="testRainEffectBtn">
+                            <span>🌧️</span>
+                            <span data-i18n-key="buttons.test_rain">Test Rain Effect</span>
+                        </button>
+                        <button class="btn btn-danger" id="stopAllPreviewBtn">
+                            <span>⏹️</span>
+                            <span data-i18n-key="buttons.stop_all">Stop All</span>
+                        </button>
+                    </div>
+                    
+                    <div class="preview-stats">
+                        <div class="preview-stat">
+                            <div class="preview-stat-value" id="preview-fps">0</div>
+                            <div class="preview-stat-label" data-i18n-key="preview.fps">FPS</div>
+                        </div>
+                        <div class="preview-stat">
+                            <div class="preview-stat-value" id="preview-avg-fps">0</div>
+                            <div class="preview-stat-label" data-i18n-key="preview.avg_fps">Avg FPS</div>
+                        </div>
+                        <div class="preview-stat">
+                            <div class="preview-stat-value" id="preview-particles">0</div>
+                            <div class="preview-stat-label" data-i18n-key="preview.particles">Particles</div>
+                        </div>
+                        <div class="preview-stat">
+                            <div class="preview-stat-value" id="preview-active-effects">0</div>
+                            <div class="preview-stat-label" data-i18n-key="preview.active_effects">Active</div>
+                        </div>
+                    </div>
+                    
+                    <div class="preview-warning" id="preview-warning">
+                        <span>⚠️</span>
+                        <span data-i18n-key="preview.warning">Performance Warning: This configuration may lag on low-end systems</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1137,11 +1275,19 @@
     <!-- Socket.IO -->
     <script src="/socket.io/socket.io.js"></script>
     
+    <!-- Weather Engine -->
+    <script src="/plugins/weather-control/weather-engine.js"></script>
+    
     <!-- Main Script -->
     <script>
         const effects = ['rain', 'snow', 'storm', 'fog', 'thunder', 'sunbeam', 'glitchclouds'];
         let socket;
         let eventsTriggered = 0;
+        
+        // Preview engine
+        let previewEngine = null;
+        let previewActive = false;
+        let previewStatsInterval = null;
 
         const translations = {
             en: {
@@ -1157,6 +1303,17 @@
                 'cards.main.rate_limit': 'Rate Limit (requests/min)',
                 'cards.main.overlay_url': 'Overlay URL',
                 'buttons.copy': 'Copy',
+                'cards.preview.title': 'Live Weather Preview',
+                'buttons.preview_on': 'Start Preview',
+                'buttons.preview_off': 'Stop Preview',
+                'buttons.test_rain': 'Test Rain Effect',
+                'buttons.test_effect': 'Test Effect',
+                'buttons.stop_all': 'Stop All',
+                'preview.fps': 'FPS',
+                'preview.avg_fps': 'Avg FPS',
+                'preview.particles': 'Particles',
+                'preview.active_effects': 'Active',
+                'preview.warning': 'Performance Warning: This configuration may lag on low-end systems',
                 'cards.chat.title': 'Chat Commands (GCCE Integration)',
                 'cards.chat.info': 'Requires Global Chat Command Engine (GCCE) plugin to be enabled. Viewers can trigger weather effects via chat commands.',
                 'cards.chat.enable': 'Enable Chat Commands',
@@ -1250,6 +1407,17 @@
                 'cards.main.rate_limit': 'Rate Limit (Anfragen/Min)',
                 'cards.main.overlay_url': 'Overlay-URL',
                 'buttons.copy': 'Kopieren',
+                'cards.preview.title': 'Live-Wettervorschau',
+                'buttons.preview_on': 'Vorschau starten',
+                'buttons.preview_off': 'Vorschau stoppen',
+                'buttons.test_rain': 'Regen-Effekt testen',
+                'buttons.test_effect': 'Effekt testen',
+                'buttons.stop_all': 'Alle stoppen',
+                'preview.fps': 'FPS',
+                'preview.avg_fps': 'Ø FPS',
+                'preview.particles': 'Partikel',
+                'preview.active_effects': 'Aktiv',
+                'preview.warning': 'Leistungswarnung: Diese Konfiguration könnte auf schwachen Systemen laggen',
                 'cards.chat.title': 'Chatbefehle (GCCE-Integration)',
                 'cards.chat.info': 'Benötigt das Global Chat Command Engine (GCCE) Plugin. Zuschauer können Wettereffects per Chat auslösen.',
                 'cards.chat.enable': 'Chatbefehle aktivieren',
@@ -1948,6 +2116,141 @@
             return div.innerHTML;
         }
 
+        // ===== PREVIEW FUNCTIONS =====
+        
+        /**
+         * Initialize the preview engine
+         */
+        function initPreview() {
+            const canvas = document.getElementById('preview-canvas');
+            if (!canvas || !window.WeatherEngine) {
+                console.error('Preview canvas or WeatherEngine not found');
+                return;
+            }
+            
+            // Prevent multiple initializations
+            if (previewEngine) {
+                console.warn('Preview already initialized');
+                return;
+            }
+            
+            // Create weather engine with lightning callback
+            previewEngine = new window.WeatherEngine(canvas, {
+                debug: false,
+                onLightning: (intensity) => {
+                    // Flash effect for thunder in preview
+                    const canvasWrapper = canvas.parentElement;
+                    canvasWrapper.style.boxShadow = `0 0 ${50 * intensity}px rgba(255, 255, 255, 0.9)`;
+                    setTimeout(() => {
+                        canvasWrapper.style.boxShadow = 'var(--shadow-xl)';
+                    }, 150);
+                }
+            });
+            
+            // Update preview stats periodically and store interval ID
+            previewStatsInterval = setInterval(updatePreviewStats, 100);
+            
+            // Setup preview control buttons
+            document.getElementById('togglePreviewBtn').addEventListener('click', togglePreview);
+            document.getElementById('testRainEffectBtn').addEventListener('click', testRainEffect);
+            document.getElementById('stopAllPreviewBtn').addEventListener('click', stopAllPreviewEffects);
+            
+            // Add effect test buttons for each weather effect card
+            document.querySelectorAll('[data-test-effect]').forEach(btn => {
+                const effectType = btn.getAttribute('data-test-effect');
+                btn.addEventListener('click', () => testEffect(effectType));
+            });
+        }
+        
+        /**
+         * Toggle preview on/off
+         */
+        function togglePreview() {
+            previewActive = !previewActive;
+            const btn = document.getElementById('togglePreviewBtn');
+            const text = document.getElementById('togglePreviewText');
+            
+            if (previewActive) {
+                previewEngine.start();
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-success');
+                btn.querySelector('span:first-child').textContent = '⏸️';
+                text.setAttribute('data-i18n-key', 'buttons.preview_off');
+                text.textContent = i18nTranslate('buttons.preview_off');
+            } else {
+                previewEngine.stop();
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-primary');
+                btn.querySelector('span:first-child').textContent = '▶️';
+                text.setAttribute('data-i18n-key', 'buttons.preview_on');
+                text.textContent = i18nTranslate('buttons.preview_on');
+            }
+        }
+        
+        /**
+         * Test a specific weather effect in preview
+         */
+        function testEffect(effectType) {
+            if (!previewEngine) return;
+            
+            // Auto-start preview if not running
+            if (!previewActive) {
+                togglePreview();
+            }
+            
+            // Get effect configuration
+            const intensity = parseFloat(document.getElementById(`effect-${effectType}-intensity`)?.value || 0.5);
+            const duration = parseInt(document.getElementById(`effect-${effectType}-duration`)?.value || 10000);
+            const permanent = document.getElementById(`effect-${effectType}-permanent`)?.checked || false;
+            
+            // Trigger effect in preview
+            previewEngine.startEffect(effectType, intensity, duration, { permanent });
+            
+            showStatus(`Testing ${effectType} effect in preview`, 'info');
+        }
+        
+        /**
+         * Test rain effect with default settings
+         * This is a quick test button for the most common effect
+         */
+        function testRainEffect() {
+            testEffect('rain');
+        }
+        
+        /**
+         * Stop all effects in preview
+         */
+        function stopAllPreviewEffects() {
+            if (!previewEngine) return;
+            previewEngine.stopAllEffects();
+            showStatus('All preview effects stopped', 'info');
+        }
+        
+        /**
+         * Update preview stats display
+         */
+        function updatePreviewStats() {
+            if (!previewEngine || !previewActive) return;
+            
+            const fps = previewEngine.getFPS();
+            const avgFps = previewEngine.getAverageFPS();
+            const particles = previewEngine.getParticleCount();
+            const activeEffects = previewEngine.getActiveEffects().length;
+            
+            document.getElementById('preview-fps').textContent = fps;
+            document.getElementById('preview-avg-fps').textContent = avgFps;
+            document.getElementById('preview-particles').textContent = particles;
+            document.getElementById('preview-active-effects').textContent = activeEffects;
+            
+            // Show performance warning if FPS drops below 30
+            const warning = document.getElementById('preview-warning');
+            if (avgFps > 0 && avgFps < 30) {
+                warning.classList.add('show');
+            } else {
+                warning.classList.remove('show');
+            }
+        }
+
         // Event listeners for gift mapping buttons
         document.getElementById('loadGiftCatalog').addEventListener('click', loadGiftCatalog);
         document.getElementById('updateGiftCatalog').addEventListener('click', updateGiftCatalog);
@@ -1966,6 +2269,19 @@
             // Set overlay URL
             const overlayUrl = `${window.location.origin}/weather-control/overlay`;
             document.getElementById('overlayUrl').value = overlayUrl;
+            
+            // Initialize preview
+            initPreview();
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (previewStatsInterval) {
+                clearInterval(previewStatsInterval);
+            }
+            if (previewEngine) {
+                previewEngine.destroy();
+            }
         });
     </script>
 </body>
