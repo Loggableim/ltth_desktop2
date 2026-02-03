@@ -214,10 +214,7 @@
         premultipliedAlpha: true
       });
       
-      // Options are informational and for future features
-      // Currently maxParticles is not strictly enforced - effects control their own particle counts
       this.options = {
-        maxParticles: options.maxParticles || 500, // Informational limit, not enforced
         debug: options.debug || false,
         ...options
       };

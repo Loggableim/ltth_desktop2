@@ -87,8 +87,6 @@
         // Initialize engine
         const canvas = document.getElementById('test-canvas');
         engine = new WeatherEngine(canvas, {
-            maxParticles: 500,
-            fpsCap: 60,
             debug: true,
             onLightning: (intensity) => {
                 console.log('Lightning triggered with intensity:', intensity);
