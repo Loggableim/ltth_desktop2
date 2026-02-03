@@ -2884,6 +2884,14 @@ class TTSPlugin {
                                 totalChunks: chunks.length,
                                 totalBytes: totalBytes
                             });
+                            
+                            // Signal to client that stream is complete
+                            this.api.emit('tts:stream:end', {
+                                id: item.id,
+                                totalChunks: chunks.length,
+                                totalBytes: totalBytes
+                            });
+                            
                             resolve();
                         });
 

@@ -16,6 +16,9 @@ let isPreviewPlaying = false;
 let audioUnlocked = false;
 let pendingTTSQueue = [];
 
+// TTS Streaming buffer management
+const streamingBuffers = new Map();
+
 // ========== STATS MENU NAVIGATION DATA ==========
 // Track event data for detail panels
 const statsMenuData = {
@@ -535,6 +538,15 @@ function initializeSocketListeners() {
     // TTS Playback im Dashboard
     socket.on('tts:play', (data) => {
         playDashboardTTS(data);
+    });
+
+    // TTS Streaming Support - collect chunks and play when complete
+    socket.on('tts:stream:chunk', (data) => {
+        handleStreamChunk(data);
+    });
+
+    socket.on('tts:stream:end', (data) => {
+        handleStreamEnd(data);
     });
 
     // NOTE: Soundboard playback is handled by dashboard-soundboard.js (loaded separately)
@@ -3432,6 +3444,142 @@ function playDashboardTTS(data) {
 
     } catch (error) {
         console.error('❌ [Dashboard] Error in playDashboardTTS:', error);
+    }
+}
+
+/**
+ * Handle incoming TTS stream chunks
+ */
+function handleStreamChunk(data) {
+    console.log(`🎵 [Dashboard] Stream chunk received for ${data.id}`, {
+        chunkNumber: streamingBuffers.has(data.id) ? streamingBuffers.get(data.id).chunks.length + 1 : 1,
+        isFirst: data.isFirst
+    });
+    
+    // Check if audio is unlocked
+    if (!audioUnlocked) {
+        console.log('⚠️ [Dashboard] Audio not unlocked yet, ignoring stream chunk');
+        return;
+    }
+    
+    // Initialize buffer for this stream ID
+    if (!streamingBuffers.has(data.id)) {
+        streamingBuffers.set(data.id, {
+            chunks: [],
+            volume: null,
+            speed: null,
+            playbackStarted: false
+        });
+    }
+    
+    const buffer = streamingBuffers.get(data.id);
+    
+    // Decode Base64 chunk to Uint8Array
+    const binaryString = atob(data.chunk);
+    const bytes = Uint8Array.from(binaryString, c => c.charCodeAt(0));
+    buffer.chunks.push(bytes);
+    
+    // Store metadata from first chunk
+    if (data.isFirst) {
+        buffer.volume = data.volume;
+        buffer.speed = data.speed;
+        console.log(`🎵 [Dashboard] Stream started for ${data.id}`, {
+            volume: buffer.volume,
+            speed: buffer.speed
+        });
+    }
+}
+
+/**
+ * Handle stream end event - combine chunks and play audio
+ */
+function handleStreamEnd(data) {
+    console.log(`🎵 [Dashboard] Stream ended for ${data.id}`, {
+        totalChunks: data.totalChunks,
+        totalBytes: data.totalBytes
+    });
+    
+    const buffer = streamingBuffers.get(data.id);
+    if (!buffer) {
+        console.warn(`⚠️ [Dashboard] No buffer found for stream ${data.id}`);
+        return;
+    }
+    
+    if (buffer.playbackStarted) {
+        console.log(`⚠️ [Dashboard] Playback already started for ${data.id}`);
+        return;
+    }
+    
+    buffer.playbackStarted = true;
+    playStreamingAudio(data.id);
+}
+
+/**
+ * Combine stream chunks and play as audio
+ */
+function playStreamingAudio(id) {
+    const buffer = streamingBuffers.get(id);
+    if (!buffer || buffer.chunks.length === 0) {
+        console.warn(`⚠️ [Dashboard] No chunks to play for ${id}`);
+        streamingBuffers.delete(id);
+        return;
+    }
+    
+    try {
+        console.log(`🎵 [Dashboard] Playing streaming audio for ${id}`, {
+            chunkCount: buffer.chunks.length
+        });
+        
+        // Combine all chunks into a single Uint8Array
+        const totalLength = buffer.chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+        const combined = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of buffer.chunks) {
+            combined.set(chunk, offset);
+            offset += chunk.length;
+        }
+        
+        // Create blob and audio URL
+        const blob = new Blob([combined], { type: 'audio/mpeg' });
+        const audioUrl = URL.createObjectURL(blob);
+        
+        // Get audio element and configure playback
+        const audio = document.getElementById('dashboard-tts-audio');
+        if (!audio) {
+            console.error('❌ [Dashboard] Audio element not found');
+            streamingBuffers.delete(id);
+            return;
+        }
+        
+        audio.src = audioUrl;
+        audio.volume = (buffer.volume || 80) / 100;
+        audio.playbackRate = buffer.speed || 1.0;
+        
+        // Start playback
+        audio.play().then(() => {
+            console.log(`✅ [Dashboard] Streaming TTS started playing for ${id}`);
+        }).catch(err => {
+            console.error(`❌ [Dashboard] Streaming TTS playback error for ${id}:`, err);
+            URL.revokeObjectURL(audioUrl);
+            streamingBuffers.delete(id);
+        });
+        
+        // Clean up after playback
+        audio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+            streamingBuffers.delete(id);
+            console.log(`✅ [Dashboard] Streaming TTS finished for ${id}`);
+        };
+        
+        audio.onerror = (err) => {
+            console.error(`❌ [Dashboard] Streaming TTS audio error for ${id}:`, err);
+            URL.revokeObjectURL(audioUrl);
+            streamingBuffers.delete(id);
+        };
+        
+    } catch (error) {
+        console.error(`❌ [Dashboard] Error in playStreamingAudio for ${id}:`, error);
+        streamingBuffers.delete(id);
     }
 }
 

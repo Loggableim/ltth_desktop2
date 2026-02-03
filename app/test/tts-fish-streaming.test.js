@@ -276,6 +276,27 @@ return runTest('tts:playback:started event should be emitted for streaming', asy
 
 }).then(() => {
 
+// Test 16: Verify tts:stream:end event is emitted when stream completes
+return runTest('tts:stream:end event should be emitted when stream completes', async () => {
+    const fs = require('fs');
+    const mainCode = fs.readFileSync(require.resolve('../plugins/tts/main'), 'utf-8');
+    
+    // Check that tts:stream:end is emitted when stream ends
+    assert.ok(mainCode.includes("'tts:stream:end'"), 'Should emit tts:stream:end event');
+    
+    // Verify the event includes necessary metadata
+    const streamEndRegex = /tts:stream:end[\s\S]{0,200}id:\s*item\.id/;
+    assert.ok(streamEndRegex.test(mainCode), 'Stream end event should include id');
+    
+    const totalChunksRegex = /tts:stream:end[\s\S]{0,200}totalChunks/;
+    assert.ok(totalChunksRegex.test(mainCode), 'Stream end event should include totalChunks');
+    
+    const totalBytesRegex = /tts:stream:end[\s\S]{0,200}totalBytes/;
+    assert.ok(totalBytesRegex.test(mainCode), 'Stream end event should include totalBytes');
+});
+
+}).then(() => {
+
 // Print results
 console.log(`\n${'='.repeat(50)}`);
 console.log(`Tests completed: ${passed + failed}`);
