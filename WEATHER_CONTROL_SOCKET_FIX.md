@@ -144,6 +144,7 @@ This script checks:
 - API key is retrieved from config (already loaded via HTTPS)
 - API key is sent in header (not in URL or query params)
 - API key is not logged or exposed in console
+- **Warning displayed** if API key is required but missing
 
 ### Backward Compatibility
 
@@ -151,6 +152,7 @@ This script checks:
 - No breaking changes to existing configurations
 - Safe fallback if config is not loaded
 - Error handling preserved
+- User-friendly warnings for configuration issues
 
 ## Related Files
 
