@@ -8,7 +8,7 @@ Dieses Plugin verbindet PupCid's Little TikTool Helper mit der Animaze Desktop A
 
 ## ✨ Features
 
-- **WebSocket-Verbindung** zu Animaze (Standard: `ws://localhost:9000`)
+- **WebSocket-Verbindung** zu Animaze (Standard: `ws://localhost:8008`)
 - **TikTok Events → Animaze Aktionen**:
   - Geschenke → Emotes, Spezialaktionen, Posen, Idle-Animationen
   - Follows → Avatar-Reaktionen
@@ -226,7 +226,7 @@ Response:
 
 1. **Animaze Desktop** muss installiert und geöffnet sein
 2. **Animaze API aktivieren**: Gehe in Animaze zu `Settings > Animaze API > Enabled`
-3. Der Standard-Port ist `9000` (kann in Animaze geändert werden)
+3. Der Standard-Port ist `8008` (kann in Animaze und Plugin geändert werden)
 4. **Für Brain Engine**: OpenAI API Key
 
 ### Plugin aktivieren
@@ -569,7 +569,40 @@ Dies hilft, häufig genutzte Erinnerungen höher zu priorisieren.
 
 ## 📝 Changelog
 
-### Version 1.2.0 (NEW)
+### Version 1.2.0 (2026-02-03) 🎉
+
+**🔧 Kritische Fixes:**
+- ❌ Entfernt: Dupliziertes Plugin-Verzeichnis auf Root-Ebene
+- 🔌 Port-Änderung: Standard-Port von 9000 auf 8008 geändert (konsistent mit Animaze)
+- 🐛 Memory Leak Fix: `pendingRequests` werden jetzt beim Disconnect korrekt geleert
+- ⏱️ Per-User Cooldowns: Cooldowns sind jetzt pro Benutzer statt global
+- 🔄 Auto-Connect Verbesserung: Bessere Fehlerbehandlung und Status-Emittierung
+- 🛡️ Data Validation: Validierung für Gift Mappings hinzugefügt
+- 🧠 Brain Engine: Robustes Error-Handling mit Graceful Fallback
+
+**🎨 UI Verbesserungen:**
+- 🎁 NEU: Gift Event UI-Section in Event Aktionen Tab
+- 💬 NEU: Chat Event UI-Section in Event Aktionen Tab
+- 🎛️ NEU: Override Behaviors UI mit Toggle-Switches in Settings Tab
+- 📬 NEU: Toast Queue System für sequentielle Benachrichtigungen
+- 🎭 NEU: Vollständige Personality CRUD UI mit Create/Edit/Delete Funktionen
+
+**🔗 Backend-Erweiterungen:**
+- ➕ Logic Matrix Routes: `GET /api/animazingpal/logic-matrix/rules`
+- 🗑️ Logic Matrix Routes: `DELETE /api/animazingpal/logic-matrix/rules/:id`
+- ✅ Gift Mappings Validation in POST Route
+
+**⚙️ Konfiguration:**
+- Gift Event: Standard-Aktion auf `emote` gesetzt mit Beispiel-Nachricht
+- Default Port: 8008 (vorher 9000)
+
+### Version 1.1.0
+- **NEU**: Brain Engine - KI-Intelligenz System
+  - Langzeit-Gedächtnis mit Vektoren-basierter semantischer Suche
+  - User-Profile und Beziehungs-Tracking
+  - Wählbare Streamer-Persönlichkeiten
+  - GPT-basierte intelligente Antworten
+  - Archiv-System für alte Erinnerungen
 - **NEU**: Standalone Mode - TTS-only Betrieb ohne GPT
   - Template-basierte Antworten mit Persona-Catchphrases
   - Per-Event Echo-Override Einstellungen
@@ -585,17 +618,7 @@ Dies hilft, häufig genutzte Erinnerungen höher zu priorisieren.
 - **NEU**: Persona Management
   - CRUD API Endpoints für Personas
   - Hot-Reload aktiver Personas
-  - Persona Editor UI (vorbereitet)
 - Verbesserte UI mit neuen Einstellungen und Logic Matrix Tab
-
-### Version 1.1.0
-- **NEU**: Brain Engine - KI-Intelligenz System
-  - Langzeit-Gedächtnis mit Vektoren-basierter semantischer Suche
-  - User-Profile und Beziehungs-Tracking
-  - Wählbare Streamer-Persönlichkeiten
-  - GPT-basierte intelligente Antworten
-  - Archiv-System für alte Erinnerungen
-- Verbesserte Event-Handler mit Brain-Integration
 
 ### Version 1.0.0
 - Initiale Veröffentlichung

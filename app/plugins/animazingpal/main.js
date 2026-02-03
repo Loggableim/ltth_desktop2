@@ -2105,7 +2105,6 @@ class AnimazingPalPlugin {
     const giftId = data.giftId;
     const giftName = data.giftName;
     const giftValue = data.diamondCount || 1;
-    const username = data.uniqueId || 'Someone';
 
     // Evaluate logic matrix first
     const logicMatrixAction = this.evaluateLogicMatrix('gift', {
@@ -2227,7 +2226,6 @@ class AnimazingPalPlugin {
     if (!this.canTriggerEvent('chat', username)) return;
 
     const comment = data.comment;
-    const username = data.uniqueId || 'Someone';
 
     if (!comment) return;
 
