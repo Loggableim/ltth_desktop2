@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -768,12 +769,12 @@ func compareVersions(v1, v2 string) int {
 		if i < len(parts1) {
 			// Extract numeric part (ignore pre-release suffixes like "-beta")
 			numStr := strings.Split(parts1[i], "-")[0]
-			fmt.Sscanf(numStr, "%d", &n1)
+			n1, _ = strconv.Atoi(numStr) // Default to 0 on error
 		}
 		
 		if i < len(parts2) {
 			numStr := strings.Split(parts2[i], "-")[0]
-			fmt.Sscanf(numStr, "%d", &n2)
+			n2, _ = strconv.Atoi(numStr) // Default to 0 on error
 		}
 		
 		if n1 > n2 {
@@ -813,7 +814,6 @@ func detectUpdateMode() string {
 	// Default: Release Mode
 	return updateModeRelease
 }
-
 
 // getLatestCommitSHA fetches the latest commit SHA from GitHub
 func getLatestCommitSHA() (string, error) {
@@ -912,7 +912,11 @@ func checkForReleasesUpdate() (*UpdateInfo, error) {
 	commitSHA := ""
 	if updateAvailable {
 		// Fetch the commit SHA from the target commitish
-		commitSHA, _ = getLatestCommitSHA()
+		commitSHA, err = getLatestCommitSHA()
+		if err != nil {
+			// If we can't get commit SHA, we can't download the update
+			return nil, fmt.Errorf("failed to get commit SHA for download: %v", err)
+		}
 	}
 	
 	return &UpdateInfo{
@@ -924,7 +928,6 @@ func checkForReleasesUpdate() (*UpdateInfo, error) {
 		CommitSHA:      commitSHA,
 	}, nil
 }
-
 
 // checkForUpdates checks if an update is available (unified for both modes)
 // Returns: hasUpdate, commitSHA, releaseInfo (may be nil), error

@@ -199,7 +199,7 @@ func TestCompareVersions(t *testing.T) {
 		{"1.0", "1.0.0", 0},
 		{"1", "1.0.0", 0},
 	}
-	
+
 	for _, test := range tests {
 		result := compareVersions(test.v1, test.v2)
 		if result != test.expected {
