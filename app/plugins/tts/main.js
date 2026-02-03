@@ -2814,8 +2814,9 @@ class TTSPlugin {
                 try {
                     const ttsEngine = this.engines[item.engine];
                     
-                    // Use WebSocket streaming for Fish.audio, fallback to HTTP streaming for others
-                    const useWebSocket = item.engine === 'fishaudio' && ttsEngine && ttsEngine.synthesizeWebSocket;
+                    // WebSocket streaming temporarily disabled due to timeout issues with Fish.audio API
+                    // Using HTTP streaming (synthesizeStream) instead which works reliably
+                    const useWebSocket = false;
                     
                     if (!ttsEngine || (!useWebSocket && !ttsEngine.synthesizeStream)) {
                         throw new Error(`Streaming not supported for engine: ${item.engine}`);
