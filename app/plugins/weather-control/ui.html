@@ -2155,11 +2155,9 @@
             document.getElementById('testRainEffectBtn').addEventListener('click', testRainEffect);
             document.getElementById('stopAllPreviewBtn').addEventListener('click', stopAllPreviewEffects);
             
-            // Add effect test buttons for each weather effect card
-            document.querySelectorAll('[data-test-effect]').forEach(btn => {
-                const effectType = btn.getAttribute('data-test-effect');
-                btn.addEventListener('click', () => testEffect(effectType));
-            });
+            // Add effect test buttons for each weather effect card - removed duplicate listener
+            // The main testEffect() function is already bound at line 1825-1830
+            // This was causing a function name collision where testEffectPreview shadowed testEffect
         }
         
         /**
@@ -2188,9 +2186,9 @@
         }
         
         /**
-         * Test a specific weather effect in preview
+         * Test a specific weather effect in preview only (local canvas, no socket.io broadcast)
          */
-        function testEffect(effectType) {
+        function testEffectPreview(effectType) {
             if (!previewEngine) return;
             
             // Auto-start preview if not running
@@ -2214,7 +2212,7 @@
          * This is a quick test button for the most common effect
          */
         function testRainEffect() {
-            testEffect('rain');
+            testEffectPreview('rain');
         }
         
         /**
