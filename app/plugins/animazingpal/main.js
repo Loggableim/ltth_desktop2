@@ -98,7 +98,7 @@ class AnimazingPalPlugin {
     // Load configuration
     this.config = this.api.getConfig('config') || this.getDefaultConfig();
     
-    // Initialize Brain Engine
+    // Initialize Brain Engine with robust error handling
     try {
       this.brainEngine = new BrainEngine(this.api);
       await this.brainEngine.initialize();
@@ -111,6 +111,8 @@ class AnimazingPalPlugin {
       this.api.log('Brain Engine initialized successfully', 'info');
     } catch (error) {
       this.api.log(`Brain Engine initialization failed: ${error.message}`, 'error');
+      this.api.log('Plugin will continue without Brain Engine functionality', 'warn');
+      this.brainEngine = null;
     }
     
     // Register API routes
@@ -124,7 +126,11 @@ class AnimazingPalPlugin {
     
     // Auto-connect if enabled
     if (this.config.enabled && this.config.autoConnect) {
-      await this.connect();
+      const connected = await this.connect();
+      if (!connected) {
+        this.api.log('Auto-connect failed, will retry on manual connect', 'warn');
+      }
+      this.safeEmitStatus();
     }
     
     this.api.log('AnimazingPal Plugin initialized', 'info');
@@ -135,7 +141,7 @@ class AnimazingPalPlugin {
       enabled: false,
       autoConnect: true,
       host: '127.0.0.1',
-      port: 9000,
+      port: 8008,
       reconnectOnDisconnect: true,
       reconnectDelay: 5000,
       // Auto-refresh Animaze data on connect
@@ -182,9 +188,9 @@ class AnimazingPalPlugin {
         },
         gift: {
           enabled: true,
-          actionType: null,
-          actionValue: null,
-          chatMessage: null,
+          actionType: 'emote',        // Default: Emote triggern
+          actionValue: null,          // User wählt selbst
+          chatMessage: 'Wow, danke {username} für {giftName}!',
           useEcho: null
         },
         chat: {
@@ -518,6 +524,16 @@ class AnimazingPalPlugin {
       
       if (!Array.isArray(mappings)) {
         return res.status(400).json({ success: false, error: 'Mappings must be an array' });
+      }
+      
+      // Validate mapping structure
+      const validMapping = (m) => {
+        return (m.giftId || m.giftName) && 
+               (m.actionType && ['emote', 'specialAction', 'pose', 'idle', 'chatMessage'].includes(m.actionType));
+      };
+
+      if (!mappings.every(validMapping)) {
+        return res.status(400).json({ success: false, error: 'Invalid mapping structure' });
       }
       
       this.config.giftMappings = mappings;
@@ -901,6 +917,42 @@ class AnimazingPalPlugin {
       }
     });
 
+    // Get logic matrix rules
+    this.api.registerRoute('get', '/api/animazingpal/logic-matrix/rules', (req, res) => {
+      try {
+        const rules = this.config.logicMatrix?.rules || [];
+        res.json({ success: true, rules });
+      } catch (error) {
+        this.api.log(`Logic matrix get error: ${error.message}`, 'error');
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Delete logic matrix rule
+    this.api.registerRoute('delete', '/api/animazingpal/logic-matrix/rules/:id', (req, res) => {
+      try {
+        const { id } = req.params;
+        
+        if (!this.config.logicMatrix?.rules) {
+          return res.status(404).json({ success: false, error: 'No rules found' });
+        }
+        
+        const initialLength = this.config.logicMatrix.rules.length;
+        this.config.logicMatrix.rules = this.config.logicMatrix.rules.filter(rule => rule.id !== id);
+        
+        if (this.config.logicMatrix.rules.length === initialLength) {
+          return res.status(404).json({ success: false, error: 'Rule not found' });
+        }
+        
+        this.api.setConfig('config', this.config);
+        
+        res.json({ success: true, rules: this.config.logicMatrix.rules });
+      } catch (error) {
+        this.api.log(`Logic matrix delete error: ${error.message}`, 'error');
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
     // Save brain settings (standalone mode, forceTtsOnly)
     this.api.registerRoute('post', '/api/animazingpal/brain/settings', (req, res) => {
       try {
@@ -1262,6 +1314,10 @@ class AnimazingPalPlugin {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    
+    // Clear pending requests to prevent memory leak
+    this.pendingRequests.forEach(({ resolve }) => resolve(null));
+    this.pendingRequests.clear();
     
     if (this.ws) {
       this.ws.close();
@@ -1968,16 +2024,17 @@ class AnimazingPalPlugin {
     return null;
   }
 
-  canTriggerEvent(eventType) {
+  canTriggerEvent(eventType, userId = 'global') {
+    const key = `${eventType}:${userId}`;
     const now = Date.now();
-    const lastTime = this.lastEventTimes.get(eventType) || 0;
+    const lastTime = this.lastEventTimes.get(key) || 0;
     const cooldown = this.eventCooldowns[eventType] || 1000;
     
     if (now - lastTime < cooldown) {
       return false;
     }
     
-    this.lastEventTimes.set(eventType, now);
+    this.lastEventTimes.set(key, now);
     return true;
   }
 
@@ -2042,7 +2099,8 @@ class AnimazingPalPlugin {
 
   handleGiftEvent(data) {
     if (!this.config.enabled || !this.isConnected) return;
-    if (!this.canTriggerEvent('gift')) return;
+    const username = data.uniqueId || 'Someone';
+    if (!this.canTriggerEvent('gift', username)) return;
 
     const giftId = data.giftId;
     const giftName = data.giftName;
@@ -2165,7 +2223,8 @@ class AnimazingPalPlugin {
 
   handleChatEvent(data) {
     if (!this.config.enabled || !this.isConnected) return;
-    if (!this.canTriggerEvent('chat')) return;
+    const username = data.uniqueId || 'Someone';
+    if (!this.canTriggerEvent('chat', username)) return;
 
     const comment = data.comment;
     const username = data.uniqueId || 'Someone';
@@ -2293,9 +2352,9 @@ class AnimazingPalPlugin {
 
   handleFollowEvent(data) {
     if (!this.config.enabled || !this.isConnected) return;
-    if (!this.canTriggerEvent('follow')) return;
-
     const username = data.uniqueId || 'Someone';
+    if (!this.canTriggerEvent('follow', username)) return;
+
     this.api.log(`Follow event from ${username}`, 'info');
 
     const placeholders = { username, nickname: data.nickname || username };
@@ -2386,9 +2445,9 @@ class AnimazingPalPlugin {
 
   handleShareEvent(data) {
     if (!this.config.enabled || !this.isConnected) return;
-    if (!this.canTriggerEvent('share')) return;
-
     const username = data.uniqueId || 'Someone';
+    if (!this.canTriggerEvent('share', username)) return;
+
     this.api.log(`Share event from ${username}`, 'info');
 
     const placeholders = { username, nickname: data.nickname || username };
@@ -2485,9 +2544,9 @@ class AnimazingPalPlugin {
 
   handleLikeEvent(data) {
     if (!this.config.enabled || !this.isConnected) return;
-    if (!this.canTriggerEvent('like')) return;
-
     const username = data.uniqueId || 'Someone';
+    if (!this.canTriggerEvent('like', username)) return;
+
     const likeCount = data.likeCount || 1;
     const action = this.config.eventActions?.like;
     const threshold = action?.threshold || 10;
@@ -2597,9 +2656,9 @@ class AnimazingPalPlugin {
 
   handleSubscribeEvent(data) {
     if (!this.config.enabled || !this.isConnected) return;
-    if (!this.canTriggerEvent('subscribe')) return;
-
     const username = data.uniqueId || 'Someone';
+    if (!this.canTriggerEvent('subscribe', username)) return;
+
     this.api.log(`Subscribe event from ${username}`, 'info');
 
     const placeholders = { username, nickname: data.nickname || username };
