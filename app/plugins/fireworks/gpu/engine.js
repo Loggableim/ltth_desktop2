@@ -66,7 +66,7 @@ const CONFIG = {
     // Performance constants
     IDEAL_FRAME_TIME: 16.67, // Ideal frame time for 60 FPS (1000ms / 60fps)
     FPS_TIMING_TOLERANCE: 1, // Tolerance in ms for FPS throttling timing jitter
-    ALPHA_CULL_THRESHOLD: 0.01 // Alpha threshold below which particles are not rendered
+    ALPHA_CULL_THRESHOLD: 0.05 // Alpha threshold below which particles are not rendered (Optimization #11)
 };
 
 // ============================================================================
@@ -119,47 +119,77 @@ function hexToRgb(hex) {
 // ============================================================================
 
 class ParticlePool {
-    constructor(initialSize = 5000) {
+    constructor(initialSize = 1000) {  // Optimization #5: Reduced from 5000
         this.pool = [];
-        this.active = [];
+        this.active = new Set();  // Bug #1 Fix: Changed from Array to Set for O(1) operations
+        this.maxPoolSize = 10000;  // Optimization #5: Hard limit
+        this.growthRate = 500;     // Optimization #5: Grow by this amount when needed
+        this.lastGrowthTime = 0;
+        this.growthCooldown = 100; // ms between growth operations
         
-        // Pre-allocate particles
+        // Pre-allocate initial particles
         for (let i = 0; i < initialSize; i++) {
             this.pool.push(new Particle());
         }
         
-        if (DEBUG) console.log(`[ParticlePool] Initialized with ${initialSize} particles`);
+        if (DEBUG) console.log(`[ParticlePool] Initialized with ${initialSize} particles (max: ${this.maxPoolSize})`);
     }
     
     acquire(args) {
         let particle;
+        
+        // Optimization #5: Check if pool needs to grow
+        if (this.pool.length === 0) {
+            const now = performance.now();
+            const totalParticles = this.active.size;
+            
+            if (totalParticles < this.maxPoolSize && now - this.lastGrowthTime > this.growthCooldown) {
+                // Grow the pool
+                const growAmount = Math.min(this.growthRate, this.maxPoolSize - totalParticles);
+                for (let i = 0; i < growAmount; i++) {
+                    this.pool.push(new Particle());
+                }
+                this.lastGrowthTime = now;
+                if (DEBUG) console.log(`[ParticlePool] Grew by ${growAmount}, total capacity: ${totalParticles + growAmount}`);
+            }
+        }
+        
         if (this.pool.length > 0) {
             particle = this.pool.pop();
             particle.reset(args);
         } else {
-            // Pool exhausted, create new particle
+            // Pool exhausted and at max capacity, create temporary particle
             particle = new Particle(args);
+            if (DEBUG) console.log('[ParticlePool] Pool exhausted, created temporary particle');
         }
-        this.active.push(particle);
+        
+        this.active.add(particle);  // Bug #1 Fix: O(1) operation with Set
         return particle;
     }
     
     release(particle) {
-        const idx = this.active.indexOf(particle);
-        if (idx > -1) {
-            this.active.splice(idx, 1);
+        if (this.active.has(particle)) {  // Bug #1 Fix: O(1) lookup with Set
+            this.active.delete(particle);  // Bug #1 Fix: O(1) deletion with Set
             particle.reset();
-            this.pool.push(particle);
+            
+            // Optimization #5: Only return to pool if under max size
+            if (this.pool.length + this.active.size < this.maxPoolSize) {
+                this.pool.push(particle);
+            }
+            // Otherwise let it be garbage collected
         }
     }
     
     releaseAll(particles) {
         for (const particle of particles) {
-            const idx = this.active.indexOf(particle);
-            if (idx > -1) {
-                this.active.splice(idx, 1);
+            if (this.active.has(particle)) {  // Bug #1 Fix: O(1) check
+                this.active.delete(particle);  // Bug #1 Fix: O(1) deletion
                 particle.reset();
-                this.pool.push(particle);
+                
+                // Optimization #5: Only return to pool if under max size
+                if (this.pool.length + this.active.size < this.maxPoolSize) {
+                    this.pool.push(particle);
+                }
             }
         }
     }
@@ -167,9 +197,20 @@ class ParticlePool {
     getStats() {
         return {
             pooled: this.pool.length,
-            active: this.active.length,
-            total: this.pool.length + this.active.length
+            active: this.active.size,  // Bug #1 Fix: Changed from .length to .size
+            total: this.pool.length + this.active.size,
+            maxSize: this.maxPoolSize
         };
+    }
+    
+    // Optimization #5: New method - Shrink pool if it's much larger than needed
+    compact() {
+        const targetSize = Math.max(1000, this.active.size * 2);
+        if (this.pool.length > targetSize) {
+            const removeCount = this.pool.length - targetSize;
+            this.pool.splice(0, removeCount);
+            if (DEBUG) console.log(`[ParticlePool] Compacted, removed ${removeCount} unused particles`);
+        }
     }
 }
 
@@ -252,6 +293,12 @@ class Particle {
             if (fadeProgress >= 1.0) {
                 this.lifespan = 0;
             }
+        }
+        
+        // Optimization #11: Early exit for nearly invisible particles
+        if (this.alpha < CONFIG.ALPHA_CULL_THRESHOLD && !this.isSeed) {
+            this.lifespan = 0;  // Mark as done
+            return;
         }
         
         // Apply air resistance (frame-independent)
@@ -1513,12 +1560,19 @@ class FireworksEngine {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
         
+        // Optimization #6: Layer splitting for performance
+        this.trailCanvas = null;
+        this.trailCtx = null;
+        this.useLayerSplitting = true;  // Can be disabled
+        this.trailUpdateInterval = 2;   // Update trails every N frames
+        this.trailFrameCounter = 0;
+        
         this.fireworks = [];
         this.audioManager = new AudioManager();
         
         // Initialize particle pool for high performance
         if (!globalParticlePool) {
-            globalParticlePool = new ParticlePool(5000);
+            globalParticlePool = new ParticlePool(1000);  // Optimization #5: Reduced from 5000
         }
         this.particlePool = globalParticlePool;
         
@@ -1529,6 +1583,9 @@ class FireworksEngine {
         this.fpsUpdateTime = performance.now();
         this.fpsHistory = []; // Track FPS history for adaptive performance
         this.performanceMode = 'normal'; // 'normal', 'reduced', 'minimal'
+        
+        // Optimization #10: Frame-skip for critical load
+        this.skippedFrames = 0;
         
         // Freeze detection and failsafe
         this.freezeDetectionEnabled = true; // Can be disabled for debugging
@@ -1567,6 +1624,10 @@ class FireworksEngine {
     async init() {
         // Setup canvas
         this.resize();
+        
+        // Optimization #6: Initialize layer splitting
+        this.initLayerSplitting();
+        
         window.addEventListener('resize', () => this.resize());
 
         // Initialize audio
@@ -1598,7 +1659,26 @@ class FireworksEngine {
         this.width = targetResolution.width;
         this.height = targetResolution.height;
         
+        // Optimization #6: Resize trail canvas too
+        if (this.trailCanvas) {
+            this.trailCanvas.width = this.width;
+            this.trailCanvas.height = this.height;
+        }
+        
         if (DEBUG) console.log(`[Fireworks] Canvas resolution: ${this.canvas.width}x${this.canvas.height} (${resolutionPreset}, ${orientation})`);
+    }
+    
+    // Optimization #6: Initialize layer splitting for performance
+    initLayerSplitting() {
+        if (!this.useLayerSplitting) return;
+        
+        // Create off-screen canvas for trails
+        this.trailCanvas = document.createElement('canvas');
+        this.trailCanvas.width = this.width;
+        this.trailCanvas.height = this.height;
+        this.trailCtx = this.trailCanvas.getContext('2d');
+        
+        if (DEBUG) console.log('[Fireworks] Layer splitting initialized');
     }
     
     getResolutionFromPreset(preset, orientation) {
@@ -1790,6 +1870,38 @@ class FireworksEngine {
         if (giftPopupPosition !== null) {
             this.config.giftPopupPosition = giftPopupPosition;
             CONFIG.giftPopupPosition = giftPopupPosition;
+        }
+
+        // Optimization #19: Priority-based queue management
+        const MAX_FIREWORKS_NORMAL = 30;
+        const MAX_FIREWORKS_HARD = 50;
+        
+        // Tier priority (higher = more important)
+        const tierPriority = {
+            'small': 1,
+            'medium': 2,
+            'big': 3,
+            'massive': 4
+        };
+        
+        const currentPriority = tierPriority[tier] || 2;
+        
+        // If queue is getting full, apply priority-based dropping
+        if (this.fireworks.length >= MAX_FIREWORKS_NORMAL) {
+            // Hard limit - never exceed
+            if (this.fireworks.length >= MAX_FIREWORKS_HARD) {
+                if (DEBUG) console.log(`[Fireworks] Hard limit reached (${this.fireworks.length}), dropping ${tier} firework`);
+                return;
+            }
+            
+            // Soft limit - drop low priority fireworks probabilistically
+            if (currentPriority <= 2) {  // small or medium
+                const dropChance = (this.fireworks.length - MAX_FIREWORKS_NORMAL) / (MAX_FIREWORKS_HARD - MAX_FIREWORKS_NORMAL);
+                if (Math.random() < dropChance) {
+                    if (DEBUG) console.log(`[Fireworks] Queue congested, dropping ${tier} firework (${(dropChance * 100).toFixed(0)}% drop chance)`);
+                    return;
+                }
+            }
         }
 
         // Combo throttling: prevent extreme lag from rapid combos
@@ -2107,6 +2219,43 @@ class FireworksEngine {
         if (!this.running) return;
 
         const now = performance.now();
+        const frameTime = now - this.lastTime;
+        
+        // Optimization #10: Frame-skip threshold (50ms = 20 FPS)
+        const FRAME_SKIP_THRESHOLD = 50;
+        
+        // If frame took too long, skip rendering but still update physics
+        if (frameTime > FRAME_SKIP_THRESHOLD && this.fireworks.length > 0) {
+            this.skippedFrames = (this.skippedFrames || 0) + 1;
+            
+            if (DEBUG) console.log(`[Fireworks] Frame skipped (${frameTime.toFixed(1)}ms), total skipped: ${this.skippedFrames}`);
+            
+            // Only update physics, no rendering
+            const deltaTime = Math.min(frameTime / CONFIG.IDEAL_FRAME_TIME, 3);
+            for (let i = this.fireworks.length - 1; i >= 0; i--) {
+                this.fireworks[i].update(deltaTime);
+                if (this.fireworks[i].isDone()) {
+                    this.fireworks.splice(i, 1);
+                }
+            }
+            
+            this.lastTime = now;
+            
+            // Emergency cleanup if too many frames skipped consecutively
+            if (this.skippedFrames > 10) {
+                if (DEBUG) console.log('[Fireworks] Emergency cleanup triggered');
+                // Force minimal mode
+                this.performanceMode = 'minimal';
+                this.applyPerformanceMode();
+                this.skippedFrames = 0;
+            }
+            
+            requestAnimationFrame(() => this.render());
+            return;
+        }
+        
+        // Reset skipped frames counter on successful render
+        this.skippedFrames = 0;
         
         // FPS Throttling: Calculate target frame time based on targetFps
         const targetFps = this.config.targetFps || CONFIG.targetFps;
@@ -2129,11 +2278,35 @@ class FireworksEngine {
         this.ctx.clearRect(0, 0, this.width, this.height);
         this.ctx.fillStyle = bgColor;
         this.ctx.fillRect(0, 0, this.width, this.height);
+        
+        // Optimization #6: Layer splitting - Update trails less frequently
+        this.trailFrameCounter++;
+        const shouldUpdateTrails = this.trailFrameCounter >= this.trailUpdateInterval;
+        
+        if (shouldUpdateTrails && this.trailCanvas && this.config.trailsEnabled) {
+            this.trailFrameCounter = 0;
+            // Clear and redraw trails on separate canvas
+            this.trailCtx.clearRect(0, 0, this.width, this.height);
+            for (const fw of this.fireworks) {
+                this.renderTrailsToLayer(fw);
+            }
+        }
+        
+        // Optimization #6: Composite trail layer first (background)
+        if (this.trailCanvas && this.config.trailsEnabled) {
+            this.ctx.drawImage(this.trailCanvas, 0, 0);
+        }
 
         // Update and render all fireworks with deltaTime for frame-independent physics
         for (let i = this.fireworks.length - 1; i >= 0; i--) {
             this.fireworks[i].update(deltaTime);
-            this.renderFirework(this.fireworks[i]);
+            
+            // Optimization #6: Render particles only (trails are on separate layer)
+            if (this.useLayerSplitting && this.config.trailsEnabled) {
+                this.renderFireworkParticlesOnly(this.fireworks[i]);
+            } else {
+                this.renderFirework(this.fireworks[i]);
+            }
             
             if (this.fireworks[i].isDone()) {
                 this.fireworks.splice(i, 1);
@@ -2202,7 +2375,7 @@ class FireworksEngine {
             }
             
             // Adaptive performance mode
-            const targetFps = this.config.targetFps || CONFIG.targetFps;
+            // Bug #2 Fix: Removed duplicate targetFps declaration - already declared at line 2112
             const minFps = this.config.minFps || CONFIG.minFps;
             
             if (avgFps < minFps) {
@@ -2228,12 +2401,15 @@ class FireworksEngine {
                 }
             }
             
+            // Optimization #19: Update debug panel to show queue size
             if (this.debugMode) {
                 const fpsEl = document.getElementById('fps');
                 const particleEl = document.getElementById('particle-count');
+                const rendererEl = document.getElementById('renderer-type');
                 const modeEl = document.getElementById('performance-mode');
                 if (fpsEl) fpsEl.textContent = this.fps;
                 if (particleEl) particleEl.textContent = this.getTotalParticles();
+                if (rendererEl) rendererEl.textContent = `${this.performanceMode} | Q:${this.fireworks.length}`;
                 if (modeEl) modeEl.textContent = this.performanceMode.toUpperCase();
             }
 
@@ -2257,25 +2433,46 @@ class FireworksEngine {
                 CONFIG.secondaryExplosionChance = 0;
                 this.config.glowEnabled = false;
                 this.config.trailsEnabled = false;
-                // Limit active fireworks with graceful despawn
-                while (this.fireworks.length > 5) {
-                    const fw = this.fireworks[this.fireworks.length - 1];
-                    // Start despawn fade for rocket
-                    if (!fw.exploded && fw.rocket) {
-                        fw.rocket.startDespawn();
-                    }
-                    // Start despawn fade for all particles
-                    fw.particles.forEach(p => p.startDespawn());
-                    fw.secondaryExplosions.forEach(p => p.startDespawn());
-                    // Don't remove immediately - let despawn effect complete
-                    // Only remove if already despawning for enough time
-                    // Using half of despawn duration ensures smooth fade without premature removal
-                    const minDespawnTime = (CONFIG.despawnFadeDuration * 1000) / 2;
-                    if (fw.rocket && fw.rocket.isDespawning && 
-                        performance.now() - fw.rocket.despawnStartTime > minDespawnTime) {
-                        this.fireworks.pop();
-                    } else {
-                        break; // Wait for despawn to complete
+                
+                // Bug #3 Fix: Fixed despawn logic - iterate in reverse and check properly
+                const maxFireworksMinimal = 5;
+                if (this.fireworks.length > maxFireworksMinimal) {
+                    for (let i = this.fireworks.length - 1; i >= maxFireworksMinimal; i--) {
+                        const fw = this.fireworks[i];
+                        
+                        // Start despawn for rocket (if exists)
+                        if (!fw.exploded && fw.rocket && !fw.rocket.isDespawning) {
+                            fw.rocket.startDespawn();
+                        }
+                        
+                        // Start despawn for all particles
+                        for (const p of fw.particles) {
+                            if (!p.isDespawning) p.startDespawn();
+                        }
+                        for (const p of fw.secondaryExplosions) {
+                            if (!p.isDespawning) p.startDespawn();
+                        }
+                        
+                        // Check if ready for removal
+                        const minDespawnTime = (CONFIG.despawnFadeDuration * 1000) / 2;
+                        const now = performance.now();
+                        
+                        // For fireworks with rocket
+                        if (fw.rocket && fw.rocket.isDespawning) {
+                            if (now - fw.rocket.despawnStartTime > minDespawnTime) {
+                                this.fireworks.splice(i, 1);
+                            }
+                        }
+                        // Bug #3 Fix: For instant-explode fireworks (no rocket)
+                        else if (!fw.rocket && fw.exploded) {
+                            // Check if all particles are despawning long enough
+                            const allParticlesDespawning = fw.particles.every(p => 
+                                p.isDespawning && (now - p.despawnStartTime > minDespawnTime)
+                            );
+                            if (allParticlesDespawning || fw.particles.length === 0) {
+                                this.fireworks.splice(i, 1);
+                            }
+                        }
                     }
                 }
                 break;
@@ -2288,25 +2485,39 @@ class FireworksEngine {
                 CONFIG.secondaryExplosionChance = 0.05;
                 this.config.glowEnabled = true;
                 this.config.trailsEnabled = true;
-                // Limit active fireworks with graceful despawn
-                while (this.fireworks.length > 15) {
-                    const fw = this.fireworks[this.fireworks.length - 1];
-                    // Start despawn fade for rocket
-                    if (!fw.exploded && fw.rocket) {
-                        fw.rocket.startDespawn();
-                    }
-                    // Start despawn fade for all particles
-                    fw.particles.forEach(p => p.startDespawn());
-                    fw.secondaryExplosions.forEach(p => p.startDespawn());
-                    // Don't remove immediately - let despawn effect complete
-                    // Only remove if already despawning for enough time
-                    // Using half of despawn duration ensures smooth fade without premature removal
-                    const minDespawnTime = (CONFIG.despawnFadeDuration * 1000) / 2;
-                    if (fw.rocket && fw.rocket.isDespawning && 
-                        performance.now() - fw.rocket.despawnStartTime > minDespawnTime) {
-                        this.fireworks.pop();
-                    } else {
-                        break; // Wait for despawn to complete
+                
+                // Bug #3 Fix: Fixed despawn logic for reduced mode
+                const maxFireworksReduced = 15;
+                if (this.fireworks.length > maxFireworksReduced) {
+                    for (let i = this.fireworks.length - 1; i >= maxFireworksReduced; i--) {
+                        const fw = this.fireworks[i];
+                        
+                        if (!fw.exploded && fw.rocket && !fw.rocket.isDespawning) {
+                            fw.rocket.startDespawn();
+                        }
+                        
+                        for (const p of fw.particles) {
+                            if (!p.isDespawning) p.startDespawn();
+                        }
+                        for (const p of fw.secondaryExplosions) {
+                            if (!p.isDespawning) p.startDespawn();
+                        }
+                        
+                        const minDespawnTime = (CONFIG.despawnFadeDuration * 1000) / 2;
+                        const now = performance.now();
+                        
+                        if (fw.rocket && fw.rocket.isDespawning) {
+                            if (now - fw.rocket.despawnStartTime > minDespawnTime) {
+                                this.fireworks.splice(i, 1);
+                            }
+                        } else if (!fw.rocket && fw.exploded) {
+                            const allParticlesDespawning = fw.particles.every(p => 
+                                p.isDespawning && (now - p.despawnStartTime > minDespawnTime)
+                            );
+                            if (allParticlesDespawning || fw.particles.length === 0) {
+                                this.fireworks.splice(i, 1);
+                            }
+                        }
                     }
                 }
                 break;
@@ -2410,6 +2621,128 @@ class FireworksEngine {
         // Batch render paws
         if (paws.length > 0) {
             this.batchRenderPaws(paws);
+        }
+    }
+    
+    // Optimization #6: Render trails to separate layer
+    renderTrailsToLayer(firework) {
+        const ctx = this.trailCtx;
+        
+        const allParticles = [];
+        if (!firework.exploded && firework.rocket) {
+            allParticles.push(firework.rocket);
+        }
+        allParticles.push(...firework.particles);
+        allParticles.push(...firework.secondaryExplosions);
+        
+        for (const p of allParticles) {
+            if (p.trail.length > 1 && p.alpha > CONFIG.ALPHA_CULL_THRESHOLD) {
+                const trailPath = new Path2D();
+                trailPath.moveTo(p.trail[0].x, p.trail[0].y);
+                
+                for (let i = 1; i < p.trail.length; i++) {
+                    trailPath.lineTo(p.trail[i].x, p.trail[i].y);
+                }
+                
+                const rgb = hslToRgb(p.hue, p.saturation, p.brightness);
+                ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.alpha * 0.3})`;
+                ctx.lineWidth = p.size * 0.5;
+                ctx.lineCap = 'round';
+                ctx.stroke(trailPath);
+            }
+        }
+    }
+    
+    // Optimization #6: Render only particles (no trails) - trails are on separate layer
+    renderFireworkParticlesOnly(firework) {
+        // Render only particles (no trails) - trails are on separate layer
+        const circles = [];
+        const images = [];
+        const hearts = [];
+        const paws = [];
+        
+        if (!firework.exploded && firework.rocket) {
+            const p = firework.rocket;
+            if (this.isParticleVisible(p)) {
+                if (p.type === 'image' && p.image) {
+                    images.push(p);
+                } else {
+                    circles.push(p);
+                }
+            }
+        }
+        
+        for (const p of firework.particles) {
+            if (!this.isParticleVisible(p)) continue;
+            
+            if (p.type === 'image' && p.image) {
+                images.push(p);
+            } else if (p.type === 'heart') {
+                hearts.push(p);
+            } else if (p.type === 'paw') {
+                paws.push(p);
+            } else {
+                circles.push(p);
+            }
+        }
+        
+        for (const p of firework.secondaryExplosions) {
+            if (!this.isParticleVisible(p)) continue;
+            circles.push(p);
+        }
+        
+        // Batch render (without trails - they're on the trail layer)
+        if (circles.length > 0) {
+            this.batchRenderCirclesNoTrails(circles);
+        }
+        if (images.length > 0) {
+            this.batchRenderImages(images);
+        }
+        if (hearts.length > 0) {
+            this.batchRenderHearts(hearts);
+        }
+        if (paws.length > 0) {
+            this.batchRenderPaws(paws);
+        }
+    }
+    
+    // Optimization #6: Batch render circles without trails
+    batchRenderCirclesNoTrails(particles) {
+        const ctx = this.ctx;
+        
+        // Render glows (if enabled)
+        if (this.config.glowEnabled) {
+            for (const p of particles) {
+                const rgb = hslToRgb(p.hue, p.saturation, p.brightness);
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation);
+                ctx.globalAlpha = p.alpha;
+                
+                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, p.size * 2);
+                gradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.alpha})`);
+                gradient.addColorStop(0.5, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.alpha * 0.5})`);
+                gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, p.size * 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+        
+        // Render core particles
+        for (const p of particles) {
+            const rgb = hslToRgb(p.hue, p.saturation, p.brightness);
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation);
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.alpha})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
         }
     }
     
