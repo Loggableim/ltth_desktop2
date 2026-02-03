@@ -5,7 +5,7 @@
   "description": "Comprehensive viewer tracking and analytics system with VIP management, birthday tracking, activity heatmaps, and detailed profile management.",
   "author": "Pup Cid",
   "entry": "main.js",
-  "enabled": false,
+  "enabled": true,
   "type": "utility",
   "devStatus": "development-beta",
   "permissions": [

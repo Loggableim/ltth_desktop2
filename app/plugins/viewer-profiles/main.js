@@ -53,29 +53,62 @@ class ViewerProfilesPlugin extends EventEmitter {
       this.loadConfig();
 
       // Initialize database
-      this.db.initialize();
+      try {
+        this.db.initialize();
+      } catch (error) {
+        throw new Error(`Database initialization failed: ${error.message}`);
+      }
 
       // Initialize managers
-      this.vipManager.initialize();
+      try {
+        this.vipManager.initialize();
+      } catch (error) {
+        throw new Error(`VIP Manager initialization failed: ${error.message}`);
+      }
 
       // Register API routes
-      this.apiModule.registerRoutes();
+      try {
+        this.apiModule.registerRoutes();
+      } catch (error) {
+        throw new Error(`API routes registration failed: ${error.message}`);
+      }
 
       // Register UI routes
-      this.registerUIRoutes();
+      try {
+        this.registerUIRoutes();
+      } catch (error) {
+        throw new Error(`UI routes registration failed: ${error.message}`);
+      }
 
       // Register WebSocket handlers
-      this.registerWebSocketHandlers();
+      try {
+        this.registerWebSocketHandlers();
+      } catch (error) {
+        throw new Error(`WebSocket handlers registration failed: ${error.message}`);
+      }
 
       // Register TikTok event handlers
-      this.registerTikTokEventHandlers();
+      try {
+        this.registerTikTokEventHandlers();
+      } catch (error) {
+        throw new Error(`TikTok event handlers registration failed: ${error.message}`);
+      }
 
       // Start session tracking
-      this.sessionManager.start();
+      try {
+        this.sessionManager.start();
+      } catch (error) {
+        throw new Error(`Session manager start failed: ${error.message}`);
+      }
 
       // Start birthday checker
       if (this.config.birthdayReminder) {
-        this.birthdayManager.start();
+        try {
+          this.birthdayManager.start();
+        } catch (error) {
+          this.api.log(`⚠️ Birthday manager start failed: ${error.message}`, 'warn');
+          // Non-critical error, continue initialization
+        }
       }
 
       this.api.log('✅ Viewer Profiles Plugin initialized successfully', 'info');
@@ -87,6 +120,7 @@ class ViewerProfilesPlugin extends EventEmitter {
 
     } catch (error) {
       this.api.log(`❌ Error initializing Viewer Profiles Plugin: ${error.message}`, 'error');
+      this.api.log(`   Stack trace: ${error.stack}`, 'error');
       throw error;
     }
   }
@@ -183,6 +217,18 @@ class ViewerProfilesPlugin extends EventEmitter {
           }
         }
       });
+
+      // Refresh profile picture
+      socket.on('viewer-profiles:refresh-avatar', (data) => {
+        try {
+          const username = data.username;
+          this.api.log(`Refresh avatar requested for ${username}`, 'debug');
+          // The next time this viewer sends an event, their avatar will be updated
+          // We could also implement a manual TikTok API call here if needed
+        } catch (error) {
+          this.api.log(`Error handling refresh-avatar: ${error.message}`, 'error');
+        }
+      });
     });
 
     this.api.log('WebSocket handlers registered', 'info');
@@ -256,6 +302,18 @@ class ViewerProfilesPlugin extends EventEmitter {
 
       // Update viewer info
       this.updateViewerInfo(username, data);
+
+      // Use custom TTS voice if configured
+      if (viewer.tts_voice && this.api.getPluginInstance) {
+        const ttsPlugin = this.api.getPluginInstance('tts');
+        if (ttsPlugin && ttsPlugin.setCustomVoice) {
+          // Notify TTS plugin about custom voice preference for this user
+          this.api.emit('viewer:custom-tts-voice', {
+            username: viewer.tiktok_username,
+            voice: viewer.tts_voice
+          });
+        }
+      }
 
       // Update heatmap
       this.db.updateHeatmap(viewer.id, new Date());
@@ -472,6 +530,9 @@ class ViewerProfilesPlugin extends EventEmitter {
    */
   updateViewerInfo(username, data) {
     try {
+      const viewer = this.db.getViewerByUsername(username);
+      if (!viewer) return;
+
       const updates = {};
 
       if (data.userId && data.userId !== 'undefined') {
@@ -482,8 +543,10 @@ class ViewerProfilesPlugin extends EventEmitter {
         updates.display_name = data.nickname;
       }
 
-      if (data.profilePictureUrl) {
+      // Profile Picture Update - always update when available
+      if (data.profilePictureUrl && data.profilePictureUrl !== viewer.profile_picture_url) {
         updates.profile_picture_url = data.profilePictureUrl;
+        this.api.log(`Updated profile picture for ${username}`, 'debug');
       }
 
       if (data.followRole) {
