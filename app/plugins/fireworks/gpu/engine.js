@@ -2375,7 +2375,7 @@ class FireworksEngine {
             }
             
             // Adaptive performance mode
-            // Bug #2 Fix: Removed duplicate targetFps declaration - already declared at line 2112
+            // Bug #2 Fix: Removed duplicate targetFps declaration - already declared earlier in this method
             const minFps = this.config.minFps || CONFIG.minFps;
             
             if (avgFps < minFps) {

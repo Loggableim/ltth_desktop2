@@ -73,7 +73,7 @@ Successfully implemented **3 critical bug fixes** and **5 major FPS optimization
 
 ---
 
-### Optimization #10: Frame-Skip bei kritischer Last ✅
+### Optimization #10: Frame-Skip Under Critical Load ✅
 **Impact:** Prevents complete freezes, maintains responsiveness
 
 **Changes:**
@@ -86,7 +86,7 @@ Successfully implemented **3 critical bug fixes** and **5 major FPS optimization
 
 ---
 
-### Optimization #11: Erhöhter Alpha-Threshold ✅
+### Optimization #11: Increased Alpha Threshold ✅
 **Impact:** 5-8% FPS improvement
 
 **Changes:**
