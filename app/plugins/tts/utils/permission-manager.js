@@ -5,7 +5,7 @@
 class PermissionManager {
     // Gain control constants (must match TTSPlugin constants)
     static MIN_GAIN = 0.0;    // Minimum gain multiplier (0%)
-    static MAX_GAIN = 2.5;    // Maximum gain multiplier (250%)
+    static MAX_GAIN = 3.0;    // Maximum gain multiplier (300%)
     static DEFAULT_GAIN = 1.0; // Default gain multiplier (100%)
 
     constructor(db, logger) {
@@ -306,7 +306,7 @@ class PermissionManager {
      * @param {string} voiceId - Voice ID
      * @param {string} engine - Engine name
      * @param {string} emotion - Optional emotion setting
-     * @param {number} gain - Optional volume gain (0.0-2.5, default 1.0)
+     * @param {number} gain - Optional volume gain (0.0-3.0, default 1.0)
      */
     assignVoice(userId, username, voiceId, engine, emotion = null, gain = null) {
         try {

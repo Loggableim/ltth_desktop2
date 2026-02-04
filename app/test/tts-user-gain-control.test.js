@@ -3,7 +3,7 @@
  * 
  * Tests that the per-user gain control feature works correctly:
  * - Database column exists (volume_gain in tts_user_permissions)
- * - API endpoints handle gain updates with clamping to [0.0, 2.5]
+ * - API endpoints handle gain updates with clamping to [0.0, 3.0]
  * - Gain is properly passed through voice assignment
  * - Gain is applied in audio synthesis pipeline
  * 
@@ -61,7 +61,7 @@ try {
     testFail('Could not read main.js', error.message);
 }
 
-// Test 3: Verify server-side gain clamping to [0.0, 2.5]
+// Test 3: Verify server-side gain clamping to [0.0, 3.0]
 console.log('\n📝 TEST 3: Server-side gain clamping using constants');
 try {
     const mainJsPath = path.join(__dirname, '../plugins/tts/main.js');
@@ -69,7 +69,7 @@ try {
     
     // Check for constants definition
     const hasConstants = mainJsContent.includes('static MIN_GAIN = 0.0') &&
-                        mainJsContent.includes('static MAX_GAIN = 2.5') &&
+                        mainJsContent.includes('static MAX_GAIN = 3.0') &&
                         mainJsContent.includes('static DEFAULT_GAIN = 1.0');
     
     // Check for clamping using constants
@@ -78,7 +78,7 @@ try {
     if (hasConstants && clampingRegex.test(mainJsContent)) {
         testPass('Gain clamping using constants (MIN_GAIN, MAX_GAIN, DEFAULT_GAIN) implemented');
     } else if (hasConstants) {
-        testPass('Gain constants defined (MIN_GAIN=0.0, MAX_GAIN=2.5, DEFAULT_GAIN=1.0)');
+        testPass('Gain constants defined (MIN_GAIN=0.0, MAX_GAIN=3.0, DEFAULT_GAIN=1.0)');
     } else {
         testFail('Gain clamping constants not found or not used correctly');
     }
@@ -182,14 +182,14 @@ try {
     testFail('Could not verify user list UI', error.message);
 }
 
-// Test 10: Verify gain range is 0-250% (0.0-2.5)
-console.log('\n📝 TEST 10: Gain range is correctly set to 0-250% (0.0-2.5)');
+// Test 10: Verify gain range is 0-300% (0.0-3.0)
+console.log('\n📝 TEST 10: Gain range is correctly set to 0-300% (0.0-3.0)');
 try {
     const adminPanelPath = path.join(__dirname, '../plugins/tts/ui/admin-panel.html');
     const adminPanelContent = fs.readFileSync(adminPanelPath, 'utf-8');
     
-    if (adminPanelContent.includes('min="0" max="250"')) {
-        testPass('Gain controls have correct range 0-250%');
+    if (adminPanelContent.includes('min="0" max="300"')) {
+        testPass('Gain controls have correct range 0-300%');
     } else {
         testFail('Gain controls do not have correct range');
     }

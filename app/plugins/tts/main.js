@@ -26,7 +26,7 @@ class TTSPlugin {
 
     // Per-user gain control constants
     static MIN_GAIN = 0.0;    // Minimum gain multiplier (0%)
-    static MAX_GAIN = 2.5;    // Maximum gain multiplier (250%)
+    static MAX_GAIN = 3.0;    // Maximum gain multiplier (300%)
     static DEFAULT_GAIN = 1.0; // Default gain multiplier (100%)
 
     // Config keys that should not be updated via regular config update mechanism

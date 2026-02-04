@@ -1,12 +1,12 @@
 # Per-User TTS Gain Control Implementation
 
 **Date:** 2026-01-22  
-**Feature:** Per-user TTS output gain control (0-250%)  
+**Feature:** Per-user TTS output gain control (0-300%)  
 **Status:** ✅ Complete
 
 ## Overview
 
-This document describes the implementation of per-user TTS output gain control, allowing individual volume adjustment for each user in the range of 0-250% (0.0-2.5 gain multiplier).
+This document describes the implementation of per-user TTS output gain control, allowing individual volume adjustment for each user in the range of 0-300% (0.0-3.0 gain multiplier).
 
 ## Architecture
 
@@ -15,7 +15,7 @@ This document describes the implementation of per-user TTS output gain control, 
 #### 1. Database Schema
 - **Table:** `tts_user_permissions`
 - **Column:** `volume_gain REAL DEFAULT 1.0`
-- **Range:** 0.0 - 2.5 (server-side clamped)
+- **Range:** 0.0 - 3.0 (server-side clamped)
 - **Default:** 1.0 (100%)
 
 #### 2. API Endpoints
@@ -59,14 +59,14 @@ Response: {
 **TTSPlugin Class:**
 ```javascript
 static MIN_GAIN = 0.0;    // Minimum gain multiplier (0%)
-static MAX_GAIN = 2.5;    // Maximum gain multiplier (250%)
+static MAX_GAIN = 3.0;    // Maximum gain multiplier (300%)
 static DEFAULT_GAIN = 1.0; // Default gain multiplier (100%)
 ```
 
 **PermissionManager Class:**
 ```javascript
 static MIN_GAIN = 0.0;    // Must match TTSPlugin
-static MAX_GAIN = 2.5;    // Must match TTSPlugin
+static MAX_GAIN = 3.0;    // Must match TTSPlugin
 static DEFAULT_GAIN = 1.0; // Must match TTSPlugin
 ```
 
@@ -97,10 +97,10 @@ Emitted whenever a user's gain is updated, allowing for live updates.
 
 ```javascript
 const MIN_GAIN = 0.0;           // Backend: 0.0
-const MAX_GAIN = 2.5;           // Backend: 2.5
+const MAX_GAIN = 3.0;           // Backend: 3.0
 const DEFAULT_GAIN = 1.0;       // Backend: 1.0
 const MIN_GAIN_PERCENT = 0;     // UI: 0%
-const MAX_GAIN_PERCENT = 250;   // UI: 250%
+const MAX_GAIN_PERCENT = 300;   // UI: 300%
 const DEFAULT_GAIN_PERCENT = 100; // UI: 100%
 ```
 
@@ -109,8 +109,8 @@ const DEFAULT_GAIN_PERCENT = 100; // UI: 100%
 **Location:** `admin-panel.html` (lines 715-730)
 
 **Controls:**
-- Range slider: 0-250%, step 5%
-- Number input: 0-250%, step 1%
+- Range slider: 0-300%, step 5%
+- Number input: 0-300%, step 1%
 - Reset button: Returns to 100%
 
 **Behavior:**
@@ -124,8 +124,8 @@ const DEFAULT_GAIN_PERCENT = 100; // UI: 100%
 **Location:** `tts-admin-production.js` (renderUsers function)
 
 **Controls per user:**
-- Inline range slider: 0-250%, step 5%
-- Inline number input: 0-250%, step 1%
+- Inline range slider: 0-300%, step 5%
+- Inline number input: 0-300%, step 1%
 - Inline reset button: Returns to 100%
 - Live percentage display
 
@@ -163,7 +163,7 @@ updateUserGain(userId, gain)     // API call wrapper
 7. ✅ Socket event emitted for live gain updates
 8. ✅ UI includes gain controls in voice assignment modal
 9. ✅ UI includes gain controls in user list
-10. ✅ Gain range is correctly set to 0-250%
+10. ✅ Gain range is correctly set to 0-300%
 11. ✅ TikTok engine visible in manual voice assignment
 12. ✅ JavaScript includes updateUserGain function
 
@@ -178,7 +178,7 @@ node test/tts-user-gain-control.test.js
 - [ ] Open admin panel at `/plugins/tts/ui/admin-panel.html`
 - [ ] Assign a voice to a test user
 - [ ] Verify gain controls appear in user list
-- [ ] Test slider interaction (0-250%)
+- [ ] Test slider interaction (0-300%)
 - [ ] Test number input (direct entry)
 - [ ] Test reset button (returns to 100%)
 - [ ] Open voice assignment modal for user with gain
