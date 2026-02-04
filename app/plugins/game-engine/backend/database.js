@@ -458,14 +458,14 @@ class GameEngineDatabase {
     const wheelConfigExists = this.db.prepare('SELECT COUNT(*) as count FROM game_wheel_config').get();
     if (wheelConfigExists.count === 0) {
       const defaultSegments = [
-        { text: '100 XP', color: '#FF6B6B', weight: 10, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0 },
-        { text: '200 XP', color: '#FFA500', weight: 8, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0 },
-        { text: '500 XP', color: '#FFD700', weight: 5, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0 },
-        { text: 'Shoutout!', color: '#4CAF50', weight: 4, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0 },
-        { text: '1000 XP', color: '#00BCD4', weight: 3, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0 },
-        { text: 'VIP Status', color: '#9C27B0', weight: 2, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0 },
-        { text: 'JACKPOT!', color: '#E91E63', weight: 1, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0 },
-        { text: 'Niete', color: '#607D8B', weight: 15, isNiete: true, isShock: false, shockIntensity: 0, shockDuration: 0 }
+        { text: '100 XP', color: '#FF6B6B', weight: 10, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0, shockType: 'shock', shockDevices: [] },
+        { text: '200 XP', color: '#FFA500', weight: 8, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0, shockType: 'shock', shockDevices: [] },
+        { text: '500 XP', color: '#FFD700', weight: 5, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0, shockType: 'shock', shockDevices: [] },
+        { text: 'Shoutout!', color: '#4CAF50', weight: 4, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0, shockType: 'shock', shockDevices: [] },
+        { text: '1000 XP', color: '#00BCD4', weight: 3, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0, shockType: 'shock', shockDevices: [] },
+        { text: 'VIP Status', color: '#9C27B0', weight: 2, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0, shockType: 'shock', shockDevices: [] },
+        { text: 'JACKPOT!', color: '#E91E63', weight: 1, isNiete: false, isShock: false, shockIntensity: 0, shockDuration: 0, shockType: 'shock', shockDevices: [] },
+        { text: 'Niete', color: '#607D8B', weight: 15, isNiete: true, isShock: false, shockIntensity: 0, shockDuration: 0, shockType: 'shock', shockDevices: [] }
       ];
       const defaultSettings = {
         spinDuration: 5000,
