@@ -417,8 +417,10 @@
         // Apply initial theme
         applyTheme();
 
-        // Progress tracking via SSE
-        const eventSource = new EventSource('/events');
+        // Progress tracking via SSE with reconnect logic
+        let eventSource = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
         const statusEl = document.getElementById('status');
         const progressEl = document.getElementById('progress');
         const progressTextEl = document.getElementById('progress-text');
@@ -426,48 +428,79 @@
         const errorMessageEl = document.getElementById('error-message');
         const spinnerEl = document.getElementById('spinner');
 
-        eventSource.onmessage = function(event) {
-            try {
-                const data = JSON.parse(event.data);
+        function connectSSE() {
+            eventSource = new EventSource('/events');
+            
+            eventSource.onopen = function() {
+                console.log('SSE connection established');
+                reconnectAttempts = 0; // Reset counter on successful connection
+            };
+
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.error) {
+                        // Show error
+                        errorMessageEl.textContent = data.error;
+                        errorEl.classList.add('show');
+                        spinnerEl.style.display = 'none';
+                    } else {
+                        // Update progress
+                        if (data.progress !== undefined) {
+                            progressEl.style.width = data.progress + '%';
+                            progressTextEl.textContent = data.progress + '%';
+                        }
+                        
+                        if (data.status) {
+                            statusEl.textContent = data.status;
+                        }
+                        
+                        // Hide spinner when complete
+                        if (data.progress === 100) {
+                            spinnerEl.style.display = 'none';
+                            setTimeout(() => {
+                                statusEl.textContent = 'Fertig! Browser öffnet sich...';
+                            }, 1000);
+                        }
+
+                        // Update logo after download completes (at 70%)
+                        if (data.progress >= 70) {
+                            applyTheme(); // Try to load real logos
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to parse event data:', e);
+                }
+            };
+
+            eventSource.onerror = function(error) {
+                console.error('EventSource failed:', error);
+                eventSource.close();
                 
-                if (data.error) {
-                    // Show error
-                    errorMessageEl.textContent = data.error;
+                // Attempt reconnect with exponential backoff
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 10000); // Max 10s
+                    console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})...`);
+                    statusEl.textContent = `Verbindung unterbrochen, versuche erneut... (${reconnectAttempts}/${maxReconnectAttempts})`;
+                    
+                    setTimeout(() => {
+                        connectSSE();
+                    }, delay);
+                } else {
+                    // Final failure - show clear error message
+                    console.error('Max reconnect attempts reached');
+                    errorMessageEl.textContent = 'Verbindung zum Server verloren. Bitte starten Sie den Launcher neu.';
                     errorEl.classList.add('show');
                     spinnerEl.style.display = 'none';
-                } else {
-                    // Update progress
-                    if (data.progress !== undefined) {
-                        progressEl.style.width = data.progress + '%';
-                        progressTextEl.textContent = data.progress + '%';
-                    }
-                    
-                    if (data.status) {
-                        statusEl.textContent = data.status;
-                    }
-                    
-                    // Hide spinner when complete
-                    if (data.progress === 100) {
-                        spinnerEl.style.display = 'none';
-                        setTimeout(() => {
-                            statusEl.textContent = 'Fertig! Browser öffnet sich...';
-                        }, 1000);
-                    }
-
-                    // Update logo after download completes (at 70%)
-                    if (data.progress >= 70) {
-                        applyTheme(); // Try to load real logos
-                    }
+                    statusEl.textContent = 'Verbindung fehlgeschlagen';
                 }
-            } catch (e) {
-                console.error('Failed to parse event data:', e);
-            }
-        };
+            };
+        }
 
-        eventSource.onerror = function(error) {
-            console.error('EventSource failed:', error);
-            eventSource.close();
-        };
+        // Initial connection
+        connectSSE();
     </script>
 </body>
 </html>
