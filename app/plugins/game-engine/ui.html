@@ -5017,7 +5017,6 @@
         segmentDiv.draggable = true;
         segmentDiv.dataset.index = index;
         segmentDiv.style.cssText = 'display: flex; gap: 10px; align-items: center; margin-bottom: 10px; padding: 10px; background: #3a3a4e; border-radius: 5px; cursor: move; transition: all 0.2s; flex-wrap: wrap;';
-        
         segmentDiv.innerHTML = `
           <div style="width: 30px; text-align: center; color: #888; cursor: grab; user-select: none;" class="drag-handle" title="Ziehen zum Verschieben">
             ⋮⋮
@@ -5079,7 +5078,6 @@
             </button>
           </div>
         `;
-        
         // Set hidden input values using DOM properties (safer than inline attributes)
         const shockTypeInput = segmentDiv.querySelector('.wheel-segment-shock-type');
         const shockDevicesInput = segmentDiv.querySelector('.wheel-segment-shock-devices');
