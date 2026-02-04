@@ -27,7 +27,16 @@ class UnifiedQueueManager {
     
     // Processing timeout (for safety)
     this.processingTimeout = null;
-    this.MAX_PROCESSING_TIME = 180000; // 3 minutes max per item
+    this.MAX_PROCESSING_TIME = 180000; // 3 minutes max per item (fallback)
+    
+    // Game-specific timeouts (in milliseconds)
+    // These are realistic timeouts based on actual game duration
+    this.GAME_TIMEOUTS = {
+      wheel: 45000,      // 45 seconds (spin + winner display + info screen + buffer)
+      plinko: 60000,     // 60 seconds (ball drop + result display)
+      connect4: 300000,  // 5 minutes (interactive gameplay)
+      chess: 600000      // 10 minutes (turn-based gameplay)
+    };
     
     // Queue size limits (prevent memory exhaustion from rapid triggers)
     this.MAX_QUEUE_SIZE = 50; // Maximum items in queue
@@ -321,6 +330,34 @@ class UnifiedQueueManager {
   }
 
   /**
+   * Get timeout duration for a specific game type
+   * For wheel games, calculate based on spin configuration
+   * @param {Object} item - Queue item
+   * @returns {number} Timeout in milliseconds
+   */
+  getTimeoutForGame(item) {
+    if (!item || !item.type) {
+      return this.MAX_PROCESSING_TIME;
+    }
+    
+    // For wheel, calculate based on actual spin configuration
+    if (item.type === 'wheel' && item.data) {
+      const spinDuration = item.data.spinDuration || 5000;
+      const settings = item.data.settings || {};
+      const winnerDisplayDuration = (settings.winnerDisplayDuration || 5) * 1000;
+      const infoScreenDuration = settings.infoScreenEnabled ? (settings.infoScreenDuration || 5) * 1000 : 0;
+      const buffer = 10000; // 10 second safety buffer
+      
+      const calculatedTimeout = spinDuration + winnerDisplayDuration + infoScreenDuration + buffer;
+      this.logger.debug(`[UNIFIED QUEUE] Calculated wheel timeout: ${calculatedTimeout}ms (spin: ${spinDuration}ms, winner: ${winnerDisplayDuration}ms, info: ${infoScreenDuration}ms, buffer: ${buffer}ms)`);
+      return calculatedTimeout;
+    }
+    
+    // Use predefined timeout for other game types
+    return this.GAME_TIMEOUTS[item.type] || this.MAX_PROCESSING_TIME;
+  }
+
+  /**
    * Get current queue status
    * @returns {Object} Queue status
    */
@@ -370,11 +407,12 @@ class UnifiedQueueManager {
 
     this.logger.info(`🎮 [UNIFIED QUEUE] Processing ${item.type} for ${item.data.username} (${this.queue.length} remaining)`);
 
-    // Set safety timeout
+    // Set safety timeout based on game type
+    const timeoutDuration = this.getTimeoutForGame(item);
     this.processingTimeout = setTimeout(() => {
-      this.logger.warn(`⚠️ [UNIFIED QUEUE] Processing timeout for ${item.type}, forcing completion`);
-      this.completeProcessing();
-    }, this.MAX_PROCESSING_TIME);
+      this.logger.warn(`⚠️ [UNIFIED QUEUE] Processing timeout for ${item.type} after ${timeoutDuration}ms, forcing completion`);
+      this.forceCompleteProcessing(item);
+    }, timeoutDuration);
 
     try {
       if (item.type === 'plinko') {
@@ -527,6 +565,49 @@ class UnifiedQueueManager {
       this.logger.error(`❌ [UNIFIED QUEUE] Error starting Chess game: ${error.message}`);
       this.completeProcessing();
     }
+  }
+
+  /**
+   * Force complete processing when timeout occurs
+   * Performs game-specific cleanup before completing
+   * @param {Object} item - Queue item that timed out
+   */
+  forceCompleteProcessing(item) {
+    this.logger.warn(`⚠️ [UNIFIED QUEUE] Force completing ${item?.type || 'unknown'} (timeout)`);
+    
+    // Game-specific cleanup
+    if (item?.type === 'wheel' && this.wheelGame) {
+      // Reset wheel state if it's stuck spinning
+      if (this.wheelGame.isSpinning) {
+        this.logger.warn(`⚠️ [UNIFIED QUEUE] Resetting stuck wheel state (spinId: ${item.data?.spinId})`);
+        this.wheelGame.isSpinning = false;
+        this.wheelGame.currentSpin = null;
+      }
+      
+      // Remove from active spins
+      if (item.data?.spinId) {
+        this.wheelGame.activeSpins.delete(item.data.spinId);
+      }
+      
+      // Emit timeout event to overlay
+      this.io.emit('wheel:spin-timeout', {
+        spinId: item.data?.spinId,
+        username: item.data?.username,
+        nickname: item.data?.nickname,
+        wheelId: item.data?.wheelId,
+        wheelName: item.data?.wheelName,
+        reason: 'overlay_no_response',
+        timestamp: Date.now()
+      });
+      
+      this.logger.info(`⚠️ [UNIFIED QUEUE] Wheel spin timeout handled (spinId: ${item.data?.spinId})`);
+    } else if (item?.type === 'plinko' && this.plinkoGame) {
+      // Plinko cleanup if needed
+      this.logger.debug(`[UNIFIED QUEUE] Plinko timeout cleanup (batchId: ${item.data?.batchId})`);
+    }
+    
+    // Complete processing and move to next item
+    this.completeProcessing();
   }
 
   /**

@@ -18,6 +18,7 @@ const SHOCK_MIN_DURATION = 300; // Minimum shock duration (ms)
 const SHOCK_MAX_DURATION = 30000; // Maximum shock duration (ms)
 const SHOCK_DISPLAY_DELAY_MS = 500; // Delay before triggering shock to ensure result is visible first
 const OPENSHOCK_BATCH_CLEANUP_THRESHOLD = 50; // Minimum batches before triggering cleanup
+const SPIN_SAFETY_TIMEOUT_BUFFER = 10000; // 10 seconds buffer for spin safety timeout
 
 // Error messages (TODO: Move to localization system)
 const ERROR_MESSAGES = {
@@ -53,6 +54,9 @@ class WheelGame {
     // Key format: "username:deviceIds:type:intensity:duration"
     this.openshockBatches = new Map(); // batchKey -> timestamp
     this.openshockBatchWindow = 5000; // 5 second window for batch deduplication
+    
+    // Server-side spin safety timeout (independent of overlay response)
+    this.spinSafetyTimeout = null;
     
     // Cleanup timer
     this.cleanupTimer = null;
@@ -540,6 +544,24 @@ class WheelGame {
       segmentAngle: segmentAngle
     });
 
+    // Set server-side safety timeout (independent of overlay response)
+    // This ensures the queue doesn't get stuck if overlay doesn't respond
+    const winnerDisplayDuration = (config.settings?.winnerDisplayDuration || 5) * 1000;
+    const infoScreenDuration = (config.settings?.infoScreenEnabled && !winningSegment.isNiete) 
+      ? (config.settings?.infoScreenDuration || 5) * 1000 
+      : 0;
+    const safetyTimeoutMs = spinDuration + winnerDisplayDuration + infoScreenDuration + SPIN_SAFETY_TIMEOUT_BUFFER;
+    
+    this.spinSafetyTimeout = setTimeout(() => {
+      // Only trigger if this specific spin is still active
+      if (this.isSpinning && this.currentSpin?.spinId === spinId) {
+        this.logger.warn(`⚠️ Spin ${spinId} safety timeout triggered after ${safetyTimeoutMs}ms - overlay did not respond`);
+        this.forceCompleteSpin(spinId, spinData, config);
+      }
+    }, safetyTimeoutMs);
+    
+    this.logger.debug(`🎡 Spin safety timeout set: ${safetyTimeoutMs}ms (spin: ${spinDuration}ms, winner: ${winnerDisplayDuration}ms, info: ${infoScreenDuration}ms, buffer: ${SPIN_SAFETY_TIMEOUT_BUFFER}ms)`);
+
     return { 
       success: true, 
       spinId, 
@@ -613,6 +635,13 @@ class WheelGame {
    * Handle spin completed (called from overlay)
    */
   async handleSpinComplete(spinId, segmentIndex, reportedSegmentIndex = null) {
+    // FIRST: Clear safety timeout since overlay responded
+    if (this.spinSafetyTimeout) {
+      clearTimeout(this.spinSafetyTimeout);
+      this.spinSafetyTimeout = null;
+      this.logger.debug(`✅ Spin safety timeout cleared (overlay responded)`);
+    }
+    
     const spinData = this.activeSpins.get(spinId);
     
     if (!spinData) {
@@ -805,6 +834,111 @@ class WheelGame {
   }
 
   /**
+   * Force complete a spin when timeout occurs (overlay didn't respond)
+   * This prevents the queue from getting stuck
+   * @param {string} spinId - Spin ID
+   * @param {Object} spinData - Spin data
+   * @param {Object} config - Wheel configuration
+   */
+  forceCompleteSpin(spinId, spinData, config) {
+    this.logger.warn(`⚠️ Force completing spin ${spinId} due to timeout`);
+    
+    if (!spinData || !config) {
+      this.logger.error(`Cannot force complete spin ${spinId}: missing data`);
+      this.isSpinning = false;
+      this.currentSpin = null;
+      
+      // Still notify queue to continue
+      if (this.unifiedQueue) {
+        this.unifiedQueue.completeProcessing();
+      }
+      return;
+    }
+    
+    const wheelId = spinData.wheelId;
+    const finalSegmentIndex = spinData.winningSegmentIndex;
+    
+    // Validate segment index
+    if (!Number.isInteger(finalSegmentIndex) || finalSegmentIndex < 0 || finalSegmentIndex >= config.segments.length) {
+      this.logger.error(`Invalid segment index for force complete (spinId: ${spinId}, index: ${finalSegmentIndex})`);
+      this.isSpinning = false;
+      this.currentSpin = null;
+      this.activeSpins.delete(spinId);
+      
+      if (this.unifiedQueue) {
+        this.unifiedQueue.completeProcessing();
+      }
+      return;
+    }
+    
+    const segment = config.segments[finalSegmentIndex];
+    
+    // Record win in database (based on server calculation)
+    this.db.recordWheelWin(
+      spinData.username,
+      spinData.nickname,
+      segment.text,
+      finalSegmentIndex,
+      spinData.giftName,
+      wheelId
+    );
+    
+    // Award XP if segment has xpReward configured
+    if (segment.xpReward && segment.xpReward > 0 && !segment.isNiete) {
+      try {
+        const viewerLeaderboard = this.api.pluginLoader?.loadedPlugins?.get('viewer-leaderboard');
+        if (viewerLeaderboard?.instance?.db) {
+          viewerLeaderboard.instance.db.addXP(
+            spinData.username, 
+            segment.xpReward, 
+            'wheel_prize', 
+            { prize: segment.text, spinId, wheelId, wheelName: config.name, timeout: true }
+          );
+          this.logger.info(`🎡 Awarded ${segment.xpReward} XP to ${spinData.nickname} from wheel prize (${config.name}) [timeout]`);
+        }
+      } catch (error) {
+        this.logger.error(`Error awarding XP during force complete: ${error.message}`);
+      }
+    }
+    
+    // Update spin status
+    spinData.status = 'timeout';
+    spinData.result = segment.text;
+    spinData.segmentIndex = finalSegmentIndex;
+    
+    // Remove from active spins
+    this.activeSpins.delete(spinId);
+    
+    // Clear spinning state
+    this.isSpinning = false;
+    this.currentSpin = null;
+    
+    // Emit timeout event to overlay
+    this.io.emit('wheel:spin-timeout', {
+      spinId,
+      username: spinData.username,
+      nickname: spinData.nickname,
+      prize: segment.text,
+      prizeColor: segment.color,
+      segmentIndex: finalSegmentIndex,
+      isNiete: segment.isNiete || false,
+      wheelId,
+      wheelName: config.name,
+      timestamp: Date.now()
+    });
+    
+    this.logger.info(`⚠️ Wheel spin timeout handled: ${spinData.nickname} -> "${segment.text}" (spinId: ${spinId}, wheelId: ${wheelId})`);
+    
+    // Notify unified queue that spin is complete (immediate, no delay for timeout)
+    if (this.unifiedQueue) {
+      this.unifiedQueue.completeProcessing();
+    } else {
+      // Legacy: process next from local queue
+      this.processNextSpin();
+    }
+  }
+
+  /**
    * Process next spin in queue (legacy - deprecated when using unified queue)
    */
   async processNextSpin() {
@@ -921,6 +1055,13 @@ class WheelGame {
 
     if (oldSpins.length > 0) {
       this.logger.info(`🧹 Cleaned up ${oldSpins.length} stuck wheel spins`);
+      
+      // Clear safety timeout if cleaning up stuck spins
+      if (this.spinSafetyTimeout) {
+        clearTimeout(this.spinSafetyTimeout);
+        this.spinSafetyTimeout = null;
+        this.logger.debug(`Cleared spin safety timeout during cleanup`);
+      }
       
       // Reset spinning state if current spin is stuck
       if (this.currentSpin && oldSpins.includes(this.currentSpin.spinId)) {
@@ -1141,6 +1282,13 @@ class WheelGame {
    */
   destroy() {
     this.stopCleanupTimer();
+    
+    // Clear safety timeout
+    if (this.spinSafetyTimeout) {
+      clearTimeout(this.spinSafetyTimeout);
+      this.spinSafetyTimeout = null;
+    }
+    
     this.activeSpins.clear();
     this.spinQueue = [];
     this.isSpinning = false;
