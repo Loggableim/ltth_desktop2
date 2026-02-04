@@ -61,6 +61,23 @@ type GitHubBlob struct {
 	Size     int    `json:"size"`
 }
 
+// GitHub Release API structures
+type GitHubRelease struct {
+	TagName     string                `json:"tag_name"`
+	Name        string                `json:"name"`
+	ZipballURL  string                `json:"zipball_url"`
+	TarballURL  string                `json:"tarball_url"`
+	Assets      []GitHubReleaseAsset  `json:"assets"`
+	PublishedAt string                `json:"published_at"`
+}
+
+type GitHubReleaseAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+	Size               int64  `json:"size"`
+	ContentType        string `json:"content_type"`
+}
+
 type StandaloneLauncher struct {
 	baseDir    string
 	progress   int
@@ -373,8 +390,329 @@ func (sl *StandaloneLauncher) downloadFile(item GitHubTreeItem) ([]byte, error) 
 	return data, nil
 }
 
+// Get latest release from GitHub
+func (sl *StandaloneLauncher) getLatestRelease() (*GitHubRelease, error) {
+	sl.updateProgress(5, "Hole neueste Release-Version...")
+	
+	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest",
+		githubAPIURL, githubOwner, githubRepo)
+	
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode == http.StatusNotFound {
+		// No release found - this is expected for repos without releases
+		return nil, nil
+	}
+	
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+	
+	var release GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, err
+	}
+	
+	sl.logger.Printf("Latest release: %s (%s)\n", release.Name, release.TagName)
+	return &release, nil
+}
+
+// Check if path is relevant for installation (whitelist/blacklist)
+func (sl *StandaloneLauncher) isRelevantPath(path string) bool {
+	// Whitelist: Only these directories and files
+	whitelistPrefixes := []string{
+		"app/",
+		"plugins/",
+		"game-engine/",
+		"package.json",
+		"package-lock.json",
+	}
+	
+	// Blacklist: Never include these
+	blacklistPrefixes := []string{
+		// Executables
+		"launcher.exe",
+		"launcher-console.exe",
+		"dev_launcher.exe",
+		"main.js", // Root main.js is Electron entry point
+		
+		// Runtime directories
+		"runtime/",
+		"logs/",
+		"data/",
+		"node_modules/",
+		
+		// Version control and CI
+		".git",
+		".github/",
+		".gitignore",
+		
+		// Build and development
+		"build-src/",
+		"standalonelauncher/",
+		
+		// Documentation
+		"infos/",
+		"docs/",
+		"docs_archive/",
+		"migration-guides/",
+		"screenshots/",
+		"images/",
+		"README.md",
+		"LICENSE",
+		"CHANGELOG",
+		".md",
+		
+		// Extra tools
+		"animazingpal/",
+		"sidekick/",
+		"simplysign/",
+		"scripts/",
+		
+		// Test files
+		"app/test/",
+		"playwright.config.js",
+		
+		// App-specific unnecessary files
+		"app/CHANGELOG.md",
+		"app/README.md",
+		"app/LICENSE",
+		"app/docs/",
+		"app/wiki/",
+	}
+	
+	// Check blacklist first
+	for _, prefix := range blacklistPrefixes {
+		if strings.HasPrefix(path, prefix) || strings.HasSuffix(path, prefix) {
+			return false
+		}
+	}
+	
+	// Check whitelist
+	for _, prefix := range whitelistPrefixes {
+		if strings.HasPrefix(path, prefix) || path == prefix {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// Download ZIP file with progress tracking
+func (sl *StandaloneLauncher) downloadZipWithProgress(url, destPath string) error {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	
+	client := &http.Client{Timeout: 300 * time.Second} // 5 minutes for large files
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+	
+	// Create destination file
+	out, err := os.Create(destPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	
+	// Download with progress tracking
+	totalSize := resp.ContentLength
+	downloaded := int64(0)
+	buffer := make([]byte, 32*1024) // 32KB buffer
+	
+	for {
+		n, err := resp.Body.Read(buffer)
+		if n > 0 {
+			_, writeErr := out.Write(buffer[:n])
+			if writeErr != nil {
+				return writeErr
+			}
+			downloaded += int64(n)
+			
+			// Update progress (15% to 60% of total progress)
+			if totalSize > 0 {
+				downloadProgress := int(float64(downloaded) / float64(totalSize) * 45)
+				sl.updateProgress(15+downloadProgress, 
+					fmt.Sprintf("Lade Release-ZIP herunter... %.1f / %.1f MB",
+						float64(downloaded)/(1024*1024),
+						float64(totalSize)/(1024*1024)))
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
+
+// Extract release ZIP file with path filtering
+func (sl *StandaloneLauncher) extractReleaseZip(zipPath string) error {
+	sl.updateProgress(60, "Entpacke Release-ZIP...")
+	
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return fmt.Errorf("failed to open ZIP: %v", err)
+	}
+	defer r.Close()
+	
+	// Find root directory in ZIP (GitHub releases have a root folder like owner-repo-commitsha)
+	var rootPrefix string
+	if len(r.File) > 0 {
+		firstPath := r.File[0].Name
+		if idx := strings.Index(firstPath, "/"); idx > 0 {
+			rootPrefix = firstPath[:idx+1]
+		}
+	}
+	
+	sl.logger.Printf("ZIP root prefix: %s\n", rootPrefix)
+	
+	extracted := 0
+	total := len(r.File)
+	
+	for i, f := range r.File {
+		// Strip root prefix
+		relativePath := f.Name
+		if rootPrefix != "" && strings.HasPrefix(relativePath, rootPrefix) {
+			relativePath = strings.TrimPrefix(relativePath, rootPrefix)
+		}
+		
+		// Skip if not relevant
+		if relativePath == "" || !sl.isRelevantPath(relativePath) {
+			continue
+		}
+		
+		// Update progress (60% to 70%)
+		extractProgress := 60 + int(float64(i+1)/float64(total)*10)
+		sl.updateProgress(extractProgress, fmt.Sprintf("Entpacke Dateien... %d/%d", extracted+1, total))
+		
+		fpath := filepath.Join(sl.baseDir, relativePath)
+		
+		// Create directory
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(fpath, 0755)
+			continue
+		}
+		
+		// Create parent directories
+		if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
+			sl.logger.Printf("Failed to create directory for %s: %v\n", relativePath, err)
+			continue
+		}
+		
+		// Extract file
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			sl.logger.Printf("Failed to create file %s: %v\n", relativePath, err)
+			continue
+		}
+		
+		rc, err := f.Open()
+		if err != nil {
+			outFile.Close()
+			sl.logger.Printf("Failed to open file in ZIP %s: %v\n", relativePath, err)
+			continue
+		}
+		
+		_, err = io.Copy(outFile, rc)
+		outFile.Close()
+		rc.Close()
+		
+		if err != nil {
+			sl.logger.Printf("Failed to extract %s: %v\n", relativePath, err)
+			continue
+		}
+		
+		extracted++
+	}
+	
+	sl.logger.Printf("Extracted %d files from ZIP\n", extracted)
+	
+	if extracted == 0 {
+		return fmt.Errorf("no files extracted from ZIP")
+	}
+	
+	sl.updateProgress(70, "Extraktion abgeschlossen!")
+	return nil
+}
+
+// Download repository from GitHub Release
+func (sl *StandaloneLauncher) downloadFromRelease() error {
+	// Get latest release
+	release, err := sl.getLatestRelease()
+	if err != nil {
+		return fmt.Errorf("Konnte Release-Info nicht abrufen: %v", err)
+	}
+	
+	if release == nil {
+		// No release found - return nil to trigger fallback
+		return nil
+	}
+	
+	sl.updateProgress(10, "Bereite Download vor...")
+	
+	// Use zipball_url for download
+	downloadURL := release.ZipballURL
+	sl.logger.Printf("Downloading from: %s\n", downloadURL)
+	
+	// Create temp directory
+	tempDir := filepath.Join(sl.baseDir, "temp")
+	os.MkdirAll(tempDir, 0755)
+	defer os.RemoveAll(tempDir)
+	
+	// Download ZIP file
+	zipPath := filepath.Join(tempDir, "release.zip")
+	if err := sl.downloadZipWithProgress(downloadURL, zipPath); err != nil {
+		return fmt.Errorf("Download fehlgeschlagen: %v", err)
+	}
+	
+	// Extract ZIP file
+	if err := sl.extractReleaseZip(zipPath); err != nil {
+		return fmt.Errorf("Extraktion fehlgeschlagen: %v", err)
+	}
+	
+	return nil
+}
+
 // Download all files from GitHub
 func (sl *StandaloneLauncher) downloadRepository() error {
+	// Try release-based download first
+	sl.logger.Println("Trying release-based download...")
+	err := sl.downloadFromRelease()
+	
+	if err == nil {
+		// Success with release download
+		sl.logger.Println("Release-based download successful!")
+		return nil
+	}
+	
+	// Release download failed or no release available - fallback to tree/blob method
+	sl.logger.Printf("Release download unavailable, falling back to tree/blob method: %v\n", err)
+	sl.updateProgress(5, "⚠️ Kein Release gefunden, verwende Fallback-Methode...")
+	
 	// Get latest commit
 	commitSHA, err := sl.getLatestCommitSHA()
 	if err != nil {
@@ -441,33 +779,80 @@ func (sl *StandaloneLauncher) downloadRepository() error {
 	return nil
 }
 
+// Check Node.js version (minimum v20 LTS)
+func (sl *StandaloneLauncher) checkNodeJSVersion(nodePath string) (bool, string, error) {
+	cmd := exec.Command(nodePath, "--version")
+	output, err := cmd.Output()
+	if err != nil {
+		return false, "", err
+	}
+	
+	version := strings.TrimSpace(string(output))
+	sl.logger.Printf("Node.js version: %s\n", version)
+	
+	// Parse version (format: v20.18.1)
+	if !strings.HasPrefix(version, "v") {
+		return false, version, fmt.Errorf("invalid version format: %s", version)
+	}
+	
+	// Extract major version
+	versionNum := strings.TrimPrefix(version, "v")
+	parts := strings.Split(versionNum, ".")
+	if len(parts) < 1 {
+		return false, version, fmt.Errorf("invalid version format: %s", version)
+	}
+	
+	major := 0
+	fmt.Sscanf(parts[0], "%d", &major)
+	
+	// Check if version is at least v20
+	if major >= 20 {
+		return true, version, nil
+	}
+	
+	return false, version, fmt.Errorf("Node.js version too old (need v20+, found %s)", version)
+}
+
 // Check if Node.js is installed (portable or global)
 func (sl *StandaloneLauncher) checkNodeJS() (string, error) {
 	sl.updateProgress(72, "Prüfe Node.js Installation...")
 	
 	// Check portable installation first
-	portableNodePath := filepath.Join(sl.baseDir, "runtime", "node", "node.exe")
+	portableNodePath := filepath.Join(sl.baseDir, "runtime", "node", "node")
 	if runtime.GOOS == "windows" {
-		if _, err := os.Stat(portableNodePath); err == nil {
-			sl.logger.Printf("Found portable Node.js at: %s\n", portableNodePath)
+		portableNodePath = filepath.Join(sl.baseDir, "runtime", "node", "node.exe")
+	}
+	
+	if _, err := os.Stat(portableNodePath); err == nil {
+		// Check version
+		valid, version, err := sl.checkNodeJSVersion(portableNodePath)
+		if err == nil && valid {
+			sl.logger.Printf("Found portable Node.js %s at: %s\n", version, portableNodePath)
 			return portableNodePath, nil
 		}
+		sl.logger.Printf("Portable Node.js found but version check failed: %v\n", err)
 	}
 	
 	// Check global installation
 	nodePath, err := exec.LookPath("node")
 	if err == nil {
-		sl.logger.Printf("Found global Node.js at: %s\n", nodePath)
-		return nodePath, nil
+		// Check version
+		valid, version, err := sl.checkNodeJSVersion(nodePath)
+		if err == nil && valid {
+			sl.logger.Printf("Found global Node.js %s at: %s\n", version, nodePath)
+			return nodePath, nil
+		}
+		sl.logger.Printf("Global Node.js found but version check failed: %v\n", err)
 	}
 	
-	// Node.js not found - install portable version
+	// Node.js not found or version too old - install portable version
+	sl.updateProgress(73, "Node.js v20 LTS wird installiert...")
 	return sl.installNodePortable()
 }
 
 // Install portable Node.js
 func (sl *StandaloneLauncher) installNodePortable() (string, error) {
-	sl.updateProgress(73, "Installiere portable Node.js...")
+	sl.updateProgress(73, "Node.js nicht gefunden, installiere portable Version...")
 	
 	var downloadURL string
 	var nodeExe string
@@ -494,7 +879,9 @@ func (sl *StandaloneLauncher) installNodePortable() (string, error) {
 		return "", fmt.Errorf("Konnte Node.js-Verzeichnis nicht erstellen: %v", err)
 	}
 	
-	// Download Node.js
+	// Download Node.js with progress tracking
+	sl.updateProgress(74, "Lade Node.js herunter...")
+	
 	resp, err := http.Get(downloadURL)
 	if err != nil {
 		return "", fmt.Errorf("Node.js Download fehlgeschlagen: %v", err)
@@ -505,19 +892,45 @@ func (sl *StandaloneLauncher) installNodePortable() (string, error) {
 		return "", fmt.Errorf("Node.js Download fehlgeschlagen: Status %d", resp.StatusCode)
 	}
 	
-	// Save to temp file
+	// Save to temp file with progress
 	tempFile := filepath.Join(sl.baseDir, "runtime", "node-temp.zip")
 	out, err := os.Create(tempFile)
 	if err != nil {
 		return "", fmt.Errorf("Konnte temporäre Datei nicht erstellen: %v", err)
 	}
 	
-	sl.updateProgress(75, "Lade Node.js herunter...")
-	_, err = io.Copy(out, resp.Body)
-	out.Close()
-	if err != nil {
-		return "", fmt.Errorf("Node.js Download fehlgeschlagen: %v", err)
+	totalSize := resp.ContentLength
+	downloaded := int64(0)
+	buffer := make([]byte, 32*1024)
+	
+	for {
+		n, err := resp.Body.Read(buffer)
+		if n > 0 {
+			_, writeErr := out.Write(buffer[:n])
+			if writeErr != nil {
+				out.Close()
+				return "", writeErr
+			}
+			downloaded += int64(n)
+			
+			// Update progress (74% to 77%)
+			if totalSize > 0 {
+				downloadProgress := int(float64(downloaded) / float64(totalSize) * 3)
+				sl.updateProgress(74+downloadProgress,
+					fmt.Sprintf("Lade Node.js herunter... %.1f / %.1f MB",
+						float64(downloaded)/(1024*1024),
+						float64(totalSize)/(1024*1024)))
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			out.Close()
+			return "", err
+		}
 	}
+	out.Close()
 	
 	// Extract zip file
 	sl.updateProgress(78, "Entpacke Node.js...")
@@ -557,7 +970,14 @@ func (sl *StandaloneLauncher) installNodePortable() (string, error) {
 		return "", fmt.Errorf("Node.js executable nicht gefunden nach Installation")
 	}
 	
-	sl.logger.Printf("Node.js successfully installed at: %s\n", nodePath)
+	// Verify version
+	valid, version, err := sl.checkNodeJSVersion(nodePath)
+	if err != nil || !valid {
+		return "", fmt.Errorf("Node.js Version-Check fehlgeschlagen: %v", err)
+	}
+	
+	sl.logger.Printf("Node.js %s successfully installed at: %s\n", version, nodePath)
+	sl.updateProgress(79, fmt.Sprintf("Node.js %s erfolgreich installiert!", version))
 	return nodePath, nil
 }
 

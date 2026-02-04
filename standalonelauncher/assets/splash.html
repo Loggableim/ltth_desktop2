@@ -20,6 +20,22 @@
             justify-content: center;
             min-height: 100vh;
             overflow: hidden;
+            transition: background 0.3s ease;
+        }
+
+        body.theme-night {
+            background: radial-gradient(circle at 20% 20%, rgba(102, 126, 234, 0.35), rgba(58, 37, 95, 0.9)), #0f172a;
+            color: #e5e7eb;
+        }
+
+        body.theme-day {
+            background: linear-gradient(135deg, #667eea 0%, #f9fafb 80%);
+            color: #1f2937;
+        }
+
+        body.theme-highcontrast {
+            background: #000;
+            color: #fff;
         }
 
         .container {
@@ -30,6 +46,45 @@
             width: 90%;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
             text-align: center;
+            position: relative;
+        }
+
+        .theme-night .container {
+            background: rgba(15, 23, 42, 0.95);
+            color: #e5e7eb;
+        }
+
+        .theme-day .container {
+            background: rgba(255, 255, 255, 0.98);
+            color: #1f2937;
+        }
+
+        .theme-highcontrast .container {
+            background: #000;
+            border: 3px solid #fff;
+            color: #fff;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(102, 126, 234, 0.2);
+            border: 2px solid rgba(102, 126, 234, 0.5);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 20px;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(102, 126, 234, 0.3);
+            transform: scale(1.1);
         }
 
         .logo-section {
@@ -41,8 +96,10 @@
         }
 
         .logo {
-            font-size: 64px;
+            width: 80px;
+            height: 80px;
             animation: float 3s ease-in-out infinite;
+            border-radius: 10px;
         }
 
         @keyframes float {
@@ -60,10 +117,24 @@
             font-weight: 700;
         }
 
+        .theme-highcontrast .app-title h1 {
+            background: none;
+            -webkit-text-fill-color: #fff;
+            color: #fff;
+        }
+
         .app-title p {
             font-size: 16px;
             color: #666;
             font-weight: 500;
+        }
+
+        .theme-night .app-title p {
+            color: #9ca3af;
+        }
+
+        .theme-highcontrast .app-title p {
+            color: #fff;
         }
 
         .status-panel {
@@ -71,6 +142,19 @@
             border-radius: 10px;
             padding: 25px;
             margin-bottom: 30px;
+        }
+
+        .theme-night .status-panel {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .theme-day .status-panel {
+            background: rgba(102, 126, 234, 0.08);
+        }
+
+        .theme-highcontrast .status-panel {
+            background: #111;
+            border: 2px solid #fff;
         }
 
         .status-title {
@@ -82,12 +166,28 @@
             border-bottom: 2px solid #667eea;
         }
 
+        .theme-night .status-title {
+            color: #e5e7eb;
+        }
+
+        .theme-highcontrast .status-title {
+            color: #fff;
+        }
+
         .status {
             font-size: 16px;
             margin-bottom: 20px;
             min-height: 24px;
             font-weight: 500;
             color: #555;
+        }
+
+        .theme-night .status {
+            color: #d1d5db;
+        }
+
+        .theme-highcontrast .status {
+            color: #fff;
         }
 
         .progress-bar-container {
@@ -97,6 +197,15 @@
             overflow: hidden;
             box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
             margin-bottom: 10px;
+        }
+
+        .theme-night .progress-bar-container {
+            background: #374151;
+        }
+
+        .theme-highcontrast .progress-bar-container {
+            background: #222;
+            border: 2px solid #fff;
         }
 
         .progress-bar {
@@ -113,6 +222,11 @@
             box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
         }
 
+        .theme-highcontrast .progress-bar {
+            background: #fff;
+            color: #000;
+        }
+
         .spinner {
             border: 4px solid rgba(102, 126, 234, 0.2);
             border-top: 4px solid #667eea;
@@ -121,6 +235,11 @@
             height: 50px;
             animation: spin 1s linear infinite;
             margin: 20px auto;
+        }
+
+        .theme-highcontrast .spinner {
+            border: 4px solid #333;
+            border-top: 4px solid #fff;
         }
 
         @keyframes spin {
@@ -139,6 +258,17 @@
             text-align: left;
         }
 
+        .theme-night .error {
+            background: rgba(255, 152, 0, 0.2);
+            color: #fbbf24;
+        }
+
+        .theme-highcontrast .error {
+            background: #333;
+            border-left: 4px solid #fff;
+            color: #fff;
+        }
+
         .error.show {
             display: block;
             animation: shake 0.5s;
@@ -146,6 +276,10 @@
 
         .error strong {
             color: #f44336;
+        }
+
+        .theme-highcontrast .error strong {
+            color: #fff;
         }
 
         @keyframes shake {
@@ -161,21 +295,55 @@
             color: #666;
         }
 
+        .theme-night .footer {
+            color: #9ca3af;
+        }
+
+        .theme-highcontrast .footer {
+            color: #fff;
+        }
+
         .footer a {
             color: #667eea;
             text-decoration: none;
             font-weight: 600;
         }
 
+        .theme-highcontrast .footer a {
+            color: #fff;
+            text-decoration: underline;
+        }
+
         .footer a:hover {
             text-decoration: underline;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            .app-title h1 {
+                font-size: 24px;
+            }
+
+            .logo {
+                width: 60px;
+                height: 60px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="theme-toggle" id="theme-toggle" title="Theme wechseln">
+            🌙
+        </div>
+
         <div class="logo-section">
-            <div class="logo">🐕</div>
+            <img class="logo" id="logo" 
+                 src="data:image/png;base64,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" 
+                 alt="LTTH Logo">
             <div class="app-title">
                 <h1>{{.Title}}</h1>
                 <p>Version {{.Version}}</p>
@@ -201,11 +369,55 @@
         
         <div class="footer">
             PupCid's Little TikTool Helper<br>
-            Powered by Standalone Launcher • <a href="https://ltth.app" target="_blank" rel="noopener noreferrer">ltth.app</a>
+            Powered by Standalone Launcher v2.0 • <a href="https://ltth.app" target="_blank" rel="noopener noreferrer">ltth.app</a>
         </div>
     </div>
 
     <script>
+        // Theme management
+        const themes = ['theme-night', 'theme-day', 'theme-highcontrast'];
+        const themeIcons = ['🌙', '☀️', '⚫'];
+        let currentThemeIndex = 0;
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('ltth-theme');
+        if (savedTheme) {
+            currentThemeIndex = themes.indexOf(savedTheme);
+            if (currentThemeIndex === -1) currentThemeIndex = 0;
+        }
+
+        // Apply theme
+        function applyTheme() {
+            document.body.className = themes[currentThemeIndex];
+            document.getElementById('theme-toggle').textContent = themeIcons[currentThemeIndex];
+            
+            // Try to update logo based on theme if files are available
+            const logoEl = document.getElementById('logo');
+            const themeLogos = {
+                'theme-night': './app/public/ltthmini_nightmode.png',
+                'theme-day': './app/public/ltthmini_daymode.png',
+                'theme-highcontrast': './app/public/ltthmini_highcontrast.png'
+            };
+            
+            // Try to load theme-specific logo (will fail until files are downloaded)
+            const img = new Image();
+            img.onload = function() {
+                logoEl.src = themeLogos[themes[currentThemeIndex]];
+            };
+            img.src = themeLogos[themes[currentThemeIndex]];
+        }
+
+        // Theme toggle button
+        document.getElementById('theme-toggle').addEventListener('click', function() {
+            currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+            applyTheme();
+            localStorage.setItem('ltth-theme', themes[currentThemeIndex]);
+        });
+
+        // Apply initial theme
+        applyTheme();
+
+        // Progress tracking via SSE
         const eventSource = new EventSource('/events');
         const statusEl = document.getElementById('status');
         const progressEl = document.getElementById('progress');
@@ -240,6 +452,11 @@
                         setTimeout(() => {
                             statusEl.textContent = 'Fertig! Browser öffnet sich...';
                         }, 1000);
+                    }
+
+                    // Update logo after download completes (at 70%)
+                    if (data.progress >= 70) {
+                        applyTheme(); // Try to load real logos
                     }
                 }
             } catch (e) {
