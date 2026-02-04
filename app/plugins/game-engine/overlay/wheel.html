@@ -1582,6 +1582,50 @@
       }, 5000);
     });
 
+    socket.on('wheel:spin-timeout', (data) => {
+      console.warn('⚠️ Spin timeout (overlay did not respond)', data);
+      
+      // Validate required data
+      if (!data || !data.spinId) {
+        console.error('wheel:spin-timeout received invalid data:', data);
+        return;
+      }
+      
+      // Only handle timeout if this spin is currently active
+      if (isSpinning && currentSpinId === data.spinId) {
+        console.log(`Resetting stuck spin ${data.spinId}`);
+        
+        // Stop spinning immediately
+        isSpinning = false;
+        currentSpinId = null;
+        
+        // Reset wheel visual state
+        wheelWrapper.classList.remove('spinning');
+        wheel.style.transition = 'none';
+        wheel.style.transform = 'rotate(0deg)';
+        
+        // Force reflow
+        void wheel.offsetHeight;
+        
+        // Re-enable transition
+        wheel.style.transition = '';
+        
+        // Hide any visible announcements
+        winAnnouncement.classList.remove('visible');
+        infoScreen.classList.remove('visible');
+        
+        // Show idle message
+        idleMessage.classList.add('visible');
+        updateIdleMessage();
+        
+        console.log('Wheel state reset after timeout');
+      }
+      
+      // Remove from queue if present
+      queue = queue.filter(item => item.spinId !== data.spinId);
+      updateQueueDisplay();
+    });
+
     // Initialize
     window.addEventListener('load', () => {
       drawWheel();
