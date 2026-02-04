@@ -5064,6 +5064,8 @@
             <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">Dauer (ms):</label>
             <input type="number" class="wheel-segment-shock-duration" data-index="${index}" value="${segment.shockDuration || 1000}" min="300" max="30000" step="100" style="width: 100%;" placeholder="1000" title="Shock-Dauer in Millisekunden (300-30000)" aria-label="Shock-Dauer für Segment ${index + 1}" ${!segment.isShock ? 'disabled' : ''}>
           </div>
+          <input type="hidden" class="wheel-segment-shock-type" data-index="${index}" value="${segment.shockType || 'shock'}">
+          <input type="hidden" class="wheel-segment-shock-devices" data-index="${index}" value="${JSON.stringify(segment.shockDevices || []).replace(/"/g, '&quot;')}">
           <div style="width: 80px; height: 40px; border-radius: 5px; background: ${segment.color || '#4CAF50'}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; text-shadow: 0 0 3px rgba(0,0,0,0.5); font-size: 10px; text-align: center; padding: 2px; overflow: hidden; ${segment.isNiete ? 'opacity: 0.6;' : ''}">
             ${segment.isShock ? '⚡' : (segment.isNiete ? '😢' : (segment.xpReward > 0 ? `⭐${segment.xpReward}` : ''))}${segment.isShock ? (segment.shockIntensity || 50) : (segment.xpReward > 0 ? '' : (segment.text || 'Preis').substring(0, 8))}
           </div>
@@ -5197,7 +5199,9 @@
         prizeAudio: segmentToCopy.prizeAudio || 1,
         isShock: segmentToCopy.isShock || false,
         shockIntensity: segmentToCopy.shockIntensity || 50,
-        shockDuration: segmentToCopy.shockDuration || 1000
+        shockDuration: segmentToCopy.shockDuration || 1000,
+        shockType: segmentToCopy.shockType || 'shock',
+        shockDevices: segmentToCopy.shockDevices || []
       };
       
       // Insert after the current segment
@@ -5293,7 +5297,31 @@
           const isShock = document.querySelector(`.wheel-segment-shock[data-index="${index}"]`)?.checked || false;
           const shockIntensity = parseInt(document.querySelector(`.wheel-segment-shock-intensity[data-index="${index}"]`)?.value) || 50;
           const shockDuration = parseInt(document.querySelector(`.wheel-segment-shock-duration[data-index="${index}"]`)?.value) || 1000;
-          segments.push({ text, color, weight, isNiete, xpReward, prizeAudio, isShock, shockIntensity, shockDuration });
+          
+          // Read shockType and shockDevices from hidden inputs, or fall back to current segment values
+          let shockType = 'shock';
+          let shockDevices = [];
+          
+          const shockTypeInput = document.querySelector(`.wheel-segment-shock-type[data-index="${index}"]`);
+          const shockDevicesInput = document.querySelector(`.wheel-segment-shock-devices[data-index="${index}"]`);
+          
+          if (shockTypeInput) {
+            shockType = shockTypeInput.value || 'shock';
+          } else if (wheelConfig.segments && wheelConfig.segments[index]) {
+            shockType = wheelConfig.segments[index].shockType || 'shock';
+          }
+          
+          if (shockDevicesInput) {
+            try {
+              shockDevices = JSON.parse(shockDevicesInput.value) || [];
+            } catch (e) {
+              shockDevices = [];
+            }
+          } else if (wheelConfig.segments && wheelConfig.segments[index]) {
+            shockDevices = wheelConfig.segments[index].shockDevices || [];
+          }
+          
+          segments.push({ text, color, weight, isNiete, xpReward, prizeAudio, isShock, shockIntensity, shockDuration, shockType, shockDevices });
         });
         
         // Collect settings
