@@ -5011,12 +5011,24 @@
       
       if (!wheelConfig || !wheelConfig.segments) return;
       
+      // Helper function for HTML escaping
+      const escapeHtml = (str) => {
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+      };
+      
       wheelConfig.segments.forEach((segment, index) => {
         const segmentDiv = document.createElement('div');
         segmentDiv.className = 'wheel-segment-item';
         segmentDiv.draggable = true;
         segmentDiv.dataset.index = index;
         segmentDiv.style.cssText = 'display: flex; gap: 10px; align-items: center; margin-bottom: 10px; padding: 10px; background: #3a3a4e; border-radius: 5px; cursor: move; transition: all 0.2s; flex-wrap: wrap;';
+        
+        // Properly escape JSON for HTML attribute
+        const escapedShockDevices = escapeHtml(JSON.stringify(segment.shockDevices || []));
+        const escapedShockType = escapeHtml(segment.shockType || 'shock');
+        
         segmentDiv.innerHTML = `
           <div style="width: 30px; text-align: center; color: #888; cursor: grab; user-select: none;" class="drag-handle" title="Ziehen zum Verschieben">
             ⋮⋮
@@ -5064,8 +5076,8 @@
             <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">Dauer (ms):</label>
             <input type="number" class="wheel-segment-shock-duration" data-index="${index}" value="${segment.shockDuration || 1000}" min="300" max="30000" step="100" style="width: 100%;" placeholder="1000" title="Shock-Dauer in Millisekunden (300-30000)" aria-label="Shock-Dauer für Segment ${index + 1}" ${!segment.isShock ? 'disabled' : ''}>
           </div>
-          <input type="hidden" class="wheel-segment-shock-type" data-index="${index}" value="${segment.shockType || 'shock'}">
-          <input type="hidden" class="wheel-segment-shock-devices" data-index="${index}" value="${JSON.stringify(segment.shockDevices || []).replace(/"/g, '&quot;')}">
+          <input type="hidden" class="wheel-segment-shock-type" data-index="${index}" value="${escapedShockType}">
+          <input type="hidden" class="wheel-segment-shock-devices" data-index="${index}" value="${escapedShockDevices}">
           <div style="width: 80px; height: 40px; border-radius: 5px; background: ${segment.color || '#4CAF50'}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; text-shadow: 0 0 3px rgba(0,0,0,0.5); font-size: 10px; text-align: center; padding: 2px; overflow: hidden; ${segment.isNiete ? 'opacity: 0.6;' : ''}">
             ${segment.isShock ? '⚡' : (segment.isNiete ? '😢' : (segment.xpReward > 0 ? `⭐${segment.xpReward}` : ''))}${segment.isShock ? (segment.shockIntensity || 50) : (segment.xpReward > 0 ? '' : (segment.text || 'Preis').substring(0, 8))}
           </div>
@@ -5313,7 +5325,7 @@
           
           if (shockDevicesInput) {
             try {
-              shockDevices = JSON.parse(shockDevicesInput.value) || [];
+              shockDevices = JSON.parse(shockDevicesInput.value);
             } catch (e) {
               shockDevices = [];
             }
