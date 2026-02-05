@@ -3,7 +3,6 @@ package main
 import (
 	"archive/zip"
 	"embed"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -36,30 +35,6 @@ const (
 	nodeLinuxURL = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz"
 	nodeMacURL   = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-darwin-x64.tar.gz"
 )
-
-// GitHub API response structures
-type GitHubCommit struct {
-	SHA string `json:"sha"`
-}
-
-type GitHubTreeItem struct {
-	Path string `json:"path"`
-	Type string `json:"type"` // "blob" or "tree"
-	SHA  string `json:"sha"`
-	Size int    `json:"size"`
-	URL  string `json:"url"`
-}
-
-type GitHubTree struct {
-	Tree      []GitHubTreeItem `json:"tree"`
-	Truncated bool             `json:"truncated"`
-}
-
-type GitHubBlob struct {
-	Content  string `json:"content"`
-	Encoding string `json:"encoding"` // "base64"
-	Size     int    `json:"size"`
-}
 
 // GitHub Release API structures
 type GitHubRelease struct {
@@ -181,215 +156,6 @@ func (sl *StandaloneLauncher) handleSSE(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// Get latest commit SHA from GitHub
-func (sl *StandaloneLauncher) getLatestCommitSHA() (string, error) {
-	sl.updateProgress(5, "Hole neueste Version von GitHub...")
-	
-	url := fmt.Sprintf("%s/repos/%s/%s/commits/%s",
-		githubAPIURL, githubOwner, githubRepo, githubBranch)
-	
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", err
-	}
-	
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
-	}
-	
-	var commit GitHubCommit
-	if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil {
-		return "", err
-	}
-	
-	sl.logger.Printf("Latest commit SHA: %s\n", commit.SHA)
-	return commit.SHA, nil
-}
-
-// Get repository tree from GitHub
-func (sl *StandaloneLauncher) getRepositoryTree(commitSHA string) (*GitHubTree, error) {
-	sl.updateProgress(10, "Lade Dateiliste...")
-	
-	url := fmt.Sprintf("%s/repos/%s/%s/git/trees/%s?recursive=1",
-		githubAPIURL, githubOwner, githubRepo, commitSHA)
-	
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
-	}
-	
-	var tree GitHubTree
-	if err := json.NewDecoder(resp.Body).Decode(&tree); err != nil {
-		return nil, err
-	}
-	
-	sl.logger.Printf("Repository tree contains %d items\n", len(tree.Tree))
-	return &tree, nil
-}
-
-// Filter relevant files for download
-func (sl *StandaloneLauncher) filterRelevantFiles(items []GitHubTreeItem) []GitHubTreeItem {
-	var filtered []GitHubTreeItem
-	
-	// Whitelist: Only download these directories and files
-	whitelistPrefixes := []string{
-		"app/",
-		"plugins/",
-		"game-engine/",
-		"package.json",
-		"package-lock.json",
-	}
-	
-	// Blacklist: Never download these (including all unnecessary directories)
-	blacklistPrefixes := []string{
-		// Executables
-		"launcher.exe",
-		"launcher-console.exe",
-		"dev_launcher.exe",
-		"main.js", // Root main.js is Electron entry point, not needed for standalone Node.js server
-		
-		// Runtime directories
-		"runtime/",
-		"logs/",
-		"data/",
-		"node_modules/",
-		
-		// Version control and CI
-		".git",
-		".github/",
-		".gitignore",
-		
-		// Build and development
-		"build-src/",
-		"standalonelauncher/",
-		
-		// Documentation and info files
-		"infos/",
-		"docs/",
-		"docs_archive/",
-		"migration-guides/",
-		"screenshots/",
-		"images/",
-		"README.md",
-		"LICENSE",
-		"CHANGELOG",
-		".md", // All markdown files
-		
-		// Extra tools not needed for runtime
-		"animazingpal/",
-		"sidekick/",
-		"simplysign/",
-		"scripts/",
-		
-		// Test files
-		"app/test/",
-		"playwright.config.js",
-		
-		// App-specific unnecessary files
-		"app/CHANGELOG.md",
-		"app/README.md",
-		"app/LICENSE",
-		"app/docs/",
-		"app/wiki/", // User documentation, can be accessed online
-	}
-	
-	for _, item := range items {
-		if item.Type != "blob" {
-			continue
-		}
-		
-		// Check blacklist first
-		blacklisted := false
-		for _, prefix := range blacklistPrefixes {
-			// Check if it starts with the prefix (for directories/files)
-			// or if it ends with the suffix (for file extensions like .md)
-			if strings.HasPrefix(item.Path, prefix) || strings.HasSuffix(item.Path, prefix) {
-				blacklisted = true
-				break
-			}
-		}
-		
-		if blacklisted {
-			continue
-		}
-		
-		// Check whitelist
-		whitelisted := false
-		for _, prefix := range whitelistPrefixes {
-			if strings.HasPrefix(item.Path, prefix) || item.Path == prefix {
-				whitelisted = true
-				break
-			}
-		}
-		
-		if whitelisted {
-			filtered = append(filtered, item)
-		}
-	}
-	
-	sl.logger.Printf("Filtered to %d relevant files\n", len(filtered))
-	return filtered
-}
-
-// Download file from GitHub blob API
-func (sl *StandaloneLauncher) downloadFile(item GitHubTreeItem) ([]byte, error) {
-	req, err := http.NewRequest("GET", item.URL, nil)
-	if err != nil {
-		return nil, err
-	}
-	
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
-	}
-	
-	var blob GitHubBlob
-	if err := json.NewDecoder(resp.Body).Decode(&blob); err != nil {
-		return nil, err
-	}
-	
-	if blob.Encoding != "base64" {
-		return nil, fmt.Errorf("unsupported encoding: %s", blob.Encoding)
-	}
-	
-	data, err := base64.StdEncoding.DecodeString(blob.Content)
-	if err != nil {
-		return nil, err
-	}
-	
-	return data, nil
-}
-
 // Get latest release from GitHub
 func (sl *StandaloneLauncher) getLatestRelease() (*GitHubRelease, error) {
 	sl.updateProgress(5, "Hole neueste Release-Version...")
@@ -495,7 +261,8 @@ func (sl *StandaloneLauncher) isRelevantPath(path string) bool {
 	
 	// Check blacklist first
 	for _, prefix := range blacklistPrefixes {
-		if strings.HasPrefix(path, prefix) || strings.HasSuffix(path, prefix) {
+		// Check prefix match, or suffix match for file extensions (starting with .)
+		if strings.HasPrefix(path, prefix) || (strings.HasPrefix(prefix, ".") && strings.HasSuffix(path, prefix)) {
 			return false
 		}
 	}
@@ -697,86 +464,51 @@ func (sl *StandaloneLauncher) downloadFromRelease() error {
 	return nil
 }
 
+// Download repository directly from branch (no API calls, no rate limit)
+func (sl *StandaloneLauncher) downloadFromBranch() error {
+	sl.updateProgress(5, "Lade Repository-ZIP von Branch herunter...")
+	
+	// Direct download URL (no API call needed!)
+	downloadURL := fmt.Sprintf("https://github.com/%s/%s/archive/refs/heads/%s.zip",
+		githubOwner, githubRepo, githubBranch)
+	
+	sl.logger.Printf("Downloading from branch: %s\n", downloadURL)
+	
+	// Create temp directory
+	tempDir := filepath.Join(sl.baseDir, "temp")
+	os.MkdirAll(tempDir, 0755)
+	defer os.RemoveAll(tempDir)
+	
+	// Download ZIP file
+	zipPath := filepath.Join(tempDir, "branch.zip")
+	if err := sl.downloadZipWithProgress(downloadURL, zipPath); err != nil {
+		return fmt.Errorf("Branch-Download fehlgeschlagen: %v", err)
+	}
+	
+	// Extract ZIP file (reuse existing extractReleaseZip function)
+	if err := sl.extractReleaseZip(zipPath); err != nil {
+		return fmt.Errorf("Extraktion fehlgeschlagen: %v", err)
+	}
+	
+	return nil
+}
+
 // Download all files from GitHub
 func (sl *StandaloneLauncher) downloadRepository() error {
-	// Try release-based download first
+	// Try release-based download first (best option)
 	sl.logger.Println("Trying release-based download...")
 	err := sl.downloadFromRelease()
 	
 	if err == nil {
-		// Success with release download
 		sl.logger.Println("Release-based download successful!")
 		return nil
 	}
 	
-	// Release download failed or no release available - fallback to tree/blob method
-	sl.logger.Printf("Release download unavailable, falling back to tree/blob method: %v\n", err)
-	sl.updateProgress(5, "⚠️ Kein Release gefunden, verwende Fallback-Methode...")
+	// Release not available - use branch download as fallback
+	sl.logger.Printf("Release unavailable, falling back to branch download: %v\n", err)
+	sl.updateProgress(5, "⚠️ Kein Release gefunden, lade direkt von Branch...")
 	
-	// Get latest commit
-	commitSHA, err := sl.getLatestCommitSHA()
-	if err != nil {
-		return fmt.Errorf("Konnte neueste Version nicht abrufen: %v", err)
-	}
-	
-	// Get repository tree
-	tree, err := sl.getRepositoryTree(commitSHA)
-	if err != nil {
-		return fmt.Errorf("Konnte Dateiliste nicht abrufen: %v", err)
-	}
-	
-	// Filter relevant files
-	relevantFiles := sl.filterRelevantFiles(tree.Tree)
-	
-	if len(relevantFiles) == 0 {
-		return fmt.Errorf("Keine Dateien zum Herunterladen gefunden")
-	}
-	
-	sl.updateProgress(15, fmt.Sprintf("Lade %d Dateien herunter...", len(relevantFiles)))
-	
-	// Download each file
-	successCount := 0
-	baseProgress := 15
-	progressRange := 55 // 15% to 70%
-	
-	for i, file := range relevantFiles {
-		// Calculate progress
-		fileProgress := baseProgress + int(float64(i+1)/float64(len(relevantFiles))*float64(progressRange))
-		sl.updateProgress(fileProgress, fmt.Sprintf("Lade %s...", file.Path))
-		
-		// Download file
-		data, err := sl.downloadFile(file)
-		if err != nil {
-			sl.logger.Printf("Failed to download %s: %v\n", file.Path, err)
-			continue
-		}
-		
-		// Write file
-		fullPath := filepath.Join(sl.baseDir, file.Path)
-		
-		// Create parent directories
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-			sl.logger.Printf("Failed to create directory for %s: %v\n", file.Path, err)
-			continue
-		}
-		
-		// Write file
-		if err := os.WriteFile(fullPath, data, 0644); err != nil {
-			sl.logger.Printf("Failed to write %s: %v\n", file.Path, err)
-			continue
-		}
-		
-		successCount++
-	}
-	
-	// Check success rate
-	successRate := float64(successCount) / float64(len(relevantFiles)) * 100
-	if successRate < 90.0 {
-		return fmt.Errorf("Zu viele Download-Fehler (%.1f%% erfolgreich)", successRate)
-	}
-	
-	sl.updateProgress(70, "Download abgeschlossen!")
-	return nil
+	return sl.downloadFromBranch()
 }
 
 // Check Node.js version (minimum v20 LTS)
