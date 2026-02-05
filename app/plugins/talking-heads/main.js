@@ -616,6 +616,71 @@ class TalkingHeadsPlugin {
       }
     });
 
+    // Export sprites as ZIP
+    this.api.registerRoute('get', '/api/talkingheads/export/:userId', async (req, res) => {
+      try {
+        const { userId } = req.params;
+        const sanitizedUserId = this._sanitizeInput(userId, 'userId');
+        
+        if (!sanitizedUserId) {
+          return res.status(400).json({ success: false, error: 'Invalid user ID' });
+        }
+
+        // Get cached avatar
+        const cached = this.cacheManager.getAvatar(sanitizedUserId, this.config.defaultStyle);
+        
+        if (!cached) {
+          return res.status(404).json({ success: false, error: 'Avatar not found in cache' });
+        }
+
+        this._log(`Exporting sprites for user ${cached.username}`, 'info');
+
+        const archiver = require('archiver');
+        const fs = require('fs');
+        
+        // Create archive
+        const archive = archiver('zip', {
+          zlib: { level: 9 } // Maximum compression
+        });
+
+        // Set response headers
+        const safeUsername = cached.username.replace(/[^a-zA-Z0-9]/g, '_');
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${safeUsername}_sprites.zip"`);
+        
+        // Pipe archive to response
+        archive.pipe(res);
+
+        // Add sprite files to archive
+        let filesAdded = 0;
+        for (const [frameName, spritePath] of Object.entries(cached.sprites)) {
+          if (spritePath && fs.existsSync(spritePath)) {
+            archive.file(spritePath, { name: `${frameName}.png` });
+            filesAdded++;
+          }
+        }
+
+        // Add avatar file if exists
+        if (cached.avatarPath && fs.existsSync(cached.avatarPath)) {
+          archive.file(cached.avatarPath, { name: 'avatar_full.png' });
+          filesAdded++;
+        }
+
+        if (filesAdded === 0) {
+          archive.abort();
+          return res.status(404).json({ success: false, error: 'No sprite files found' });
+        }
+
+        // Finalize archive
+        await archive.finalize();
+        
+        this._log(`Exported ${filesAdded} files for ${cached.username}`, 'info');
+      } catch (error) {
+        this.logger.error('TalkingHeads: Sprite export failed', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
     // Test API connection
     this.api.registerRoute('post', '/api/talkingheads/test-api', async (req, res) => {
       try {
@@ -979,6 +1044,103 @@ class TalkingHeadsPlugin {
         });
       } catch (error) {
         this.logger.error('TalkingHeads: User assignment failed', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Manual sprite assignment - assign sprites from one user to another
+    this.api.registerRoute('post', '/api/talkingheads/assign-manual-sprite', async (req, res) => {
+      try {
+        const { userId, username, targetUserId } = req.body;
+
+        if (!userId || !username || !targetUserId) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Missing required fields: userId, username, and targetUserId' 
+          });
+        }
+
+        // Sanitize inputs
+        const sanitizedUserId = this._sanitizeInput(userId, 'userId');
+        const sanitizedUsername = this._sanitizeInput(username, 'username');
+        const sanitizedTargetUserId = this._sanitizeInput(targetUserId, 'userId');
+
+        if (!sanitizedUserId || !sanitizedUsername || !sanitizedTargetUserId) {
+          return res.status(400).json({ success: false, error: 'Invalid input parameters' });
+        }
+
+        // Get target user's avatar from cache
+        const targetAvatar = this.cacheManager.getAvatar(sanitizedTargetUserId, this.config.defaultStyle);
+        
+        if (!targetAvatar) {
+          return res.status(404).json({ 
+            success: false, 
+            error: `No avatar found for target user ID: ${sanitizedTargetUserId}` 
+          });
+        }
+
+        this._log(`Manually assigning sprites from ${targetAvatar.username} to ${sanitizedUsername}`, 'info');
+
+        // Copy sprites to new user in cache
+        this.cacheManager.saveAvatar(
+          sanitizedUserId,
+          sanitizedUsername,
+          targetAvatar.styleKey,
+          targetAvatar.avatarPath,
+          targetAvatar.sprites,
+          targetAvatar.profileImageUrl
+        );
+
+        // Emit socket event to notify UI of new avatar assignment
+        this.io.emit('talkingheads:avatar:generated', {
+          userId: sanitizedUserId,
+          username: sanitizedUsername,
+          styleKey: targetAvatar.styleKey,
+          sprites: this._getRelativeSpritePaths(targetAvatar.sprites),
+          manuallyAssigned: true,
+          sourceUser: targetAvatar.username
+        });
+
+        res.json({ 
+          success: true, 
+          message: `Successfully assigned sprites from ${targetAvatar.username} to ${sanitizedUsername}`,
+          userId: sanitizedUserId,
+          username: sanitizedUsername,
+          styleKey: targetAvatar.styleKey,
+          sourceUserId: sanitizedTargetUserId,
+          sourceUsername: targetAvatar.username
+        });
+      } catch (error) {
+        this.logger.error('TalkingHeads: Manual sprite assignment failed', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Get available sprites for manual assignment
+    this.api.registerRoute('get', '/api/talkingheads/available-sprites', (req, res) => {
+      try {
+        const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+        
+        // Get all cached avatars
+        const cachedAvatars = this.cacheManager.listAvatars(limit);
+        
+        // Format for dropdown/selection
+        const availableSprites = cachedAvatars.map(avatar => ({
+          userId: avatar.userId,
+          username: avatar.username,
+          styleKey: avatar.styleKey,
+          previewUrl: this._getRelativeSpritePaths(avatar.sprites).idle_neutral,
+          createdAt: avatar.createdAt,
+          lastUsed: avatar.lastUsed
+        }));
+
+        res.json({ 
+          success: true, 
+          sprites: availableSprites,
+          total: availableSprites.length
+        });
+      } catch (error) {
+        this.logger.error('TalkingHeads: Failed to list available sprites', error);
         res.status(500).json({ success: false, error: error.message });
       }
     });
