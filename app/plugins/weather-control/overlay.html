@@ -332,6 +332,13 @@
         const DIGITAL_NOISE_FREQUENCY = 0.25;
         const FIXED_TIMESTEP = 1000 / 60;
         const MAX_ACCUMULATED = 200;
+        
+        // Lightning effect constants
+        const LIGHTNING_MAX_SEGMENTS_PER_BOLT = 200; // Hard limit per bolt
+        const LIGHTNING_BRANCH_THRESHOLD = 180; // Stop branching when approaching limit
+        const LIGHTNING_DEBUG_THRESHOLD = 150; // Log when segment count is high
+        const LIGHTNING_MAX_TOTAL_SEGMENTS = 1000; // Overflow protection
+        const LIGHTNING_MAX_CONCURRENT = 3; // Maximum simultaneous lightning bolts
 
         /**
          * SimplexNoise - Lightweight Simplex noise implementation for fog effects
@@ -624,10 +631,10 @@
                     case 'fog':
                         this.speedY = 0.3 + Math.random() * 0.4;
                         this.speedX = 0.5 + Math.random() - 0.5;
-                        this.size = 80 + Math.random() * 200;
-                        this.alpha = 0.15 + Math.random() * 0.2;
+                        this.size = 60 + Math.random() * 140; // Optimized: 60-200px (was 80-280px)
+                        this.alpha = FOG_MAX_ALPHA; // Start at max alpha for immediate visibility
                         this.life = 0;
-                        this.maxLife = 250 + Math.random() * 400;
+                        this.maxLife = 350 + Math.random() * 500; // Extended: 350-850ms (was 250-650ms)
                         this.hue = 200 + Math.random() * 20;
                         break;
                 }
@@ -701,7 +708,15 @@
                         this.x += this.speedX * speed;
                         this.life += speed;
                         const lifePercent = this.life / this.maxLife;
-                        this.alpha = Math.sin(lifePercent * Math.PI) * FOG_MAX_ALPHA;
+                        // Linear fade-in/sustain/fade-out curve for better visibility
+                        // 0-20%: Fade in, 20-80%: Sustain, 80-100%: Fade out
+                        if (lifePercent < 0.2) {
+                            this.alpha = (lifePercent / 0.2) * FOG_MAX_ALPHA;
+                        } else if (lifePercent < 0.8) {
+                            this.alpha = FOG_MAX_ALPHA;
+                        } else {
+                            this.alpha = ((1 - lifePercent) / 0.2) * FOG_MAX_ALPHA;
+                        }
                         if (this.life > this.maxLife) {
                             this.reset({ width: w, height: h });
                         }
@@ -1039,7 +1054,7 @@
             fog: {
                 start(intensity = 0.4, duration = 15000, options = {}) {
                     const isPermanent = options.permanent === true;
-                    const particleCount = Math.floor(30 * intensity);
+                    const particleCount = Math.floor(80 * intensity); // Increased from 30 to 80 particles
                     const newParticles = [];
                     
                     for (let i = 0; i < particleCount; i++) {
@@ -1373,18 +1388,35 @@
         function handleThunder(effect) {
             const now = Date.now();
             
+            // Count active lightning bolts
+            const activeLightningCount = state.activeEffects.filter(e => 
+                e.type === 'thunder' && e.lightningActive
+            ).length;
+            
             if (now >= effect.nextFlash) {
-                generateLightningBolt();
-                effect.flashCount = (effect.flashCount || 0) + 1;
-                effect.nextFlash = now + 400 + Math.random() * 2500;
-                triggerLightning(effect.intensity);
+                // Limit concurrent lightning bolts to prevent performance degradation
+                if (activeLightningCount < LIGHTNING_MAX_CONCURRENT) {
+                    // Check for segment overflow before generating new bolt
+                    if (lightningSegments.length > LIGHTNING_MAX_TOTAL_SEGMENTS) {
+                        log(`⚠️ Lightning segment overflow detected (${lightningSegments.length} segments), clearing`, 'warn');
+                        lightningSegments = [];
+                    }
+                    
+                    generateLightningBolt();
+                    effect.flashCount = (effect.flashCount || 0) + 1;
+                    effect.lightningActive = true; // Mark as active
+                    effect.nextFlash = now + 400 + Math.random() * 2500;
+                    triggerLightning(effect.intensity);
+                }
             }
             
             if (lightningSegments.length > 0 && now < lightningFadeTime) {
                 const fadeProgress = 1 - (lightningFadeTime - now) / 150;
                 drawLightning(fadeProgress);
-            } else if (now >= lightningFadeTime) {
+            } else if (now >= lightningFadeTime && lightningSegments.length > 0) {
+                // Clear segments after fade completes (memory leak fix)
                 lightningSegments = [];
+                effect.lightningActive = false; // Mark as inactive
             }
         }
 
@@ -1398,31 +1430,47 @@
             const endX = startX + (Math.random() - 0.5) * w * 0.3;
             const endY = h;
             
-            lightningSegments = subdivideLightning(startX, startY, endX, endY, 6, 1.0);
+            // Clear old segments before generating new bolt
+            const segmentCount = { count: 0 };
+            lightningSegments = subdivideLightning(startX, startY, endX, endY, 6, 1.0, segmentCount);
             lightningFadeTime = Date.now() + 150;
+            
+            // Debug logging for high segment count monitoring
+            if (segmentCount.count > LIGHTNING_DEBUG_THRESHOLD) {
+                log(`⚡ Lightning generated with ${segmentCount.count} segments (threshold: ${LIGHTNING_DEBUG_THRESHOLD})`, 'debug');
+            }
         }
 
-        // Recursive lightning subdivision
-        function subdivideLightning(x1, y1, x2, y2, generations, brightness) {
+        // Recursive lightning subdivision with segment limits
+        function subdivideLightning(x1, y1, x2, y2, generations, brightness, segmentCount = { count: 0 }) {
             const segments = [];
+            
+            // Hard limit: prevent unbounded segment growth
+            if (segmentCount.count >= LIGHTNING_MAX_SEGMENTS_PER_BOLT) {
+                return segments;
+            }
             
             if (generations === 0) {
                 segments.push({ x1, y1, x2, y2, brightness });
+                segmentCount.count++;
                 return segments;
             }
             
             const midX = (x1 + x2) / 2 + (Math.random() - 0.5) * (x2 - x1) * 0.4;
             const midY = (y1 + y2) / 2 + (Math.random() - 0.5) * 50;
             
-            segments.push(...subdivideLightning(x1, y1, midX, midY, generations - 1, brightness));
-            segments.push(...subdivideLightning(midX, midY, x2, y2, generations - 1, brightness * 0.9));
+            segments.push(...subdivideLightning(x1, y1, midX, midY, generations - 1, brightness, segmentCount));
+            segments.push(...subdivideLightning(midX, midY, x2, y2, generations - 1, brightness * 0.9, segmentCount));
             
-            if (Math.random() < 0.3 && generations > 2) {
+            // Reduced branching probability: decreases at higher recursion depths
+            const branchProbability = 0.3 * Math.pow(0.7, 6 - generations);
+            // Secondary limit: stop branching when approaching hard limit
+            if (Math.random() < branchProbability && generations > 2 && segmentCount.count < LIGHTNING_BRANCH_THRESHOLD) {
                 const branchAngle = (Math.random() - 0.5) * Math.PI / 3;
                 const branchLength = Math.hypot(x2 - midX, y2 - midY) * 0.6;
                 const branchEndX = midX + Math.cos(branchAngle) * branchLength;
                 const branchEndY = midY + Math.sin(branchAngle) * branchLength + branchLength * 0.5;
-                segments.push(...subdivideLightning(midX, midY, branchEndX, branchEndY, generations - 2, brightness * 0.5));
+                segments.push(...subdivideLightning(midX, midY, branchEndX, branchEndY, generations - 2, brightness * 0.5, segmentCount));
             }
             
             return segments;
