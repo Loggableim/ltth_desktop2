@@ -2058,7 +2058,6 @@ class FireworksEngine {
         }
 
         // Combo throttling: prevent extreme lag from rapid combos
-        const now = performance.now();
         const timeSinceLastTrigger = now - this.lastComboTriggerTime;
         const minInterval = CONFIG.comboThrottleMinInterval;
         
