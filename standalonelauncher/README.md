@@ -20,6 +20,54 @@ Der Standalone Launcher ist eine **kleine, eigenständige Anwendung** (~6-8 MB),
 
 ## 🎯 Verwendung
 
+### Installation & Betriebsmodi
+
+Der Launcher arbeitet in **zwei Modi**:
+
+#### 🏠 Standard-Modus (Installer)
+**Dies ist der empfohlene Modus für normale Nutzer.**
+
+- Die `.exe` Datei bleibt alleinstehend (z.B. auf dem Desktop oder in Downloads)
+- Installation erfolgt **automatisch** in einem versteckten Systemverzeichnis:
+  - **Windows:** `%APPDATA%\PupCid\LTTH-Launcher`
+  - **Linux:** `~/.config/PupCid/LTTH-Launcher`
+  - **macOS:** `~/Library/Application Support/PupCid/LTTH-Launcher`
+- ✨ **Clean Desktop** - Keine zusätzlichen Dateien neben der `.exe`
+- Der Launcher prüft beim Start dieses Verzeichnis und aktualisiert es bei Bedarf
+
+**Beispiel (Windows):**
+```
+Desktop/
+  └── launcher.exe          ← Nur diese Datei bleibt sichtbar
+
+%APPDATA%/PupCid/LTTH-Launcher/   ← Installation hier (versteckt)
+  ├── app/
+  ├── plugins/
+  ├── runtime/
+  └── package.json
+```
+
+#### 💾 Portable-Modus (USB-Stick Support)
+**Für Nutzer, die LTTH auf einem USB-Stick verwenden möchten.**
+
+1. Erstelle eine Datei namens `portable.txt` **neben** der `launcher.exe`
+2. Der Launcher erkennt dies automatisch und installiert alle Dateien **im selben Verzeichnis**
+3. Perfekt für USB-Sticks oder portable Installationen
+
+**Beispiel:**
+```
+USB-Stick/LTTH/
+  ├── launcher.exe
+  ├── portable.txt          ← Diese Datei aktiviert Portable-Modus
+  ├── app/                  ← Installation im selben Ordner
+  ├── plugins/
+  └── runtime/
+```
+
+**Wie aktiviere ich den Portable-Modus?**
+- **Windows:** Rechtsklick im Ordner → "Neu" → "Textdokument" → Benenne es zu `portable.txt`
+- **Linux/macOS:** `touch portable.txt` im Terminal
+
 ### Für Endnutzer
 
 1. **Download:** Lade `launcher.exe` (Windows) oder `launcher` (Linux) von [ltth.app](https://ltth.app) herunter
@@ -112,15 +160,41 @@ Der Launcher lädt nur die relevanten Dateien herunter:
 
 ### Dateistruktur nach Installation
 
+#### Standard-Modus (Installer)
+
+**Sichtbar für den Nutzer:**
 ```
-standalone-launcher.exe
-├── app/                    # Hauptanwendung
-├── plugins/                # Plugins
-├── game-engine/            # Game Engine
-├── runtime/
-│   └── node/              # Portable Node.js (falls installiert)
-├── package.json
-└── package-lock.json
+Desktop/
+  └── launcher.exe          ← Nur diese Datei
+```
+
+**Installation (versteckt in AppData):**
+```
+%APPDATA%/PupCid/LTTH-Launcher/     (Windows)
+~/.config/PupCid/LTTH-Launcher/     (Linux)
+~/Library/Application Support/PupCid/LTTH-Launcher/  (macOS)
+  ├── app/                    # Hauptanwendung
+  ├── plugins/                # Plugins
+  ├── game-engine/            # Game Engine
+  ├── runtime/
+  │   └── node/              # Portable Node.js (falls installiert)
+  ├── package.json
+  └── package-lock.json
+```
+
+#### Portable-Modus (mit portable.txt)
+
+```
+USB-Stick/LTTH/
+  ├── launcher.exe
+  ├── portable.txt           # Aktiviert Portable-Modus
+  ├── app/                   # Installation im selben Ordner
+  ├── plugins/
+  ├── game-engine/
+  ├── runtime/
+  │   └── node/
+  ├── package.json
+  └── package-lock.json
 ```
 
 ## 🛠️ Für Entwickler
@@ -305,20 +379,47 @@ Keine Installation erforderlich
 ### Node.js Installation fehlgeschlagen
 
 - **Prüfe:** Genug freien Speicherplatz (~500 MB)
-- **Prüfe:** Schreibrechte im Verzeichnis
+- **Prüfe:** Schreibrechte im Installationsverzeichnis
+  - **Standard-Modus:** Schreibrechte in `%APPDATA%` (sollte immer vorhanden sein)
+  - **Portable-Modus:** Schreibrechte im Launcher-Verzeichnis
 - **Prüfe:** Node.js Version (min. v20.x erforderlich)
-- **Lösung:** Launcher als Administrator ausführen
+- **Lösung:** Bei Portable-Modus: Launcher als Administrator ausführen
 
 ### npm install fehlgeschlagen
 
 - **Prüfe:** Internet-Verbindung
 - **Prüfe:** npm Registry erreichbar
 - **Lösung:** Manuell `npm install` im `app/` Verzeichnis ausführen
+  - **Standard-Modus:** Navigiere zu `%APPDATA%\PupCid\LTTH-Launcher\app`
+  - **Portable-Modus:** Navigiere zum Launcher-Verzeichnis → `app`
 
 ### Alte Node.js Version wird nicht aktualisiert
 
 - **Ursache:** Globale Node.js Installation ist älter als v20
 - **Lösung:** Launcher installiert portable v20 LTS automatisch
+
+### Wo finde ich die installierten Dateien?
+
+**Standard-Modus:**
+- **Windows:** `%APPDATA%\PupCid\LTTH-Launcher`
+  - Öffne mit: Windows-Taste + R → `%APPDATA%\PupCid\LTTH-Launcher` → Enter
+- **Linux:** `~/.config/PupCid/LTTH-Launcher`
+- **macOS:** `~/Library/Application Support/PupCid/LTTH-Launcher`
+
+**Portable-Modus:**
+- Im selben Verzeichnis wie die `launcher.exe`
+
+### Wie wechsle ich zwischen Modi?
+
+**Von Standard zu Portable:**
+1. Erstelle eine Datei namens `portable.txt` neben der `launcher.exe`
+2. Starte den Launcher neu
+3. Hinweis: Alte Dateien in AppData werden **nicht** automatisch gelöscht
+
+**Von Portable zu Standard:**
+1. Lösche die Datei `portable.txt`
+2. Starte den Launcher neu
+3. Optional: Lösche die alten Dateien aus dem Portable-Verzeichnis manuell
 
 ## 📄 Lizenz
 
