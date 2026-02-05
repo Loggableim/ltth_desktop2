@@ -691,6 +691,12 @@ class FireworksEngine {
         this.particles.updateRotations(deltaTime);
         this.particles.updateTrails(deltaTime);
         
+        // Check for and trigger secondary explosions
+        const explosions = this.particles.updateSecondaryExplosions();
+        for (const explosion of explosions) {
+            this.particles.createSecondaryExplosion(explosion);
+        }
+        
         if (this.frameCount % 60 === 0) {
             this.particles.compact();
         }
@@ -721,6 +727,9 @@ class FireworksEngine {
             // Add trails to a subset of particles for visual effect without lag
             const shouldEmitTrail = Math.random() < 0.3; // 30% of particles emit trails
             
+            // Add secondary explosions to a small subset for extra sparkle (10% chance)
+            const shouldExplode = Math.random() < 0.1;
+            
             this.particles.emit({
                 x: fw.x,
                 y: fw.y,
@@ -737,7 +746,9 @@ class FireworksEngine {
                 rotation: Math.random() * Math.PI * 2,
                 rotationSpeed: (Math.random() - 0.5) * 0.1,
                 fireworkId: fw.id,
-                emitTrail: shouldEmitTrail
+                emitTrail: shouldEmitTrail,
+                willExplode: shouldExplode,
+                explosionDelay: 0.3 + Math.random() * 0.3 // Explode after 0.3-0.6 seconds
             });
         }
         

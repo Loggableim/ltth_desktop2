@@ -48,6 +48,7 @@ class ParticleSystemSOA {
         // State flags
         this.active = new Uint8Array(maxParticles);
         this.emitTrail = new Uint8Array(maxParticles); // Whether particle emits trail
+        this.willExplode = new Uint8Array(maxParticles); // Whether particle will create secondary explosion
         
         // Firework association (for tracking which firework owns which particles)
         this.fireworkId = new Uint32Array(maxParticles);
@@ -55,6 +56,11 @@ class ParticleSystemSOA {
         // Trail emission tracking
         this.trailTimer = new Float32Array(maxParticles); // Time since last trail emission
         this.trailInterval = 0.05; // Emit trail every 50ms
+        
+        // Secondary explosion tracking
+        this.age = new Float32Array(maxParticles); // Particle age for explosion timing
+        this.explosionDelay = new Float32Array(maxParticles); // Delay before explosion
+        this.hasExploded = new Uint8Array(maxParticles); // Already triggered explosion
     }
 
     /**
@@ -77,6 +83,9 @@ class ParticleSystemSOA {
             // Update position
             this.x[i] += this.vx[i] * dt;
             this.y[i] += this.vy[i] * dt;
+            
+            // Update age
+            this.age[i] += dt;
         }
     }
 
@@ -153,6 +162,68 @@ class ParticleSystemSOA {
     }
 
     /**
+     * Check for and trigger secondary explosions
+     * Should be called after updatePositions
+     * @returns {Array} List of explosion data for new particles
+     */
+    updateSecondaryExplosions() {
+        const explosions = [];
+        
+        for (let i = 0; i < this.count; i++) {
+            if (!this.active[i] || !this.willExplode[i] || this.hasExploded[i]) continue;
+            
+            // Check if enough time has passed
+            if (this.age[i] >= this.explosionDelay[i]) {
+                this.hasExploded[i] = 1;
+                
+                // Store explosion data
+                explosions.push({
+                    x: this.x[i],
+                    y: this.y[i],
+                    hue: this.hue[i],
+                    fireworkId: this.fireworkId[i]
+                });
+            }
+        }
+        
+        return explosions;
+    }
+
+    /**
+     * Create secondary explosion particles
+     * @param {Object} explosion - Explosion data from updateSecondaryExplosions
+     */
+    createSecondaryExplosion(explosion) {
+        const count = 8 + Math.floor(Math.random() * 12);
+        const baseGravity = 0.08; // Default gravity value
+        
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.PI * 2 * i) / count;
+            const speed = 1 + Math.random() * 2;
+            
+            this.emit({
+                x: explosion.x,
+                y: explosion.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                size: 1 + Math.random() * 2,
+                alpha: 1,
+                hue: explosion.hue + (Math.random() - 0.5) * 30,
+                saturation: 100,
+                brightness: 100,
+                decay: 0.02,
+                gravity: baseGravity * 0.6,
+                drag: 0.96,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.2,
+                fireworkId: explosion.fireworkId,
+                emitTrail: false,
+                willExplode: false
+            });
+        }
+    }
+
+    /**
      * Emit a new particle
      * @param {Object} props - Particle properties
      * @returns {number} Index of the particle, or -1 if pool is full
@@ -189,6 +260,10 @@ class ParticleSystemSOA {
         this.fireworkId[i] = props.fireworkId || 0;
         this.emitTrail[i] = props.emitTrail ? 1 : 0;
         this.trailTimer[i] = 0;
+        this.willExplode[i] = props.willExplode ? 1 : 0;
+        this.age[i] = 0;
+        this.explosionDelay[i] = props.explosionDelay || 0.5;
+        this.hasExploded[i] = 0;
         
         return i;
     }
@@ -221,6 +296,10 @@ class ParticleSystemSOA {
                     this.fireworkId[writeIdx] = this.fireworkId[readIdx];
                     this.emitTrail[writeIdx] = this.emitTrail[readIdx];
                     this.trailTimer[writeIdx] = this.trailTimer[readIdx];
+                    this.willExplode[writeIdx] = this.willExplode[readIdx];
+                    this.age[writeIdx] = this.age[readIdx];
+                    this.explosionDelay[writeIdx] = this.explosionDelay[readIdx];
+                    this.hasExploded[writeIdx] = this.hasExploded[readIdx];
                     this.active[writeIdx] = 1;
                 }
                 writeIdx++;
