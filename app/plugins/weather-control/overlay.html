@@ -1510,6 +1510,11 @@
                     effect.nextShake = Date.now() + 800 + Math.random() * 2500;
                 }
             }
+            
+            // Apply optional post-processing (bloom)
+            if (config.enablePostProcessing) {
+                applyPostProcessing();
+            }
 
             if (config.debug) {
                 updateDebugInfo();
@@ -1905,6 +1910,29 @@
                 }
             }
             
+            ctx.restore();
+        }
+
+        /**
+         * Apply post-processing effects (bloom/glow)
+         * Optional - can impact performance
+         */
+        function applyPostProcessing() {
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = 0.15;
+            ctx.filter = 'blur(8px)';
+            
+            // Create temporary canvas for bloom effect
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(canvas, 0, 0);
+            
+            ctx.drawImage(tempCanvas, 0, 0);
+            
+            ctx.filter = 'none';
             ctx.restore();
         }
 
