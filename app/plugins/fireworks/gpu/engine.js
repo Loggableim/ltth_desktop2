@@ -745,7 +745,7 @@ class FireworksEngine {
         if (!this.running) return;
         
         const now = performance.now();
-        const deltaTime = Math.min((now - this.lastTime) / 16.67, 2.0);
+        const deltaTime = Math.min((now - this.lastTime) / CONFIG.IDEAL_FRAME_TIME, 2.0);
         this.lastTime = now;
         
         this.update(deltaTime);
