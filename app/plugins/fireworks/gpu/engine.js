@@ -1604,6 +1604,10 @@ class FireworksEngine {
         this.frameSkip = 0;
         this.adaptiveFpsHistory = []; // Separate FPS history for adaptive frame skip (30 frames)
         
+        // BUG FIX #3: Particle count cache (updated once per frame)
+        this.cachedParticleCount = 0;
+        this.lastParticleCountUpdate = 0;
+        
         this.config = { 
             ...CONFIG,
             toasterMode: false,
@@ -1623,6 +1627,14 @@ class FireworksEngine {
         this.MAX_FIREWORKS = 5; // Will be updated from config
         this.MAX_PARTICLES = 800; // Will be updated from config
         this.EMERGENCY_CLEANUP_THRESHOLD = 1000; // Will be updated from config
+        
+        // BUG FIX #2: Make engine globally accessible for synchronous access from main.js
+        if (typeof global !== 'undefined') {
+            global.fireworksEngineInstance = this;
+        }
+        if (typeof window !== 'undefined') {
+            window.fireworksEngineInstance = this;
+        }
         
         this.running = false;
         this.socket = null;
@@ -1922,8 +1934,16 @@ class FireworksEngine {
             return;
         }
 
+        // BUG FIX #3: Use cached particle count (updated max once per frame = 16ms)
+        const now = performance.now();
+        if (now - this.lastParticleCountUpdate > 16) {
+            this.cachedParticleCount = this.getTotalParticles();
+            this.lastParticleCountUpdate = now;
+        }
+
+        const currentParticles = this.cachedParticleCount;
+
         // NEW: Reject wenn zu viele Partikel (80% threshold)
-        const currentParticles = this.getTotalParticles();
         if (currentParticles > this.MAX_PARTICLES * 0.8) {
             if (DEBUG) console.warn(`[Fireworks] Particle limit approaching (${currentParticles}/${this.MAX_PARTICLES}), skipping`);
             return;
@@ -2281,29 +2301,43 @@ class FireworksEngine {
         const now = performance.now();
         const frameTime = now - this.lastTime;
         
-        // NEW: EMERGENCY CLEANUP - Check particles at start of render
+        // BUG FIX #4: EMERGENCY CLEANUP - More aggressive to prevent freeze loops
         const totalParticles = this.getTotalParticles();
         if (totalParticles > this.EMERGENCY_CLEANUP_THRESHOLD) {
-            console.error(`[Fireworks] EMERGENCY: ${totalParticles} particles! Force cleanup...`);
+            console.error(`[Fireworks] EMERGENCY: ${totalParticles} particles! Aggressive cleanup...`);
             
-            // Lösche die ersten 50% der exploded Fireworks
+            // Remove 100% of exploded fireworks
             const explodedFW = this.fireworks.filter(fw => fw.exploded);
-            const toRemove = Math.ceil(explodedFW.length * 0.5);
-            
-            for (let i = 0; i < toRemove; i++) {
-                const fw = explodedFW[i];
-                // Gebe alle Partikel sofort frei
+            for (const fw of explodedFW) {
                 if (fw.particles && fw.particles.length > 0) {
                     this.particlePool.releaseAll(fw.particles);
                     fw.particles = [];
                 }
-                
-                // Entferne Firework
-                const index = this.fireworks.indexOf(fw);
-                if (index > -1) this.fireworks.splice(index, 1);
             }
             
-            console.log(`[Fireworks] Emergency cleanup: Removed ${toRemove} fireworks, now ${this.getTotalParticles()} particles`);
+            // Remove 50% of oldest flying fireworks (by age)
+            const flyingFW = this.fireworks.filter(fw => !fw.exploded);
+            flyingFW.sort((a, b) => (b.age || 0) - (a.age || 0)); // Oldest first
+            const toRemoveFlying = Math.ceil(flyingFW.length * 0.5);
+            
+            for (let i = 0; i < toRemoveFlying; i++) {
+                const fw = flyingFW[i];
+                if (fw.particles && fw.particles.length > 0) {
+                    this.particlePool.releaseAll(fw.particles);
+                    fw.particles = [];
+                }
+            }
+            
+            // Clean up fireworks array (remove empty fireworks)
+            this.fireworks = this.fireworks.filter(fw => {
+                const hasParticles = fw.particles && fw.particles.length > 0;
+                const isValid = !fw.exploded || hasParticles;
+                return isValid;
+            });
+            
+            const newCount = this.getTotalParticles();
+            console.log(`[Fireworks] Emergency cleanup: Removed ${explodedFW.length} exploded + ${toRemoveFlying} flying fireworks`);
+            console.log(`[Fireworks] Particles: ${totalParticles} -> ${newCount} (${((1 - newCount/totalParticles) * 100).toFixed(1)}% reduction)`);
         }
         
         // Optimization #10: Frame-skip threshold (50ms = 20 FPS)
@@ -2355,13 +2389,12 @@ class FireworksEngine {
         
         // Calculate deltaTime for frame-independent physics (capped at 3x normal for extreme lag)
         const deltaTime = Math.min((now - this.lastTime) / CONFIG.IDEAL_FRAME_TIME, 3);
-        this.lastTime = now;
-        this.lastRenderTime = now;
+        
+        // BUG FIX #1: Berechne frameDuration VOR dem Update von lastTime
+        const frameDuration = now - this.lastTime;
 
         // NEW: Adaptive Frame Skip bei Low FPS
         if (this.frameSkipEnabled && this.adaptivePerformance) {
-            // Update FPS History
-            const frameDuration = now - this.lastTime;
             const currentFPS = frameDuration > 0 ? 1000 / frameDuration : 60;
             this.adaptiveFpsHistory.push(currentFPS);
             if (this.adaptiveFpsHistory.length > 30) this.adaptiveFpsHistory.shift();
@@ -2385,6 +2418,10 @@ class FireworksEngine {
                 }
             }
         }
+
+        // DANN erst lastTime updaten
+        this.lastTime = now;
+        this.lastRenderTime = now;
 
         // Clear with configurable background for trail effect
         const bgColor = this.config.backgroundColor || CONFIG.backgroundColor;

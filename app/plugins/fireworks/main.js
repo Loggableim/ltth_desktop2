@@ -888,15 +888,20 @@ class FireworksPlugin {
 
     /**
      * Get active firework count from overlay
-     * This communicates with the engine to get the current firework count
+     * BUG FIX #2: Directly access engine instance instead of async socket
      */
     getActiveFireworkCount() {
-        // Store count from last response, default to 0
+        // Try to get count directly from global engine instance (browser context)
+        if (typeof global !== 'undefined' && global.fireworksEngineInstance) {
+            return global.fireworksEngineInstance.fireworks.length;
+        }
+        
+        // Fallback: Use cached value from socket (for server-side calls)
         if (!this.cachedActiveFireworkCount) {
             this.cachedActiveFireworkCount = 0;
         }
         
-        // Request current count from overlay (async, but we use cached value)
+        // Still emit for cache updates
         this.api.emit('fireworks:get-active-count');
         
         // Return cached value (updated via socket response)
