@@ -1217,35 +1217,58 @@
     }
 
     /**
-     * Draw lightning with glow effect
+     * Draw lightning with HDR multi-layer glow
      */
     drawLightning(fadeProgress) {
       this.ctx.save();
       
-      const alpha = 1 - fadeProgress;
+      const brightness = 1.0 - fadeProgress;
       
-      // Outer glow
-      this.ctx.shadowColor = `rgba(180, 200, 255, ${0.8 * alpha})`;
-      this.ctx.shadowBlur = 30;
       this.ctx.lineCap = 'round';
       this.ctx.lineJoin = 'round';
       
-      // Draw multiple passes for glow effect
-      const widths = [15, 8, 3, 1];
-      widths.forEach((width, i) => {
-        this.ctx.lineWidth = width;
-        const baseAlpha = alpha * (i === 3 ? 1 : (0.3 - i * 0.05));
-        this.ctx.strokeStyle = i === 3 
-          ? `rgba(255, 255, 255, ${baseAlpha})` 
-          : `rgba(200, 220, 255, ${baseAlpha})`;
+      // Multi-pass glow for atmospheric scatter
+      const glowPasses = [
+        { width: 20, alpha: 0.08, color: 'rgba(180, 220, 255, ' },
+        { width: 12, alpha: 0.15, color: 'rgba(200, 230, 255, ' },
+        { width: 6, alpha: 0.25, color: 'rgba(220, 240, 255, ' },
+        { width: 3, alpha: 0.4, color: 'rgba(240, 250, 255, ' }
+      ];
+      
+      // Render glow passes (outer to inner)
+      glowPasses.forEach(pass => {
+        this.ctx.strokeStyle = pass.color + (pass.alpha * brightness) + ')';
+        this.ctx.lineWidth = pass.width;
         
         this.ctx.beginPath();
-        this.lightningSegments.forEach(seg => {
-          this.ctx.moveTo(seg.x1, seg.y1);
+        this.lightningSegments.forEach((seg, i) => {
+          if (i === 0) this.ctx.moveTo(seg.x1, seg.y1);
           this.ctx.lineTo(seg.x2, seg.y2);
         });
         this.ctx.stroke();
       });
+      
+      // Main lightning core (bright white)
+      this.ctx.strokeStyle = `rgba(255, 255, 255, ${brightness * 0.95})`;
+      this.ctx.lineWidth = 1.5;
+      
+      this.ctx.beginPath();
+      this.lightningSegments.forEach((seg, i) => {
+        if (i === 0) this.ctx.moveTo(seg.x1, seg.y1);
+        this.ctx.lineTo(seg.x2, seg.y2);
+      });
+      this.ctx.stroke();
+      
+      // Inner highlight (electric blue)
+      this.ctx.strokeStyle = `rgba(150, 200, 255, ${brightness * 0.6})`;
+      this.ctx.lineWidth = 0.8;
+      
+      this.ctx.beginPath();
+      this.lightningSegments.forEach((seg, i) => {
+        if (i === 0) this.ctx.moveTo(seg.x1, seg.y1);
+        this.ctx.lineTo(seg.x2, seg.y2);
+      });
+      this.ctx.stroke();
       
       this.ctx.restore();
     }
