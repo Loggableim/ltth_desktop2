@@ -1560,6 +1560,11 @@ class FireworksEngine {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
         
+        // WebGL rendering engine (initialized in init() if available)
+        this.webglEngine = null;
+        this.useWebGL = false;
+        this.rendererMode = 'canvas'; // 'webgl' or 'canvas'
+        
         // Optimization #6: Layer splitting for performance
         this.trailCanvas = null;
         this.trailCtx = null;
@@ -1610,6 +1615,7 @@ class FireworksEngine {
         
         this.config = { 
             ...CONFIG,
+            renderer: 'webgl', // 'webgl', 'canvas', 'auto' - will be set from main.js config
             toasterMode: false,
             audioEnabled: true,
             audioVolume: 0.7,
@@ -1651,6 +1657,9 @@ class FireworksEngine {
         // Setup canvas
         this.resize();
         
+        // Try to initialize WebGL renderer (unless toasterMode is enabled)
+        this.initRenderer();
+        
         // Optimization #6: Initialize layer splitting
         this.initLayerSplitting();
         
@@ -1666,7 +1675,56 @@ class FireworksEngine {
         this.running = true;
         this.render();
 
-        if (DEBUG) console.log('[Fireworks Engine] Initialized with Canvas 2D');
+        const rendererName = this.useWebGL ? 'WebGL2' : 'Canvas 2D';
+        if (DEBUG) console.log(`[Fireworks Engine] Initialized with ${rendererName}`);
+    }
+    
+    initRenderer() {
+        // Force Canvas 2D if toaster mode is enabled
+        if (this.config.toasterMode) {
+            this.useWebGL = false;
+            this.rendererMode = 'canvas';
+            if (DEBUG) console.log('[Fireworks] Toaster mode enabled, using Canvas 2D');
+            return;
+        }
+        
+        const rendererConfig = this.config.renderer || 'webgl';
+        
+        // Try WebGL if renderer is 'webgl' or 'auto'
+        if (rendererConfig === 'webgl' || rendererConfig === 'auto') {
+            try {
+                // Load WebGL engine (defined in webgl-particle-engine.js)
+                if (typeof WebGLParticleEngine === 'undefined') {
+                    console.warn('[Fireworks] WebGLParticleEngine not loaded, falling back to Canvas 2D');
+                    this.useWebGL = false;
+                    this.rendererMode = 'canvas';
+                    return;
+                }
+                
+                this.webglEngine = new WebGLParticleEngine(this.canvas);
+                const success = this.webglEngine.init();
+                
+                if (success) {
+                    this.useWebGL = true;
+                    this.rendererMode = 'webgl';
+                    console.log('[Fireworks] WebGL2 renderer initialized successfully');
+                } else {
+                    this.useWebGL = false;
+                    this.rendererMode = 'canvas';
+                    console.log('[Fireworks] WebGL initialization failed, using Canvas 2D fallback');
+                }
+            } catch (error) {
+                console.error('[Fireworks] WebGL initialization error:', error);
+                this.useWebGL = false;
+                this.rendererMode = 'canvas';
+                console.log('[Fireworks] Using Canvas 2D fallback due to error');
+            }
+        } else {
+            // Force Canvas 2D
+            this.useWebGL = false;
+            this.rendererMode = 'canvas';
+            if (DEBUG) console.log('[Fireworks] Canvas 2D renderer configured');
+        }
     }
 
     resize() {
@@ -1684,6 +1742,11 @@ class FireworksEngine {
         
         this.width = targetResolution.width;
         this.height = targetResolution.height;
+        
+        // Resize WebGL engine if active
+        if (this.webglEngine && this.useWebGL) {
+            this.webglEngine.resize(this.width, this.height);
+        }
         
         // Optimization #6: Resize trail canvas too
         if (this.trailCanvas) {
@@ -1757,6 +1820,8 @@ class FireworksEngine {
                     const oldResolution = this.config.resolution;
                     const oldPreset = this.config.resolutionPreset;
                     const oldOrientation = this.config.orientation;
+                    const oldRenderer = this.config.renderer;
+                    const oldToasterMode = this.config.toasterMode;
                     
                     Object.assign(this.config, data.config);
                     this.audioManager.setEnabled(this.config.audioEnabled);
@@ -1798,6 +1863,12 @@ class FireworksEngine {
                     }
                     if (data.config.frameSkipEnabled !== undefined) {
                         this.frameSkipEnabled = data.config.frameSkipEnabled;
+                    }
+                    
+                    // Re-initialize renderer if renderer or toasterMode changed
+                    if (oldRenderer !== this.config.renderer || oldToasterMode !== this.config.toasterMode) {
+                        console.log('[Fireworks] Renderer config changed, re-initializing...');
+                        this.initRenderer();
                     }
                     
                     // Resize canvas if resolution or orientation changed
@@ -1987,7 +2058,6 @@ class FireworksEngine {
         }
 
         // Combo throttling: prevent extreme lag from rapid combos
-        const now = performance.now();
         const timeSinceLastTrigger = now - this.lastComboTriggerTime;
         const minInterval = CONFIG.comboThrottleMinInterval;
         
@@ -2428,44 +2498,20 @@ class FireworksEngine {
         this.lastTime = now;
         this.lastRenderTime = now;
 
-        // Clear with configurable background for trail effect
-        const bgColor = this.config.backgroundColor || CONFIG.backgroundColor;
-        this.ctx.clearRect(0, 0, this.width, this.height);
-        this.ctx.fillStyle = bgColor;
-        this.ctx.fillRect(0, 0, this.width, this.height);
-        
-        // Optimization #6: Layer splitting - Update trails less frequently
-        this.trailFrameCounter++;
-        const shouldUpdateTrails = this.trailFrameCounter >= this.trailUpdateInterval;
-        
-        if (shouldUpdateTrails && this.trailCanvas && this.config.trailsEnabled) {
-            this.trailFrameCounter = 0;
-            // Clear and redraw trails on separate canvas
-            this.trailCtx.clearRect(0, 0, this.width, this.height);
-            for (const fw of this.fireworks) {
-                this.renderTrailsToLayer(fw);
-            }
-        }
-        
-        // Optimization #6: Composite trail layer first (background)
-        if (this.trailCanvas && this.config.trailsEnabled) {
-            this.ctx.drawImage(this.trailCanvas, 0, 0);
-        }
-
-        // Update and render all fireworks with deltaTime for frame-independent physics
+        // Update all fireworks with deltaTime for frame-independent physics
         for (let i = this.fireworks.length - 1; i >= 0; i--) {
             this.fireworks[i].update(deltaTime);
-            
-            // Optimization #6: Render particles only (trails are on separate layer)
-            if (this.useLayerSplitting && this.config.trailsEnabled) {
-                this.renderFireworkParticlesOnly(this.fireworks[i]);
-            } else {
-                this.renderFirework(this.fireworks[i]);
-            }
             
             if (this.fireworks[i].isDone()) {
                 this.fireworks.splice(i, 1);
             }
+        }
+
+        // Render using WebGL or Canvas 2D
+        if (this.useWebGL && this.webglEngine) {
+            this.renderWebGL();
+        } else {
+            this.renderCanvas();
         }
 
         // Update FPS and adaptive performance
@@ -2564,7 +2610,7 @@ class FireworksEngine {
                 const modeEl = document.getElementById('performance-mode');
                 if (fpsEl) fpsEl.textContent = this.fps;
                 if (particleEl) particleEl.textContent = this.getTotalParticles();
-                if (rendererEl) rendererEl.textContent = `${this.performanceMode} | Q:${this.fireworks.length}`;
+                if (rendererEl) rendererEl.textContent = `${this.rendererMode.toUpperCase()} | ${this.performanceMode} | Q:${this.fireworks.length}`;
                 if (modeEl) modeEl.textContent = this.performanceMode.toUpperCase();
             }
 
@@ -2575,6 +2621,114 @@ class FireworksEngine {
         }
 
         requestAnimationFrame(() => this.render());
+    }
+    
+    /**
+     * Render using WebGL instanced rendering
+     */
+    renderWebGL() {
+        // Update particle data in WebGL engine
+        this.webglEngine.updateParticles(this.fireworks);
+        
+        // Render all particles in a single draw call
+        this.webglEngine.render();
+        
+        // Render non-circle particles (images, hearts, paws) using Canvas 2D overlay
+        // These are not supported by WebGL renderer yet
+        const ctx = this.ctx;
+        for (const firework of this.fireworks) {
+            // Render rocket if it's an image
+            if (!firework.exploded && firework.rocket && firework.rocket.type !== 'circle') {
+                this.renderNonCircleParticle(firework.rocket);
+            }
+            
+            // Render non-circle particles
+            for (const p of firework.particles) {
+                if (p.type !== 'circle' && this.isParticleVisible(p)) {
+                    this.renderNonCircleParticle(p);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Render a non-circle particle using Canvas 2D
+     */
+    renderNonCircleParticle(p) {
+        const ctx = this.ctx;
+        
+        if (p.type === 'image' && p.image) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation);
+            ctx.globalAlpha = p.alpha;
+            const size = p.size * 3;
+            ctx.drawImage(p.image, -size/2, -size/2, size, size);
+            ctx.restore();
+        } else if (p.type === 'heart') {
+            const rgb = hslToRgb(p.hue, p.saturation, p.brightness);
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation);
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.alpha})`;
+            ctx.font = `${p.size * 4}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('❤', 0, 0);
+            ctx.restore();
+        } else if (p.type === 'paw') {
+            const rgb = hslToRgb(p.hue, p.saturation, p.brightness);
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation);
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.alpha})`;
+            ctx.font = `${p.size * 4}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🐾', 0, 0);
+            ctx.restore();
+        }
+    }
+    
+    /**
+     * Render using Canvas 2D (fallback)
+     */
+    renderCanvas() {
+        // Clear with configurable background for trail effect
+        const bgColor = this.config.backgroundColor || CONFIG.backgroundColor;
+        this.ctx.clearRect(0, 0, this.width, this.height);
+        this.ctx.fillStyle = bgColor;
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        
+        // Optimization #6: Layer splitting - Update trails less frequently
+        this.trailFrameCounter++;
+        const shouldUpdateTrails = this.trailFrameCounter >= this.trailUpdateInterval;
+        
+        if (shouldUpdateTrails && this.trailCanvas && this.config.trailsEnabled) {
+            this.trailFrameCounter = 0;
+            // Clear and redraw trails on separate canvas
+            this.trailCtx.clearRect(0, 0, this.width, this.height);
+            for (const fw of this.fireworks) {
+                this.renderTrailsToLayer(fw);
+            }
+        }
+        
+        // Optimization #6: Composite trail layer first (background)
+        if (this.trailCanvas && this.config.trailsEnabled) {
+            this.ctx.drawImage(this.trailCanvas, 0, 0);
+        }
+
+        // Render all fireworks
+        for (const firework of this.fireworks) {
+            // Optimization #6: Render particles only (trails are on separate layer)
+            if (this.useLayerSplitting && this.config.trailsEnabled) {
+                this.renderFireworkParticlesOnly(firework);
+            } else {
+                this.renderFirework(firework);
+            }
+        }
     }
     
     applyPerformanceMode() {
