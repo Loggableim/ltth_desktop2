@@ -541,8 +541,16 @@
         premultipliedAlpha: true
       });
       
+      // Enable high-quality rendering
+      this.ctx.imageSmoothingEnabled = true;
+      this.ctx.imageSmoothingQuality = 'high';
+      this.ctx.lineCap = 'round';
+      this.ctx.lineJoin = 'round';
+      
       this.options = {
         debug: options.debug || false,
+        enablePostProcessing: options.enablePostProcessing || false,
+        renderQuality: options.renderQuality || 'high',
         ...options
       };
       
@@ -597,6 +605,12 @@
       this.canvas.width = displayWidth * dpr;
       this.canvas.height = displayHeight * dpr;
       this.ctx.scale(dpr, dpr);
+      
+      // Re-apply high-quality rendering settings after canvas resize
+      this.ctx.imageSmoothingEnabled = true;
+      this.ctx.imageSmoothingQuality = 'high';
+      this.ctx.lineCap = 'round';
+      this.ctx.lineJoin = 'round';
       
       this.dimensions.width = displayWidth;
       this.dimensions.height = displayHeight;

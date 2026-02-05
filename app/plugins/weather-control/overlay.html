@@ -207,7 +207,9 @@
             showConnectionStatus: true,
             reconnectDelay: 1000,
             reconnectMaxDelay: 30000,
-            reconnectBackoffMultiplier: 1.5
+            reconnectBackoffMultiplier: 1.5,
+            enablePostProcessing: new URLSearchParams(window.location.search).get('bloom') === 'true',
+            renderQuality: 'high' // 'low', 'medium', 'high'
         };
 
         // DOM elements
@@ -235,6 +237,12 @@
             document.body.appendChild(errorDiv);
             throw new Error('Canvas context initialization failed');
         }
+        
+        // Enable high-quality rendering
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         
         // Get context attributes once
         const contextAttrs = ctx.getContextAttributes();
