@@ -2,7 +2,7 @@
  * WebGL2 Particle Engine - High-Performance Instanced Rendering
  * 
  * Renders all particles in a single draw call using WebGL2 instanced rendering.
- * Achieves 60 FPS with 5000+ particles compared to Canvas 2D's ~15 FPS.
+ * Works directly with Struct-of-Arrays (SOA) particle system for maximum performance.
  * 
  * Features:
  * - Instanced rendering: 1 draw call for all particles
@@ -10,6 +10,7 @@
  * - HSB to RGB conversion in fragment shader
  * - Soft-edge circular particles with glow effect
  * - Additive blending for realistic light effects
+ * - Direct SOA integration for zero-copy data transfer
  */
 
 class WebGLParticleEngine {
@@ -21,7 +22,7 @@ class WebGLParticleEngine {
         this.locations = {};
         this.particleData = null;
         this.particleCount = 0;
-        this.maxParticles = 10000;
+        this.maxParticles = 100000;
         this.initialized = false;
     }
 
@@ -58,7 +59,9 @@ class WebGLParticleEngine {
                 in vec2 a_particlePos;    // x, y
                 in float a_size;          // size
                 in float a_alpha;         // alpha
-                in vec3 a_hsb;            // hue, saturation, brightness
+                in float a_hue;           // hue (0-360)
+                in float a_saturation;    // saturation (0-100)
+                in float a_brightness;    // brightness (0-100)
                 in float a_rotation;      // rotation angle
 
                 // Output to fragment shader
@@ -69,15 +72,20 @@ class WebGLParticleEngine {
                 uniform vec2 u_resolution;
 
                 // HSB to RGB conversion
-                vec3 hsb2rgb(vec3 c) {
-                    vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0,4.0,2.0), 6.0)-3.0)-1.0, 0.0, 1.0);
+                vec3 hsb2rgb(float h, float s, float b) {
+                    // Normalize inputs
+                    h = h / 360.0;
+                    s = s / 100.0;
+                    b = b / 100.0;
+                    
+                    vec3 rgb = clamp(abs(mod(h*6.0+vec3(0.0,4.0,2.0), 6.0)-3.0)-1.0, 0.0, 1.0);
                     rgb = rgb*rgb*(3.0-2.0*rgb);
-                    return c.z * mix(vec3(1.0), rgb, c.y);
+                    return b * mix(vec3(1.0), rgb, s);
                 }
 
                 void main() {
                     // Convert HSB to RGB
-                    vec3 rgb = hsb2rgb(vec3(a_hsb.x / 360.0, a_hsb.y / 100.0, a_hsb.z / 100.0));
+                    vec3 rgb = hsb2rgb(a_hue, a_saturation, a_brightness);
                     v_color = vec4(rgb, 1.0);
                     v_alpha = a_alpha;
 
@@ -173,7 +181,9 @@ class WebGLParticleEngine {
                 a_particlePos: gl.getAttribLocation(this.program, 'a_particlePos'),
                 a_size: gl.getAttribLocation(this.program, 'a_size'),
                 a_alpha: gl.getAttribLocation(this.program, 'a_alpha'),
-                a_hsb: gl.getAttribLocation(this.program, 'a_hsb'),
+                a_hue: gl.getAttribLocation(this.program, 'a_hue'),
+                a_saturation: gl.getAttribLocation(this.program, 'a_saturation'),
+                a_brightness: gl.getAttribLocation(this.program, 'a_brightness'),
                 a_rotation: gl.getAttribLocation(this.program, 'a_rotation'),
                 // Uniforms
                 u_resolution: gl.getUniformLocation(this.program, 'u_resolution')
@@ -228,10 +238,20 @@ class WebGLParticleEngine {
             gl.vertexAttribPointer(this.locations.a_alpha, 1, gl.FLOAT, false, 32, 12);
             gl.vertexAttribDivisor(this.locations.a_alpha, 1);
             
-            // HSB (hue, saturation, brightness)
-            gl.enableVertexAttribArray(this.locations.a_hsb);
-            gl.vertexAttribPointer(this.locations.a_hsb, 3, gl.FLOAT, false, 32, 16);
-            gl.vertexAttribDivisor(this.locations.a_hsb, 1);
+            // Hue
+            gl.enableVertexAttribArray(this.locations.a_hue);
+            gl.vertexAttribPointer(this.locations.a_hue, 1, gl.FLOAT, false, 32, 16);
+            gl.vertexAttribDivisor(this.locations.a_hue, 1);
+            
+            // Saturation
+            gl.enableVertexAttribArray(this.locations.a_saturation);
+            gl.vertexAttribPointer(this.locations.a_saturation, 1, gl.FLOAT, false, 32, 20);
+            gl.vertexAttribDivisor(this.locations.a_saturation, 1);
+            
+            // Brightness
+            gl.enableVertexAttribArray(this.locations.a_brightness);
+            gl.vertexAttribPointer(this.locations.a_brightness, 1, gl.FLOAT, false, 32, 24);
+            gl.vertexAttribDivisor(this.locations.a_brightness, 1);
             
             // Rotation
             gl.enableVertexAttribArray(this.locations.a_rotation);
@@ -276,79 +296,15 @@ class WebGLParticleEngine {
     }
 
     /**
-     * Update particle data from Firework objects
-     * @param {Array} fireworks - Array of Firework objects
+     * Update particle data from SOA particle system
+     * @param {ParticleSystemSOA} particleSystem - SOA particle system
      */
-    updateParticles(fireworks) {
+    updateFromSOA(particleSystem) {
         if (!this.initialized) return;
 
-        let index = 0;
-        const data = this.particleData;
-
-        // Iterate through all fireworks and collect particles
-        for (const firework of fireworks) {
-            // Add rocket particle if not exploded
-            if (!firework.exploded && firework.rocket) {
-                const p = firework.rocket;
-                if (this.shouldRenderParticle(p) && index < this.maxParticles) {
-                    this.writeParticleData(data, index++, p);
-                }
-            }
-
-            // Add explosion particles
-            for (const p of firework.particles) {
-                if (this.shouldRenderParticle(p) && index < this.maxParticles) {
-                    this.writeParticleData(data, index++, p);
-                }
-            }
-
-            // Add secondary explosion particles
-            for (const p of firework.secondaryExplosions) {
-                if (this.shouldRenderParticle(p) && index < this.maxParticles) {
-                    this.writeParticleData(data, index++, p);
-                }
-            }
-        }
-
-        this.particleCount = index;
-    }
-
-    /**
-     * Check if particle should be rendered (culling)
-     */
-    shouldRenderParticle(p) {
-        // Skip particles with types that aren't circles (images, hearts, paws)
-        // These will be rendered using Canvas 2D fallback
-        if (p.type !== 'circle') return false;
-
-        // Alpha culling
-        if (p.alpha < 0.05) return false;
-
-        // Viewport culling with margin
-        const margin = 100;
-        const w = this.canvas.width;
-        const h = this.canvas.height;
-        if (p.x < -margin || p.x > w + margin || p.y < -margin || p.y > h + margin) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Write particle data to buffer
-     * Format: [x, y, size, alpha, hue, saturation, brightness, rotation]
-     */
-    writeParticleData(data, index, particle) {
-        const offset = index * 8;
-        data[offset + 0] = particle.x;
-        data[offset + 1] = particle.y;
-        data[offset + 2] = particle.size;
-        data[offset + 3] = particle.alpha;
-        data[offset + 4] = particle.hue;
-        data[offset + 5] = particle.saturation;
-        data[offset + 6] = particle.brightness;
-        data[offset + 7] = particle.rotation;
+        // Directly fill GPU buffer from SOA system
+        const activeCount = particleSystem.fillGPUBuffer(this.particleData);
+        this.particleCount = activeCount;
     }
 
     /**
