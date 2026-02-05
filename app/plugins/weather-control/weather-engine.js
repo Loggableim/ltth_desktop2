@@ -157,16 +157,156 @@
   }
 
   /**
-   * Generate multiple snowflake variants
+   * Generate diverse realistic snowflake variants
+   * Each snowflake in nature is unique - this creates 20+ variants with:
+   * - Different symmetry levels (3-fold, 4-fold, 6-fold, 8-fold)
+   * - Random imperfections (broken arms, asymmetry)
+   * - Size variations
+   * - Different base shapes (stellar, plate, column, needle)
    */
   function generateSnowflakeVariants() {
     const variants = [];
-    // Generate 5 different snowflake patterns with varying iterations
+    
+    // Variant 1-5: Koch snowflakes (6-fold symmetry) with varying iterations
     for (let i = 0; i < 5; i++) {
-      const iterations = 1 + Math.floor(i / 2); // 1, 1, 2, 2, 3
+      const iterations = 1 + Math.floor(i / 2);
       variants.push(generateKochSnowflake(iterations));
     }
+    
+    // Variant 6-10: Stellar dendrites (6 main branches with side branches)
+    for (let i = 0; i < 5; i++) {
+      variants.push(generateStellarDendrite(6, 2 + i * 0.5, Math.random() * 0.3));
+    }
+    
+    // Variant 11-13: Plate snowflakes (simple hexagons with embellishments)
+    for (let i = 0; i < 3; i++) {
+      variants.push(generatePlateSnowflake(6, Math.random() * 0.2));
+    }
+    
+    // Variant 14-16: Needle crystals (elongated, 3-fold symmetry)
+    for (let i = 0; i < 3; i++) {
+      variants.push(generateNeedleCrystal(3, 1.5 + Math.random()));
+    }
+    
+    // Variant 17-20: Irregular/broken snowflakes (realistic imperfections)
+    for (let i = 0; i < 4; i++) {
+      const baseVariant = Math.floor(Math.random() * variants.length);
+      variants.push(addImperfections(variants[baseVariant], 0.15 + Math.random() * 0.2));
+    }
+    
     return variants;
+  }
+
+  /**
+   * Generate stellar dendrite snowflake (6 main branches with side branches)
+   */
+  function generateStellarDendrite(branches = 6, branchLength = 2.5, sideBranchChance = 0.3) {
+    const points = [];
+    const angleStep = (Math.PI * 2) / branches;
+    
+    for (let i = 0; i < branches; i++) {
+      const angle = angleStep * i;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      
+      // Main branch
+      for (let dist = 0; dist <= branchLength; dist += 0.3) {
+        const x = cos * dist;
+        const y = sin * dist;
+        points.push({ x, y });
+        
+        // Side branches
+        if (Math.random() < sideBranchChance && dist > 0.5 && dist < branchLength - 0.3) {
+          const sideLength = 0.2 + Math.random() * 0.4;
+          const sideAngle = angle + (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 6 + Math.random() * Math.PI / 12);
+          const sideCos = Math.cos(sideAngle);
+          const sideSin = Math.sin(sideAngle);
+          
+          for (let sd = 0.1; sd <= sideLength; sd += 0.1) {
+            points.push({
+              x: x + sideCos * sd,
+              y: y + sideSin * sd
+            });
+          }
+        }
+      }
+    }
+    
+    return points;
+  }
+
+  /**
+   * Generate simple plate snowflake (hexagon with small decorations)
+   */
+  function generatePlateSnowflake(sides = 6, decorationChance = 0.2) {
+    const points = [];
+    const angleStep = (Math.PI * 2) / sides;
+    
+    // Main hexagon
+    for (let i = 0; i <= sides; i++) {
+      const angle = angleStep * i;
+      points.push({
+        x: Math.cos(angle) * 0.8,
+        y: Math.sin(angle) * 0.8
+      });
+      
+      // Small decorations on edges
+      if (Math.random() < decorationChance) {
+        const midAngle = angle + angleStep / 2;
+        points.push({
+          x: Math.cos(midAngle) * 0.6,
+          y: Math.sin(midAngle) * 0.6
+        });
+      }
+    }
+    
+    return points;
+  }
+
+  /**
+   * Generate needle crystal (elongated, less symmetry)
+   */
+  function generateNeedleCrystal(branches = 3, length = 2.0) {
+    const points = [];
+    const angleStep = (Math.PI * 2) / branches;
+    
+    for (let i = 0; i < branches; i++) {
+      const angle = angleStep * i;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      
+      // Elongated needle
+      for (let dist = 0; dist <= length; dist += 0.2) {
+        points.push({
+          x: cos * dist * 0.3, // Narrower
+          y: sin * dist
+        });
+      }
+    }
+    
+    return points;
+  }
+
+  /**
+   * Add imperfections to snowflake (broken arms, asymmetry)
+   */
+  function addImperfections(basePoints, imperfectionLevel = 0.2) {
+    if (!basePoints || basePoints.length === 0) return basePoints;
+    
+    const points = [];
+    
+    basePoints.forEach(point => {
+      // Random chance to skip point (creates gaps/broken arms)
+      if (Math.random() > imperfectionLevel) {
+        // Add slight random displacement
+        points.push({
+          x: point.x + (Math.random() - 0.5) * imperfectionLevel * 0.5,
+          y: point.y + (Math.random() - 0.5) * imperfectionLevel * 0.5
+        });
+      }
+    });
+    
+    return points.length > 0 ? points : basePoints;
   }
 
   /**
@@ -1315,41 +1455,138 @@
     }
 
     /**
-     * Draw glitch clouds
+     * Draw advanced glitch clouds with RGB shift, displacement, and VHS artifacts
      */
     drawGlitchClouds(effect) {
       this.ctx.save();
       const w = this.dimensions.width;
       const h = this.dimensions.height;
+      const time = Date.now();
       
-      // Draw random glitch lines
-      if (Math.random() < GLITCH_LINE_FREQUENCY) {
-        const lineCount = Math.floor(5 + Math.random() * 10);
-        for (let i = 0; i < lineCount; i++) {
-          const y = Math.random() * h;
-          const height = 1 + Math.random() * 5;
-          const offset = (Math.random() - 0.5) * 20 * effect.intensity;
+      // === RGB Channel Shift (classic glitch effect) ===
+      if (Math.random() < GLITCH_LINE_FREQUENCY * 1.5) {
+        const shiftIntensity = effect.intensity * 8;
+        const shiftY = Math.floor(Math.random() * h);
+        const shiftHeight = Math.floor(10 + Math.random() * 40);
+        
+        try {
+          // Get image data for this strip
+          const imageData = this.ctx.getImageData(0, shiftY, w, Math.min(shiftHeight, h - shiftY));
+          const data = imageData.data;
           
-          this.ctx.globalAlpha = 0.3 + Math.random() * 0.4;
-          this.ctx.fillStyle = Math.random() > 0.5 ? '#ff00ff' : '#00ffff';
-          this.ctx.fillRect(0, y, w, height);
+          // Shift RGB channels
+          for (let i = 0; i < data.length; i += 4) {
+            const offset = Math.floor((Math.random() - 0.5) * shiftIntensity) * 4;
+            const newIndex = i + offset;
+            
+            if (newIndex >= 0 && newIndex < data.length - 4) {
+              // Red channel shift
+              data[i] = data[newIndex];
+              // Blue channel shift (opposite direction)
+              const blueIndex = i - offset * 2;
+              if (blueIndex >= 0 && blueIndex < data.length) {
+                data[i + 2] = data[blueIndex];
+              }
+            }
+          }
+          
+          this.ctx.putImageData(imageData, 0, shiftY);
+        } catch (e) {
+          // Fail silently if out of bounds
         }
       }
       
-      // Add digital noise overlay
-      if (Math.random() < DIGITAL_NOISE_FREQUENCY) {
-        const noiseIntensity = effect.intensity * 0.05;
-        this.ctx.globalAlpha = noiseIntensity;
-        
-        for (let i = 0; i < 50; i++) {
-          const x = Math.random() * w;
-          const y = Math.random() * h;
-          const size = 1 + Math.random() * 3;
-          const brightness = Math.random() * 255;
+      // === Vertical Displacement Bars ===
+      if (Math.random() < GLITCH_LINE_FREQUENCY) {
+        const barCount = Math.floor(2 + Math.random() * 5);
+        for (let i = 0; i < barCount; i++) {
+          const barY = Math.random() * h;
+          const barHeight = 5 + Math.random() * 30;
+          const displacement = (Math.random() - 0.5) * 50 * effect.intensity;
           
-          this.ctx.fillStyle = `rgb(${brightness}, ${brightness}, ${brightness})`;
-          this.ctx.fillRect(x, y, size, size);
+          // Copy and shift section
+          try {
+            const imageData = this.ctx.getImageData(0, barY, w, Math.min(barHeight, h - barY));
+            this.ctx.putImageData(imageData, displacement, barY);
+          } catch (e) {
+            // Fail silently if out of bounds
+          }
+          
+          // Add colored overlay
+          this.ctx.globalAlpha = 0.2 + Math.random() * 0.3;
+          const glitchColors = [
+            '#ff00ff', // Magenta
+            '#00ffff', // Cyan
+            '#ff0000', // Red
+            '#00ff00', // Green
+            '#ffff00', // Yellow
+            '#0000ff'  // Blue
+          ];
+          this.ctx.fillStyle = glitchColors[Math.floor(Math.random() * glitchColors.length)];
+          this.ctx.fillRect(0, barY, w, barHeight);
         }
+      }
+      
+      // === Scanline/VHS Effect ===
+      if (Math.random() < 0.3) {
+        this.ctx.globalAlpha = 0.15 * effect.intensity;
+        this.ctx.fillStyle = '#000000';
+        for (let y = 0; y < h; y += 4) {
+          this.ctx.fillRect(0, y, w, 2);
+        }
+      }
+      
+      // === Digital Artifacts (blocks) ===
+      if (Math.random() < DIGITAL_NOISE_FREQUENCY * 2) {
+        const blockCount = Math.floor(20 + Math.random() * 40);
+        for (let i = 0; i < blockCount; i++) {
+          const blockX = Math.random() * w;
+          const blockY = Math.random() * h;
+          const blockW = 10 + Math.random() * 40;
+          const blockH = 10 + Math.random() * 40;
+          
+          this.ctx.globalAlpha = 0.4 + Math.random() * 0.5;
+          const brightness = Math.random() * 255;
+          const colorStyle = Math.random();
+          
+          if (colorStyle < 0.33) {
+            // Grayscale noise
+            this.ctx.fillStyle = `rgb(${brightness}, ${brightness}, ${brightness})`;
+          } else if (colorStyle < 0.66) {
+            // Magenta/Cyan
+            this.ctx.fillStyle = Math.random() > 0.5 ? '#ff00ff' : '#00ffff';
+          } else {
+            // Random RGB
+            this.ctx.fillStyle = `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`;
+          }
+          
+          this.ctx.fillRect(blockX, blockY, blockW, blockH);
+        }
+      }
+      
+      // === Chromatic Aberration (edges) ===
+      if (Math.random() < 0.2) {
+        this.ctx.globalAlpha = 0.3 * effect.intensity;
+        this.ctx.strokeStyle = '#ff00ff';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(0, 0, w, h);
+        
+        this.ctx.strokeStyle = '#00ffff';
+        this.ctx.strokeRect(3, 3, w - 6, h - 6);
+      }
+      
+      // === Static Noise (improved) ===
+      const noiseIntensity = effect.intensity * 0.15; // Increased from 0.05
+      this.ctx.globalAlpha = noiseIntensity;
+      
+      for (let i = 0; i < 150; i++) { // Increased from 50
+        const x = Math.random() * w;
+        const y = Math.random() * h;
+        const size = 1 + Math.random() * 4;
+        const brightness = Math.random() * 255;
+        
+        this.ctx.fillStyle = `rgb(${brightness}, ${brightness}, ${brightness})`;
+        this.ctx.fillRect(x, y, size, size);
       }
       
       this.ctx.restore();

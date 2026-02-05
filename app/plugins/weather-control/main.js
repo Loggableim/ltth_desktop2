@@ -238,6 +238,13 @@ class WeatherControlPlugin {
                 // Track if command names changed
                 let commandNamesChanged = false;
                 
+                // Store old permanent effects state
+                const oldPermanentEffects = new Set(
+                    this.supportedEffects.filter(effect => 
+                        this.config.effects[effect]?.permanent === true
+                    )
+                );
+                
                 // Validate configuration
                 if (newConfig.permissions) {
                     this.config.permissions = { ...this.config.permissions, ...newConfig.permissions };
@@ -287,8 +294,22 @@ class WeatherControlPlugin {
 
                 await this.api.setConfig('weather_config', this.config);
 
-                // Sync permanent effects with new configuration
-                this.syncPermanentEffects();
+                // Get new permanent effects state
+                const newPermanentEffects = new Set(
+                    this.supportedEffects.filter(effect => 
+                        this.config.effects[effect]?.permanent === true
+                    )
+                );
+                
+                // Sync permanent effects if changed
+                const effectsChanged = oldPermanentEffects.size !== newPermanentEffects.size ||
+                    [...oldPermanentEffects].some(e => !newPermanentEffects.has(e)) ||
+                    [...newPermanentEffects].some(e => !oldPermanentEffects.has(e));
+                
+                if (effectsChanged) {
+                    this.api.log('♾️ [WEATHER CONTROL] Permanent effects changed, syncing...', 'info');
+                    this.syncPermanentEffects();
+                }
                 
                 // Re-register commands if names changed
                 if (commandNamesChanged) {
