@@ -224,9 +224,9 @@ class GameEnginePlugin {
             this.logger.info('✅ [GAME ENGINE] GCCE commands registered on retry #' + this.gcceRetryCount);
             clearInterval(this.gcceRetryInterval);
             this.gcceRetryInterval = null;
-            // Note: In a real scenario, we would need to unregister the fallback chat handler
-            // and re-register events, but the current API doesn't support unregistering events.
-            // The fallback handler now checks gcceCommandsRegistered flag to avoid conflicts.
+            // Note: The fallback chat handler (if already registered) checks the 
+            // gcceCommandsRegistered flag at runtime in handleChatCommand (line 2723)
+            // to avoid processing commands when GCCE becomes available after initial registration.
           }
         }, 2000); // Retry every 2 seconds
       }
