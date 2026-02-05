@@ -306,6 +306,7 @@ func (sl *StandaloneLauncher) downloadZipWithProgress(url, destPath string) erro
 	totalSize := resp.ContentLength
 	downloaded := int64(0)
 	buffer := make([]byte, 32*1024) // 32KB buffer
+	lastUpdate := time.Now()
 	
 	for {
 		n, err := resp.Body.Read(buffer)
@@ -316,13 +317,23 @@ func (sl *StandaloneLauncher) downloadZipWithProgress(url, destPath string) erro
 			}
 			downloaded += int64(n)
 			
-			// Update progress (15% to 60% of total progress)
-			if totalSize > 0 {
-				downloadProgress := int(float64(downloaded) / float64(totalSize) * 45)
-				sl.updateProgress(15+downloadProgress, 
-					fmt.Sprintf("Lade Release-ZIP herunter... %.1f / %.1f MB",
-						float64(downloaded)/(1024*1024),
-						float64(totalSize)/(1024*1024)))
+			// Update progress every 200ms to avoid too many updates (15% to 60% of total progress)
+			if time.Since(lastUpdate) > 200*time.Millisecond {
+				if totalSize > 0 {
+					downloadProgress := int(float64(downloaded) / float64(totalSize) * 45)
+					percentage := int(float64(downloaded) / float64(totalSize) * 100)
+					sl.updateProgress(15+downloadProgress, 
+						fmt.Sprintf("Lade Release-ZIP herunter... %.1f / %.1f MB (%d%%)",
+							float64(downloaded)/(1024*1024),
+							float64(totalSize)/(1024*1024),
+							percentage))
+				} else {
+					// Unknown size, just show downloaded amount
+					sl.updateProgress(15, 
+						fmt.Sprintf("Lade Release-ZIP herunter... %.1f MB",
+							float64(downloaded)/(1024*1024)))
+				}
+				lastUpdate = time.Now()
 			}
 		}
 		if err == io.EOF {
@@ -331,6 +342,12 @@ func (sl *StandaloneLauncher) downloadZipWithProgress(url, destPath string) erro
 		if err != nil {
 			return err
 		}
+	}
+	
+	// Final update
+	if totalSize > 0 {
+		sl.updateProgress(60, 
+			fmt.Sprintf("Download abgeschlossen! %.1f MB", float64(downloaded)/(1024*1024)))
 	}
 	
 	return nil
@@ -634,6 +651,7 @@ func (sl *StandaloneLauncher) installNodePortable() (string, error) {
 	totalSize := resp.ContentLength
 	downloaded := int64(0)
 	buffer := make([]byte, 32*1024)
+	lastUpdate := time.Now()
 	
 	for {
 		n, err := resp.Body.Read(buffer)
@@ -645,13 +663,22 @@ func (sl *StandaloneLauncher) installNodePortable() (string, error) {
 			}
 			downloaded += int64(n)
 			
-			// Update progress (74% to 77%)
-			if totalSize > 0 {
-				downloadProgress := int(float64(downloaded) / float64(totalSize) * 3)
-				sl.updateProgress(74+downloadProgress,
-					fmt.Sprintf("Lade Node.js herunter... %.1f / %.1f MB",
-						float64(downloaded)/(1024*1024),
-						float64(totalSize)/(1024*1024)))
+			// Update progress every 200ms to avoid too many updates (74% to 77%)
+			if time.Since(lastUpdate) > 200*time.Millisecond {
+				if totalSize > 0 {
+					downloadProgress := int(float64(downloaded) / float64(totalSize) * 3)
+					percentage := int(float64(downloaded) / float64(totalSize) * 100)
+					sl.updateProgress(74+downloadProgress,
+						fmt.Sprintf("Lade Node.js herunter... %.1f / %.1f MB (%d%%)",
+							float64(downloaded)/(1024*1024),
+							float64(totalSize)/(1024*1024),
+							percentage))
+				} else {
+					sl.updateProgress(74,
+						fmt.Sprintf("Lade Node.js herunter... %.1f MB",
+							float64(downloaded)/(1024*1024)))
+				}
+				lastUpdate = time.Now()
 			}
 		}
 		if err == io.EOF {
@@ -663,6 +690,11 @@ func (sl *StandaloneLauncher) installNodePortable() (string, error) {
 		}
 	}
 	out.Close()
+	
+	// Final update
+	if totalSize > 0 {
+		sl.updateProgress(77, fmt.Sprintf("Node.js Download abgeschlossen! %.1f MB", float64(downloaded)/(1024*1024)))
+	}
 	
 	// Extract zip file
 	sl.updateProgress(78, "Entpacke Node.js...")
