@@ -977,6 +977,60 @@ class FishSpeechEngine {
                 reference_id: 'c944589a55ad450e8109d39cd3ecc488',
                 description: 'Sorting Hat Harry Potter voice',
                 supportedEmotions: true
+            },
+            'fish-kermit': {
+                name: 'Kermit',
+                lang: 'en',
+                gender: 'male',
+                model: 's1',
+                reference_id: '93d75b99763f4f10a0756d85c59cfcca',
+                description: 'Kermit the Frog voice',
+                supportedEmotions: true
+            },
+            'fish-zug-ostdeutschland': {
+                name: 'Zug Ostdeutschland',
+                lang: 'de',
+                gender: 'male',
+                model: 's1',
+                reference_id: '63338a153446436db1b18fe92d58c6f0',
+                description: 'East German train announcement voice',
+                supportedEmotions: true
+            },
+            'fish-zug-allgemein': {
+                name: 'Zug Allgemein',
+                lang: 'de',
+                gender: 'male',
+                model: 's1',
+                reference_id: '2e2259a37979416882b78165735cc7a0',
+                description: 'General German train announcement voice',
+                supportedEmotions: true
+            },
+            'fish-chibbiserker': {
+                name: 'Chibbiserker',
+                lang: 'de',
+                gender: 'male',
+                model: 's1',
+                reference_id: 'e49a69c4528a4fc4bd6bf620227ab575',
+                description: 'Chibbiserker voice',
+                supportedEmotions: true
+            },
+            'fish-blucher': {
+                name: 'Gebhard Leberecht von Blücher',
+                lang: 'de',
+                gender: 'male',
+                model: 's1',
+                reference_id: 'a355dda8cc904e4fb2590f1a598e89e2',
+                description: 'Gebhard Leberecht von Blücher historical voice',
+                supportedEmotions: true
+            },
+            'fish-funtime-freddy': {
+                name: 'Funtime Freddy (Deutsch)',
+                lang: 'de',
+                gender: 'male',
+                model: 's1',
+                reference_id: '4540a261de68409396afc3a8e86255ad',
+                description: 'Funtime Freddy German voice (Fazbear And Friends)',
+                supportedEmotions: true
             }
         };
     }
