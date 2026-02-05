@@ -2052,7 +2052,7 @@ class GameEnginePlugin {
       // These are commands added via Admin UI that should trigger games
       chatCommandTriggers.forEach(trigger => {
         // Extract command name without prefix (remove /, !, etc.)
-        const commandName = trigger.trigger_value.replace(/^[!/]+/, '');
+        const commandName = trigger.trigger_value.replace(/^[!/]/, '');
         
         // Check if command is already registered (avoid duplicates)
         if (commands.some(cmd => cmd.name === commandName)) {
@@ -2676,8 +2676,8 @@ class GameEnginePlugin {
       }
       
       const triggerValue = t.trigger_value.toLowerCase();
-      const triggerWithoutPrefix = triggerValue.replace(/^[!/]+/, '');
-      const messageWithoutPrefix = messageLower.replace(/^[!/]+/, '');
+      const triggerWithoutPrefix = triggerValue.replace(/^[!/]/, '');
+      const messageWithoutPrefix = messageLower.replace(/^[!/]/, '');
       
       // Check for exact match or match without prefixes
       return messageLower === triggerValue ||
