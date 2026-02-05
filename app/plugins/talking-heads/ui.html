@@ -710,6 +710,55 @@
             </div>
         </div>
 
+        <!-- Manual Sprite Assignment -->
+        <div class="config-section">
+            <div class="section-title">
+                <i data-lucide="copy"></i>
+                <span>Manuelle Sprite-Zuweisung</span>
+            </div>
+            <div class="form-help" style="margin-bottom: 16px;">
+                Weise einem User die Sprites eines anderen Users zu, ohne neu zu generieren.
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="form-group">
+                    <label class="form-label">Ziel-User (erhält Sprites)</label>
+                    <input type="text" id="targetUserSearch" class="form-input" placeholder="User-ID oder Username eingeben...">
+                    <div class="form-help">Der User, der die Sprites erhalten soll</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Quell-Avatar (Sprite-Vorlage)</label>
+                    <select id="sourceAvatarSelect" class="form-select">
+                        <option value="">-- Bitte Avatar wählen --</option>
+                    </select>
+                    <div class="form-help">Avatar, dessen Sprites kopiert werden</div>
+                </div>
+            </div>
+            
+            <!-- Preview Area -->
+            <div id="spritePreviewArea" style="
+                display: none;
+                padding: 16px;
+                background: var(--color-bg-tertiary);
+                border: 1px solid var(--color-border);
+                border-radius: 6px;
+                margin-bottom: 16px;
+            ">
+                <div style="font-weight: 500; margin-bottom: 8px;">Vorschau:</div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <img id="spritePreviewImg" style="width: 128px; height: 128px; object-fit: contain; background: #000; border-radius: 4px;" alt="Sprite Preview">
+                </div>
+            </div>
+            
+            <div>
+                <button class="btn btn-primary" id="assignSpriteBtn" disabled>
+                    <i data-lucide="check-circle" class="inline-block w-4 h-4 mr-2"></i>
+                    Sprites zuweisen
+                </button>
+            </div>
+        </div>
+
         <!-- User Assignment -->
         <div class="config-section">
             <div class="section-title">
@@ -784,10 +833,39 @@
             </div>
             <div class="alert alert-info" data-i18n-html="true" data-i18n="talking_heads_ui.alerts.debug_log">
                 <strong>ℹ️ Debug-Logs anzeigen</strong><br>
-                Debug-Logs werden im Server-Terminal ausgegeben. Öffnen Sie das Terminal/Konsole, in dem der Server läuft, um die Logs zu sehen.<br>
-                <small>Die Logs enthalten detaillierte Informationen über API-Aufrufe, Cache-Zugriffe und Avatar-Generierung.</small>
+                Debug-Logs werden in Echtzeit angezeigt. Die Logs enthalten detaillierte Informationen über API-Aufrufe, Cache-Zugriffe und Avatar-Generierung.
             </div>
-            <div class="debug-log" id="debugLogOutput" aria-live="polite"></div>
+            
+            <!-- Debug Log Controls -->
+            <div style="margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="autoRefreshLogs" checked>
+                    <span class="toggle-slider"></span>
+                    <span style="margin-left: 8px; font-size: 0.875rem;">Auto-Refresh (5s)</span>
+                </label>
+                <button class="btn btn-secondary" id="refreshLogsBtn" style="padding: 6px 12px;">
+                    <i data-lucide="refresh-cw" class="inline-block w-4 h-4 mr-1"></i>
+                    Aktualisieren
+                </button>
+                <button class="btn btn-secondary" id="clearLogsBtn" style="padding: 6px 12px;">
+                    <i data-lucide="trash-2" class="inline-block w-4 h-4 mr-1"></i>
+                    Logs leeren
+                </button>
+            </div>
+            
+            <!-- Debug Log Output -->
+            <div class="debug-log" id="debugLogOutput" aria-live="polite" style="
+                background: #1a1a1a;
+                border: 1px solid var(--color-border);
+                border-radius: 6px;
+                padding: 12px;
+                max-height: 400px;
+                overflow-y: auto;
+                font-family: 'Courier New', monospace;
+                font-size: 0.75rem;
+                line-height: 1.5;
+                color: #d4d4d4;
+            "></div>
         </div>
 
         <!-- Save Button -->
