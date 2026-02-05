@@ -1490,6 +1490,8 @@
                         state.activeEffects.filter(e => e.type === 'sunbeam').forEach(e => {
                             if (e.timerId) clearTimeout(e.timerId);
                             if (e.fadeTimerId) clearTimeout(e.fadeTimerId);
+                            // Clean up effect-specific data
+                            e.beams = null;
                         });
                         state.activeEffects = state.activeEffects.filter(e => e.type !== 'sunbeam');
                         log('☀️ All sunbeam effects stopped');
@@ -1504,6 +1506,8 @@
                             clearTimeout(effect.fadeTimerId);
                             effect.fadeTimerId = null;
                         }
+                        // Clean up effect-specific data
+                        effect.beams = null;
                         state.activeEffects = state.activeEffects.filter(e => e !== effect);
                         log('☀️ Sunbeam effect stopped');
                         processEffectQueue(); // Process queue when an effect stops
@@ -1538,6 +1542,8 @@
                         // Stop all glitch clouds effects
                         state.activeEffects.filter(e => e.type === 'glitchclouds').forEach(e => {
                             if (e.timerId) clearTimeout(e.timerId);
+                            // Clean up effect-specific data
+                            e.glitchLines = null;
                         });
                         state.activeEffects = state.activeEffects.filter(e => e.type !== 'glitchclouds');
                         log('☁️ All glitch clouds effects stopped');
@@ -1548,6 +1554,8 @@
                             clearTimeout(effect.timerId);
                             effect.timerId = null;
                         }
+                        // Clean up effect-specific data
+                        effect.glitchLines = null;
                         state.activeEffects = state.activeEffects.filter(e => e !== effect);
                         log('☁️ Glitch clouds effect stopped');
                         processEffectQueue(); // Process queue when an effect stops
@@ -1637,7 +1645,7 @@
                     handleThunder(effect);
                 }
 
-                if (effect.type === 'sunbeam' && effect.beams) {
+                if (effect.type === 'sunbeam' && effect.beams && Array.isArray(effect.beams)) {
                     drawSunbeams(effect);
                 }
 
@@ -2409,6 +2417,10 @@
                 
                 // Clear all particles
                 state.particles.length = 0;
+                
+                // Clear lightning state
+                lightningSegments = [];
+                lightningFadeTime = 0;
                 
                 // Clear canvas
                 ctx.clearRect(0, 0, canvas.width, canvas.height);

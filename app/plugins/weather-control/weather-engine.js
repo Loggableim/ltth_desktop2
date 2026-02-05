@@ -982,30 +982,53 @@
           clearTimeout(specificEffect.timerId);
           specificEffect.timerId = null;
         }
+        
         // Release particles back to pool instead of destroying
-        specificEffect.particles.forEach(p => {
-          if (this.pools[p.type]) {
-            this.pools[p.type].release(p);
-          } else {
-            p.destroy();
-          }
-        });
-        this.state.particles = this.state.particles.filter(p => p.active);
-        this.state.activeEffects = this.state.activeEffects.filter(e => e !== specificEffect);
-      } else {
-        // Stop all effects of this type
-        this.state.activeEffects.filter(e => e.type === type).forEach(e => {
-          if (e.timerId) clearTimeout(e.timerId);
-          // Release particles back to pool
-          e.particles.forEach(p => {
-            if (this.pools[p.type]) {
+        // Safety check: sunbeam/thunder/glitchclouds don't use particles
+        if (specificEffect.particles && specificEffect.particles.length > 0) {
+          specificEffect.particles.forEach(p => {
+            if (p && p.type && this.pools[p.type]) {
               this.pools[p.type].release(p);
-            } else {
+            } else if (p && typeof p.destroy === 'function') {
               p.destroy();
             }
           });
+        }
+        
+        // Clean up effect-specific data structures
+        specificEffect.beams = null;
+        specificEffect.glitchLines = null;
+        
+        this.state.particles = this.state.particles.filter(p => p && p.active);
+        this.state.activeEffects = this.state.activeEffects.filter(e => e !== specificEffect);
+      } else {
+        // Stop all effects of this type
+        const effectsToStop = this.state.activeEffects.filter(e => e.type === type);
+        
+        effectsToStop.forEach(e => {
+          if (e.timerId) {
+            clearTimeout(e.timerId);
+            e.timerId = null;
+          }
+          
+          // Release particles back to pool with safety checks
+          if (e.particles && e.particles.length > 0) {
+            e.particles.forEach(p => {
+              if (p && p.type && this.pools[p.type]) {
+                this.pools[p.type].release(p);
+              } else if (p && typeof p.destroy === 'function') {
+                p.destroy();
+              }
+            });
+          }
+          
+          // Clean up effect-specific data
+          e.beams = null;
+          e.glitchLines = null;
         });
-        this.state.particles = this.state.particles.filter(p => p.type !== type);
+        
+        // Filter out stopped particles and effects
+        this.state.particles = this.state.particles.filter(p => p && p.type !== type && p.active);
         this.state.activeEffects = this.state.activeEffects.filter(e => e.type !== type);
       }
     }
@@ -1015,18 +1038,31 @@
      */
     stopAllEffects() {
       this.state.activeEffects.forEach(e => {
-        if (e.timerId) clearTimeout(e.timerId);
-        // Release particles back to pools
-        e.particles.forEach(p => {
-          if (this.pools[p.type]) {
-            this.pools[p.type].release(p);
-          } else {
-            p.destroy();
-          }
-        });
+        if (e.timerId) {
+          clearTimeout(e.timerId);
+          e.timerId = null;
+        }
+        
+        // Release particles back to pools with safety checks
+        if (e.particles && e.particles.length > 0) {
+          e.particles.forEach(p => {
+            if (p && p.type && this.pools[p.type]) {
+              this.pools[p.type].release(p);
+            } else if (p && typeof p.destroy === 'function') {
+              p.destroy();
+            }
+          });
+        }
+        
+        // Clean up effect-specific data
+        e.beams = null;
+        e.glitchLines = null;
       });
+      
       this.state.particles = [];
       this.state.activeEffects = [];
+      this.lightningSegments = [];
+      this.lightningFadeTime = 0;
     }
 
     /**
@@ -1091,7 +1127,7 @@
       
       // Handle special effects
       for (const effect of this.state.activeEffects) {
-        if (effect.type === 'sunbeam' && effect.beams) {
+        if (effect.type === 'sunbeam' && effect.beams && Array.isArray(effect.beams)) {
           this.drawSunbeams(effect);
         }
         if (effect.type === 'fog') {
