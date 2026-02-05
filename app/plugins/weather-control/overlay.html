@@ -2329,10 +2329,12 @@
                     });
                     state.activeEffects = [];
                     
-                    // Request fresh permanent effects
+                    // Request fresh permanent effects after brief delay
+                    // Delay allows effects cleanup to complete before requesting new state
+                    const CONFIG_RELOAD_DELAY = 100;
                     setTimeout(() => {
                         state.socket.emit('weather:request-permanent-effects');
-                    }, 100);
+                    }, CONFIG_RELOAD_DELAY);
                 });
 
                 state.socket.on('connect_error', (error) => {

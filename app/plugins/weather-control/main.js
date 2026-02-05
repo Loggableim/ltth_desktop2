@@ -714,7 +714,9 @@ class WeatherControlPlugin {
         if (targetSocket) {
             desiredEffects.forEach(effect => this.emitPermanentEffect(effect, targetSocket));
             // ✅ FIX: Update activePermanentEffects during socket sync
-            this.activePermanentEffects = desiredEffects;
+            // Use clear/add to preserve Set reference
+            this.activePermanentEffects.clear();
+            desiredEffects.forEach(e => this.activePermanentEffects.add(e));
             this.api.log(`✅ [WEATHER CONTROL] Synced ${desiredEffects.size} permanent effects to new client`, 'debug');
             return;
         }
@@ -734,7 +736,9 @@ class WeatherControlPlugin {
             }
         });
 
-        this.activePermanentEffects = desiredEffects;
+        // Update activePermanentEffects in-place to preserve references
+        this.activePermanentEffects.clear();
+        desiredEffects.forEach(e => this.activePermanentEffects.add(e));
     }
 
     emitPermanentEffect(effect, socket = null) {
