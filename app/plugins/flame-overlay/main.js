@@ -33,7 +33,8 @@ class FlameOverlayPlugin {
     loadConfig() {
         const savedConfig = this.api.getConfig('settings');
         
-        this.config = savedConfig || {
+        // Default configuration with all features
+        const defaultConfig = {
             // Effect type selection
             effectType: 'flames', // 'flames', 'particles', 'energy', 'lightning'
             
@@ -67,8 +68,50 @@ class FlameOverlayPlugin {
             
             // Advanced
             maskOnlyEdges: true, // Only show flames on frame edges
-            highDPI: true // Handle high DPI displays
+            highDPI: true, // Handle high DPI displays
+            
+            // ===== NEW FEATURES (v2.2.0) =====
+            // Quality Settings
+            noiseOctaves: 8, // 4-12 octaves for fBm
+            useHighQualityTextures: false, // Enable when HQ textures are available
+            detailScaleAuto: true, // Automatic detail scaling based on resolution
+            
+            // Edge Settings
+            edgeFeather: 0.3, // 0.0-1.0: Soft edge blending amount
+            frameCurve: 0.0, // 0.0-1.0: Curved frame edges (0=sharp corners)
+            frameNoiseAmount: 0.0, // 0.0-1.0: Noise modulation on frame edges
+            
+            // Animation
+            animationEasing: 'linear', // 'linear', 'sine', 'quad', 'elastic'
+            pulseEnabled: false, // Enable pulsing/breathing animation
+            pulseAmount: 0.2, // 0.0-1.0: Pulse intensity
+            pulseSpeed: 1.0, // 0.1-3.0: Pulse frequency
+            
+            // Bloom
+            bloomEnabled: false, // Enable bloom post-processing
+            bloomIntensity: 0.8, // 0.0-2.0: Bloom strength
+            bloomThreshold: 0.6, // 0.0-1.0: Brightness threshold for bloom
+            bloomRadius: 4, // 1-10: Bloom blur radius
+            
+            // Layers
+            layersEnabled: false, // Enable multi-layer compositing
+            layerCount: 3, // 1-3: Number of layers
+            layerParallax: 0.3, // 0.0-1.0: Parallax effect strength
+            
+            // Post-FX
+            chromaticAberration: 0.005, // 0.0-0.02: RGB channel offset
+            filmGrain: 0.03, // 0.0-0.1: Film grain intensity
+            depthIntensity: 0.5, // 0.0-1.0: Fake depth/inner glow
+            
+            // Smoke
+            smokeEnabled: false, // Enable smoke layer
+            smokeIntensity: 0.4, // 0.0-1.0: Smoke opacity
+            smokeSpeed: 0.3, // 0.1-1.0: Smoke movement speed
+            smokeColor: '#333333' // Smoke color
         };
+        
+        // Merge saved config with defaults to ensure backward compatibility
+        this.config = savedConfig ? { ...defaultConfig, ...savedConfig } : defaultConfig;
     }
 
     /**

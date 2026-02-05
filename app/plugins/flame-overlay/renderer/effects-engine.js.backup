@@ -1,7 +1,6 @@
 /**
- * Enhanced WebGL Effects Engine v2.2.0
+ * Enhanced WebGL Effects Engine
  * Supports multiple visual effects: flames, particles, energy waves, lightning
- * Features: Multi-layer flames, bloom post-processing, smoke effects, advanced animation
  * 
  * Based on modern WebGL rendering techniques and shader programming
  */
@@ -16,7 +15,7 @@ class EffectsEngine {
         }
         
         this.gl = null;
-        this.programs = {};
+        this.programs = {}; // Multiple shader programs for different effects
         this.currentProgram = null;
         this.textures = {};
         this.uniforms = {};
@@ -25,7 +24,6 @@ class EffectsEngine {
         this.config = {};
         this.particles = [];
         this.lightningSegments = [];
-        this.postProcessor = null;
         
         this.init();
     }
@@ -36,6 +34,7 @@ class EffectsEngine {
             return;
         }
         
+        // Initialize WebGL context
         this.gl = this.canvas.getContext('webgl', {
             alpha: true,
             premultipliedAlpha: true,
@@ -48,15 +47,24 @@ class EffectsEngine {
             return;
         }
         
+        // Load initial config
         this.loadConfig();
+        
+        // Setup WebGL
         this.setupAllShaders();
         this.setupGeometry();
         this.loadTextures();
-        this.initPostProcessor();
+        
+        // Initialize particle system
         this.initParticles();
+        
+        // Start render loop
         this.render();
+        
+        // Listen for config updates via socket.io
         this.setupSocketListener();
         
+        // Handle window resize
         window.addEventListener('resize', () => this.handleResize());
         this.handleResize();
     }
@@ -71,6 +79,7 @@ class EffectsEngine {
             }
         } catch (error) {
             console.error('Failed to load config:', error);
+            // Use defaults
             this.config = {
                 effectType: 'flames',
                 resolutionPreset: 'tiktok-portrait',
@@ -84,31 +93,7 @@ class EffectsEngine {
                 flameBrightness: 0.25,
                 enableGlow: true,
                 enableAdditiveBlend: true,
-                maskOnlyEdges: true,
-                noiseOctaves: 8,
-                useHighQualityTextures: false,
-                detailScaleAuto: true,
-                edgeFeather: 0.3,
-                frameCurve: 0.0,
-                frameNoiseAmount: 0.0,
-                animationEasing: 'linear',
-                pulseEnabled: false,
-                pulseAmount: 0.2,
-                pulseSpeed: 1.0,
-                bloomEnabled: false,
-                bloomIntensity: 0.8,
-                bloomThreshold: 0.6,
-                bloomRadius: 4,
-                layersEnabled: false,
-                layerCount: 3,
-                layerParallax: 0.3,
-                chromaticAberration: 0.005,
-                filmGrain: 0.03,
-                depthIntensity: 0.5,
-                smokeEnabled: false,
-                smokeIntensity: 0.4,
-                smokeSpeed: 0.3,
-                smokeColor: '#333333'
+                maskOnlyEdges: true
             };
             this.switchEffect('flames');
         }
@@ -132,16 +117,12 @@ class EffectsEngine {
                     const oldEffect = this.config.effectType;
                     this.config = data.config;
                     
+                    // Switch effect if changed
                     if (oldEffect !== this.config.effectType) {
                         this.switchEffect(this.config.effectType);
                     }
                     
                     this.updateUniforms();
-                    
-                    // Resize post-processor if bloom settings changed
-                    if (this.postProcessor && this.config.bloomEnabled) {
-                        this.postProcessor.resize(this.canvas.width, this.canvas.height);
-                    }
                 });
             } catch (error) {
                 console.error('Failed to setup socket listener:', error);
@@ -151,18 +132,9 @@ class EffectsEngine {
         }
     }
     
-    initPostProcessor() {
-        if (typeof PostProcessor !== 'undefined') {
-            this.postProcessor = new PostProcessor(this.gl);
-            this.postProcessor.resize(this.canvas.width, this.canvas.height);
-        } else {
-            console.warn('PostProcessor not available - bloom effects disabled');
-        }
-    }
-    
     setupAllShaders() {
+        // Setup shader programs for each effect
         this.setupFlameShaders();
-        this.setupSmokeShaders();
         this.setupParticleShaders();
         this.setupEnergyShaders();
         this.setupLightningShaders();
@@ -186,515 +158,152 @@ class EffectsEngine {
             }
         `;
         
-        // Inline flame.frag shader
-        const fragmentShaderSource = `precision highp float;
-
-// Uniforms
-uniform float uTime;
-uniform sampler2D uNoiseTexture;
-uniform sampler2D uFireProfile;
-uniform sampler2D uGradientLUT;
-uniform vec3 uFlameColor;
-uniform float uFlameSpeed;
-uniform float uFlameIntensity;
-uniform float uFlameBrightness;
-uniform vec2 uResolution;
-uniform float uFrameThickness;
-uniform int uFrameMode; // 0=bottom, 1=top, 2=sides, 3=all
-uniform bool uMaskEdges;
-
-// New quality settings
-uniform int uNoiseOctaves; // 4-12
-uniform bool uUseHighQualityTextures;
-uniform float uDetailScale; // Auto-calculated from resolution
-
-// Edge settings
-uniform float uEdgeFeather; // 0.0-1.0
-uniform float uFrameCurve; // 0.0-1.0
-uniform float uFrameNoiseAmount; // 0.0-1.0
-
-// Animation settings
-uniform int uAnimationEasing; // 0=linear, 1=sine, 2=quad, 3=elastic
-uniform bool uPulseEnabled;
-uniform float uPulseAmount; // 0.0-1.0
-uniform float uPulseSpeed; // 0.1-3.0
-
-// Post-FX settings
-uniform float uDepthIntensity; // 0.0-1.0
-
-// Layer settings
-uniform bool uLayersEnabled;
-uniform int uLayerCount; // 1-3
-uniform float uLayerParallax; // 0.0-1.0
-
-varying vec2 vTexCoord;
-varying vec3 vPosition;
-
-const float modulus = 61.0;
-
-// Include noise functions (these would be inline in actual shader)
-// Simplex noise 2D
-vec3 mod289(vec3 x) {
-    return x - floor(x * (1.0 / 289.0)) * 289.0;
-}
-
-vec2 mod289_2(vec2 x) {
-    return x - floor(x * (1.0 / 289.0)) * 289.0;
-}
-
-vec3 permute(vec3 x) {
-    return mod289(((x * 34.0) + 1.0) * x);
-}
-
-float simplexNoise(vec2 v) {
-    const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
-    vec2 i = floor(v + dot(v, C.yy));
-    vec2 x0 = v - i + dot(i, C.xx);
-    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-    vec4 x12 = x0.xyxy + C.xxzz;
-    x12.xy -= i1;
-    i = mod289_2(i);
-    vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
-    vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
-    m = m * m;
-    m = m * m;
-    vec3 x = 2.0 * fract(p * C.www) - 1.0;
-    vec3 h = abs(x) - 0.5;
-    vec3 ox = floor(x + 0.5);
-    vec3 a0 = x - ox;
-    m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
-    vec3 g;
-    g.x = a0.x * x0.x + h.x * x0.y;
-    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-    return 130.0 * dot(m, g);
-}
-
-float hash(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
-}
-
-vec2 random2(vec2 p) {
-    return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453);
-}
-
-float valueNoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    float a = hash(i);
-    float b = hash(i + vec2(1.0, 0.0));
-    float c = hash(i + vec2(0.0, 1.0));
-    float d = hash(i + vec2(1.0, 1.0));
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-}
-
-// 8-octave fBm with configurable octave count
-float fbm(vec2 p, int octaves) {
-    float sum = 0.0;
-    float freq = 1.0;
-    float amp = 1.0;
-    const float lacunarity = 2.0;
-    const float gain = 0.5;
-    
-    for (int i = 0; i < 12; i++) {
-        if (i >= octaves) break;
-        float n = simplexNoise(p * freq) * 0.7 + valueNoise(p * freq) * 0.3;
-        sum += n * amp;
-        freq *= lacunarity;
-        amp *= gain;
-    }
-    
-    return sum;
-}
-
-// Easing functions
-float applyEasing(float t, int easingType) {
-    if (easingType == 1) return sin(t * 1.5707963); // sine
-    if (easingType == 2) return t * t; // quad
-    if (easingType == 3) return pow(2.0, -10.0 * t) * sin((t - 0.075) * (6.283185 / 0.3)) + 1.0; // elastic
-    return t; // linear
-}
-
-// Blackbody radiation
-vec3 blackbodyColor(float temp) {
-    temp = temp * 39000.0 + 1000.0;
-    float r, g, b;
-    temp /= 100.0;
-    
-    if (temp <= 66.0) {
-        r = 1.0;
-    } else {
-        r = temp - 60.0;
-        r = 329.698727446 * pow(r, -0.1332047592);
-        r /= 255.0;
-        r = clamp(r, 0.0, 1.0);
-    }
-    
-    if (temp <= 66.0) {
-        g = temp;
-        g = 99.4708025861 * log(g) - 161.1195681661;
-        g /= 255.0;
-        g = clamp(g, 0.0, 1.0);
-    } else {
-        g = temp - 60.0;
-        g = 288.1221695283 * pow(g, -0.0755148492);
-        g /= 255.0;
-        g = clamp(g, 0.0, 1.0);
-    }
-    
-    if (temp >= 66.0) {
-        b = 1.0;
-    } else if (temp <= 19.0) {
-        b = 0.0;
-    } else {
-        b = temp - 10.0;
-        b = 138.5177312231 * log(b) - 305.0447927307;
-        b /= 255.0;
-        b = clamp(b, 0.0, 1.0);
-    }
-    
-    return vec3(r, g, b);
-}
-
-// Curved frame with noise modulation
-float getCurvedFrameDistance(vec2 pixelPos, vec2 resolution, float thickness, float curve, float noiseAmt) {
-    vec2 center = resolution * 0.5;
-    vec2 toEdge = abs(pixelPos - center);
-    vec2 maxDist = resolution * 0.5;
-    
-    // Apply curve (rounded corners)
-    float cornerRadius = min(resolution.x, resolution.y) * curve * 0.3;
-    vec2 cornerOffset = max(toEdge - (maxDist - cornerRadius), 0.0);
-    float cornerDist = length(cornerOffset);
-    
-    float distFromLeft = pixelPos.x;
-    float distFromRight = resolution.x - pixelPos.x;
-    float distFromBottom = pixelPos.y;
-    float distFromTop = resolution.y - pixelPos.y;
-    
-    float minDist = min(min(distFromLeft, distFromRight), min(distFromBottom, distFromTop));
-    minDist = max(minDist - cornerDist, 0.0);
-    
-    // Add noise modulation to edges
-    if (noiseAmt > 0.0) {
-        float noiseVal = simplexNoise(pixelPos * 0.01) * noiseAmt * thickness * 0.3;
-        minDist += noiseVal;
-    }
-    
-    return minDist;
-}
-
-// Sample fire with multiple layers
-vec4 sampleFireLayer(vec3 loc, vec4 scale, float layerOffset, float speedMult, float brightnessMult) {
-    loc.xz = loc.xz * 2.0 - 1.0;
-    vec2 st = vec2(sqrt(dot(loc.xz, loc.xz)), loc.y);
-    
-    // Apply easing and pulse
-    float timeAdjusted = uTime;
-    if (uPulseEnabled) {
-        timeAdjusted += sin(uTime * uPulseSpeed) * uPulseAmount;
-    }
-    timeAdjusted = applyEasing(fract(timeAdjusted * 0.1), uAnimationEasing) * 10.0;
-    
-    loc.y -= timeAdjusted * scale.w * uFlameSpeed * speedMult;
-    loc *= scale.xyz;
-    loc.y += layerOffset;
-    
-    // Use configurable octave fBm instead of simple turbulence
-    float offset = sqrt(st.y) * uFlameIntensity * fbm(loc.xy * uDetailScale, uNoiseOctaves);
-    st.y += offset;
-    
-    if (st.y > 1.0) {
-        return vec4(0.0, 0.0, 0.0, 0.0);
-    }
-    
-    vec4 result = texture2D(uFireProfile, st);
-    
-    // Fade bottom
-    if (st.y < 0.1) {
-        result *= st.y / 0.1;
-    }
-    
-    // Apply blackbody color or custom color
-    float temp = result.r; // Use red channel as temperature
-    vec3 bbColor = blackbodyColor(temp);
-    result.rgb = mix(uFlameColor * result.rgb, bbColor, 0.3);
-    
-    // Apply brightness multiplier for this layer
-    result.rgb *= brightnessMult;
-    
-    // Fake depth (inner glow)
-    if (uDepthIntensity > 0.0) {
-        float depth = result.r * uDepthIntensity;
-        result.rgb += vec3(depth) * 0.5;
-    }
-    
-    return result;
-}
-
-void main() {
-    vec2 uv = vTexCoord;
-    vec2 pixelPos = gl_FragCoord.xy;
-    
-    // Determine if we're in a frame area
-    bool inFrame = false;
-    float edgeDist = 0.0;
-    
-    if (uFrameMode == 0) {
-        // Bottom only
-        if (uFrameCurve > 0.0 || uFrameNoiseAmount > 0.0) {
-            float dist = getCurvedFrameDistance(pixelPos, uResolution, uFrameThickness, uFrameCurve, uFrameNoiseAmount);
-            if (pixelPos.y < uFrameThickness && dist < uFrameThickness) {
-                inFrame = true;
-                edgeDist = pixelPos.y / uFrameThickness;
-            }
-        } else {
-            if (pixelPos.y < uFrameThickness) {
-                inFrame = true;
-                edgeDist = pixelPos.y / uFrameThickness;
-            }
-        }
-    } else if (uFrameMode == 1) {
-        // Top only
-        if (pixelPos.y > uResolution.y - uFrameThickness) {
-            inFrame = true;
-            edgeDist = (uResolution.y - pixelPos.y) / uFrameThickness;
-        }
-    } else if (uFrameMode == 2) {
-        // Sides only
-        if (pixelPos.x < uFrameThickness || pixelPos.x > uResolution.x - uFrameThickness) {
-            inFrame = true;
-            if (pixelPos.x < uFrameThickness) {
-                edgeDist = pixelPos.x / uFrameThickness;
-            } else {
-                edgeDist = (uResolution.x - pixelPos.x) / uFrameThickness;
-            }
-        }
-    } else {
-        // All edges with curve support
-        float minDist;
-        if (uFrameCurve > 0.0 || uFrameNoiseAmount > 0.0) {
-            minDist = getCurvedFrameDistance(pixelPos, uResolution, uFrameThickness, uFrameCurve, uFrameNoiseAmount);
-        } else {
-            float distFromLeft = pixelPos.x;
-            float distFromRight = uResolution.x - pixelPos.x;
-            float distFromBottom = pixelPos.y;
-            float distFromTop = uResolution.y - pixelPos.y;
-            minDist = min(min(distFromLeft, distFromRight), min(distFromBottom, distFromTop));
-        }
-        
-        if (minDist < uFrameThickness) {
-            inFrame = true;
-            edgeDist = minDist / uFrameThickness;
-        }
-    }
-    
-    if (!inFrame) {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
-        return;
-    }
-    
-    // Multi-layer compositing
-    vec4 finalColor = vec4(0.0);
-    
-    if (uLayersEnabled && uLayerCount > 1) {
-        // Background layer: large, slow, dark
-        vec3 samplePos1 = vec3(uv.x, edgeDist, uv.y);
-        samplePos1.x += uLayerParallax * 0.02;
-        vec4 layer1 = sampleFireLayer(samplePos1, vec4(0.8, 2.0, 0.8, 0.5), 0.0, 0.5, 0.6 * uFlameBrightness);
-        finalColor = layer1;
-        
-        // Midground layer: normal
-        vec3 samplePos2 = vec3(uv.x, edgeDist, uv.y);
-        vec4 layer2 = sampleFireLayer(samplePos2, vec4(1.0, 2.0, 1.0, 0.5), 0.0, 1.0, 1.0 * uFlameBrightness);
-        finalColor = mix(finalColor, layer2, layer2.a);
-        
-        if (uLayerCount >= 3) {
-            // Foreground layer: small, fast, bright
-            vec3 samplePos3 = vec3(uv.x, edgeDist, uv.y);
-            samplePos3.x -= uLayerParallax * 0.02;
-            vec4 layer3 = sampleFireLayer(samplePos3, vec4(1.2, 2.0, 1.2, 0.5), 0.0, 1.5, 1.2 * uFlameBrightness);
-            finalColor = mix(finalColor, layer3, layer3.a);
-        }
-    } else {
-        // Single layer
-        vec3 samplePos = vec3(uv.x, edgeDist, uv.y);
-        finalColor = sampleFireLayer(samplePos, vec4(1.0, 2.0, 1.0, 0.5), 0.0, 1.0, uFlameBrightness);
-    }
-    
-    // Apply soft edge blending / feathering
-    if (uEdgeFeather > 0.0) {
-        float featherDist = uFrameThickness * uEdgeFeather;
-        float featherNoise = simplexNoise(pixelPos * 0.02) * 0.5 + 0.5;
-        float featherAmount = smoothstep(0.0, featherDist / uFrameThickness, edgeDist);
-        featherAmount = mix(featherAmount, featherAmount * featherNoise, 0.3);
-        finalColor.a *= featherAmount;
-    } else if (uMaskEdges) {
-        finalColor.a *= smoothstep(0.0, 0.3, edgeDist);
-    }
-    
-    gl_FragColor = finalColor;
-}
-`;
-        
-        this.programs.flames = this.createProgram(vertexShaderSource, fragmentShaderSource);
-    }
-    
-    setupSmokeShaders() {
-        const vertexShaderSource = `
-            attribute vec3 aPosition;
-            attribute vec2 aTexCoord;
+        const fragmentShaderSource = `
+            precision highp float;
             
-            uniform mat4 uProjectionMatrix;
-            uniform mat4 uModelViewMatrix;
+            uniform float uTime;
+            uniform sampler2D uNoiseTexture;
+            uniform sampler2D uFireProfile;
+            uniform vec3 uFlameColor;
+            uniform float uFlameSpeed;
+            uniform float uFlameIntensity;
+            uniform float uFlameBrightness;
+            uniform vec2 uResolution;
+            uniform float uFrameThickness;
+            uniform int uFrameMode;
+            uniform bool uMaskEdges;
             
             varying vec2 vTexCoord;
+            varying vec3 vPosition;
+            
+            const float modulus = 61.0;
+            
+            vec2 mBBS(vec2 val, float modulus) {
+                val = mod(val, modulus);
+                return mod(val * val, modulus);
+            }
+            
+            float mnoise(vec3 pos) {
+                float intArg = floor(pos.z);
+                float fracArg = fract(pos.z);
+                vec2 hash = mBBS(intArg * 3.0 + vec2(0.0, 3.0), modulus);
+                vec4 g = vec4(
+                    texture2D(uNoiseTexture, vec2(pos.x, pos.y + hash.x) / modulus).xy,
+                    texture2D(uNoiseTexture, vec2(pos.x, pos.y + hash.y) / modulus).xy
+                ) * 2.0 - 1.0;
+                return mix(
+                    g.x + g.y * fracArg,
+                    g.z + g.w * (fracArg - 1.0),
+                    smoothstep(0.0, 1.0, fracArg)
+                );
+            }
+            
+            float turbulence(vec3 pos) {
+                float sum = 0.0;
+                float freq = 1.0;
+                float amp = 1.0;
+                
+                for(int i = 0; i < 5; i++) {
+                    sum += abs(mnoise(pos * freq)) * amp;
+                    freq *= 2.0;
+                    amp *= 0.5;
+                }
+                return sum;
+            }
+            
+            vec4 sampleFire(vec3 loc, vec4 scale) {
+                loc.xz = loc.xz * 2.0 - 1.0;
+                vec2 st = vec2(sqrt(dot(loc.xz, loc.xz)), loc.y);
+                
+                loc.y -= uTime * scale.w * uFlameSpeed;
+                loc *= scale.xyz;
+                
+                float offset = sqrt(st.y) * uFlameIntensity * turbulence(loc);
+                st.y += offset;
+                
+                if (st.y > 1.0) {
+                    return vec4(0.0, 0.0, 0.0, 0.0);
+                }
+                
+                vec4 result = texture2D(uFireProfile, st);
+                
+                if (st.y < 0.1) {
+                    result *= st.y / 0.1;
+                }
+                
+                // Enhanced color with better gradient
+                vec3 flameGradient = mix(
+                    uFlameColor * 0.5,
+                    uFlameColor * 1.5,
+                    st.y
+                );
+                result.rgb *= flameGradient;
+                
+                // Add glow effect
+                result.rgb += vec3(0.2, 0.1, 0.0) * (1.0 - st.y) * result.a;
+                
+                return result;
+            }
             
             void main() {
-                gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
-                vTexCoord = aTexCoord;
+                vec2 uv = vTexCoord;
+                vec2 pixelPos = gl_FragCoord.xy;
+                
+                bool inFrame = false;
+                float edgeDist = 0.0;
+                
+                if (uFrameMode == 0) {
+                    if (pixelPos.y < uFrameThickness) {
+                        inFrame = true;
+                        edgeDist = pixelPos.y / uFrameThickness;
+                    }
+                } else if (uFrameMode == 1) {
+                    if (pixelPos.y > uResolution.y - uFrameThickness) {
+                        inFrame = true;
+                        edgeDist = (uResolution.y - pixelPos.y) / uFrameThickness;
+                    }
+                } else if (uFrameMode == 2) {
+                    if (pixelPos.x < uFrameThickness || pixelPos.x > uResolution.x - uFrameThickness) {
+                        inFrame = true;
+                        if (pixelPos.x < uFrameThickness) {
+                            edgeDist = pixelPos.x / uFrameThickness;
+                        } else {
+                            edgeDist = (uResolution.x - pixelPos.x) / uFrameThickness;
+                        }
+                    }
+                } else {
+                    float distFromLeft = pixelPos.x;
+                    float distFromRight = uResolution.x - pixelPos.x;
+                    float distFromBottom = pixelPos.y;
+                    float distFromTop = uResolution.y - pixelPos.y;
+                    
+                    float minDist = min(min(distFromLeft, distFromRight), min(distFromBottom, distFromTop));
+                    
+                    if (minDist < uFrameThickness) {
+                        inFrame = true;
+                        edgeDist = minDist / uFrameThickness;
+                    }
+                }
+                
+                if (!inFrame) {
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+                    return;
+                }
+                
+                vec3 samplePos = vec3(uv.x, edgeDist, uv.y);
+                vec4 fireColor = sampleFire(samplePos, vec4(1.0, 2.0, 1.0, 0.5));
+                
+                fireColor.rgb *= uFlameBrightness * 2.0;
+                
+                if (uMaskEdges) {
+                    fireColor.a *= smoothstep(0.0, 0.3, edgeDist);
+                }
+                
+                gl_FragColor = fireColor;
             }
         `;
         
-        // Inline smoke.frag shader
-        const fragmentShaderSource = `precision highp float;
-
-uniform float uTime;
-uniform vec2 uResolution;
-uniform float uFrameThickness;
-uniform int uFrameMode;
-uniform float uSmokeIntensity;
-uniform float uSmokeSpeed;
-uniform vec3 uSmokeColor;
-uniform float uDetailScale;
-
-varying vec2 vTexCoord;
-
-// Simplex noise (inline for smoke shader)
-vec3 mod289(vec3 x) {
-    return x - floor(x * (1.0 / 289.0)) * 289.0;
-}
-
-vec2 mod289_2(vec2 x) {
-    return x - floor(x * (1.0 / 289.0)) * 289.0;
-}
-
-vec3 permute(vec3 x) {
-    return mod289(((x * 34.0) + 1.0) * x);
-}
-
-float simplexNoise(vec2 v) {
-    const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
-    vec2 i = floor(v + dot(v, C.yy));
-    vec2 x0 = v - i + dot(i, C.xx);
-    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-    vec4 x12 = x0.xyxy + C.xxzz;
-    x12.xy -= i1;
-    i = mod289_2(i);
-    vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
-    vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
-    m = m * m;
-    m = m * m;
-    vec3 x = 2.0 * fract(p * C.www) - 1.0;
-    vec3 h = abs(x) - 0.5;
-    vec3 ox = floor(x + 0.5);
-    vec3 a0 = x - ox;
-    m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
-    vec3 g;
-    g.x = a0.x * x0.x + h.x * x0.y;
-    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-    return 130.0 * dot(m, g);
-}
-
-// Multi-octave noise for smoke
-float smokeFbm(vec2 p) {
-    float sum = 0.0;
-    float freq = 1.0;
-    float amp = 1.0;
-    
-    for (int i = 0; i < 6; i++) {
-        sum += simplexNoise(p * freq) * amp;
-        freq *= 2.0;
-        amp *= 0.5;
-    }
-    
-    return sum;
-}
-
-void main() {
-    vec2 pixelPos = gl_FragCoord.xy;
-    vec2 uv = vTexCoord;
-    
-    // Determine if we're in frame area (reuse same logic as flame)
-    bool inFrame = false;
-    float edgeDist = 0.0;
-    
-    if (uFrameMode == 0) {
-        // Bottom only
-        if (pixelPos.y < uFrameThickness) {
-            inFrame = true;
-            edgeDist = pixelPos.y / uFrameThickness;
-        }
-    } else if (uFrameMode == 1) {
-        // Top only
-        if (pixelPos.y > uResolution.y - uFrameThickness) {
-            inFrame = true;
-            edgeDist = (uResolution.y - pixelPos.y) / uFrameThickness;
-        }
-    } else if (uFrameMode == 2) {
-        // Sides only
-        if (pixelPos.x < uFrameThickness || pixelPos.x > uResolution.x - uFrameThickness) {
-            inFrame = true;
-            if (pixelPos.x < uFrameThickness) {
-                edgeDist = pixelPos.x / uFrameThickness;
-            } else {
-                edgeDist = (uResolution.x - pixelPos.x) / uFrameThickness;
-            }
-        }
-    } else {
-        // All edges
-        float distFromLeft = pixelPos.x;
-        float distFromRight = uResolution.x - pixelPos.x;
-        float distFromBottom = pixelPos.y;
-        float distFromTop = uResolution.y - pixelPos.y;
-        float minDist = min(min(distFromLeft, distFromRight), min(distFromBottom, distFromTop));
-        
-        if (minDist < uFrameThickness) {
-            inFrame = true;
-            edgeDist = minDist / uFrameThickness;
-        }
-    }
-    
-    if (!inFrame) {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
-        return;
-    }
-    
-    // Smoke moves upward slowly
-    vec2 smokePos = uv;
-    smokePos.y += uTime * uSmokeSpeed * 0.1;
-    smokePos.x += simplexNoise(vec2(uv.y * 3.0, uTime * 0.5)) * 0.1;
-    
-    // Create wispy smoke pattern
-    float smoke = smokeFbm(smokePos * uDetailScale * 2.0);
-    smoke = smoothstep(0.3, 0.8, smoke);
-    
-    // Dissipate as it rises
-    float dissipation = 1.0 - edgeDist;
-    dissipation = pow(dissipation, 2.0);
-    
-    smoke *= dissipation * uSmokeIntensity;
-    
-    // Apply smoke color with transparency
-    vec4 smokeColor = vec4(uSmokeColor, smoke * 0.5);
-    
-    gl_FragColor = smokeColor;
-}
-`;
-        
-        this.programs.smoke = this.createProgram(vertexShaderSource, fragmentShaderSource);
+        this.programs.flames = this.createProgram(vertexShaderSource, fragmentShaderSource);
     }
     
     setupParticleShaders() {
@@ -836,7 +445,6 @@ void main() {
         
         this.programs.particles = this.createProgram(vertexShaderSource, fragmentShaderSource);
     }
-
     
     setupEnergyShaders() {
         const vertexShaderSource = `
@@ -962,7 +570,6 @@ void main() {
         
         this.programs.energy = this.createProgram(vertexShaderSource, fragmentShaderSource);
     }
-
     
     setupLightningShaders() {
         const vertexShaderSource = `
@@ -1113,7 +720,6 @@ void main() {
         
         this.programs.lightning = this.createProgram(vertexShaderSource, fragmentShaderSource);
     }
-
     
     createProgram(vertexSource, fragmentSource) {
         const vertexShader = this.compileShader(vertexSource, this.gl.VERTEX_SHADER);
@@ -1167,7 +773,6 @@ void main() {
     setupUniformsForProgram(program) {
         this.gl.useProgram(program);
         
-        // Standard uniforms
         this.uniforms = {
             time: this.gl.getUniformLocation(program, 'uTime'),
             flameColor: this.gl.getUniformLocation(program, 'uFlameColor'),
@@ -1181,26 +786,7 @@ void main() {
             projectionMatrix: this.gl.getUniformLocation(program, 'uProjectionMatrix'),
             modelViewMatrix: this.gl.getUniformLocation(program, 'uModelViewMatrix'),
             noiseTexture: this.gl.getUniformLocation(program, 'uNoiseTexture'),
-            fireProfile: this.gl.getUniformLocation(program, 'uFireProfile'),
-            // New v2.2.0 uniforms
-            noiseOctaves: this.gl.getUniformLocation(program, 'uNoiseOctaves'),
-            useHighQualityTextures: this.gl.getUniformLocation(program, 'uUseHighQualityTextures'),
-            detailScale: this.gl.getUniformLocation(program, 'uDetailScale'),
-            edgeFeather: this.gl.getUniformLocation(program, 'uEdgeFeather'),
-            frameCurve: this.gl.getUniformLocation(program, 'uFrameCurve'),
-            frameNoiseAmount: this.gl.getUniformLocation(program, 'uFrameNoiseAmount'),
-            animationEasing: this.gl.getUniformLocation(program, 'uAnimationEasing'),
-            pulseEnabled: this.gl.getUniformLocation(program, 'uPulseEnabled'),
-            pulseAmount: this.gl.getUniformLocation(program, 'uPulseAmount'),
-            pulseSpeed: this.gl.getUniformLocation(program, 'uPulseSpeed'),
-            depthIntensity: this.gl.getUniformLocation(program, 'uDepthIntensity'),
-            layersEnabled: this.gl.getUniformLocation(program, 'uLayersEnabled'),
-            layerCount: this.gl.getUniformLocation(program, 'uLayerCount'),
-            layerParallax: this.gl.getUniformLocation(program, 'uLayerParallax'),
-            // Smoke uniforms
-            smokeIntensity: this.gl.getUniformLocation(program, 'uSmokeIntensity'),
-            smokeSpeed: this.gl.getUniformLocation(program, 'uSmokeSpeed'),
-            smokeColor: this.gl.getUniformLocation(program, 'uSmokeColor')
+            fireProfile: this.gl.getUniformLocation(program, 'uFireProfile')
         };
     }
     
@@ -1284,25 +870,6 @@ void main() {
         return modes[this.config.frameMode] || 0;
     }
     
-    getAnimationEasing() {
-        const easings = {
-            'linear': 0,
-            'sine': 1,
-            'quad': 2,
-            'elastic': 3
-        };
-        return easings[this.config.animationEasing] || 0;
-    }
-    
-    calculateDetailScale() {
-        if (!this.config.detailScaleAuto) {
-            return 1.0;
-        }
-        // Auto-calculate based on canvas resolution
-        const avgRes = (this.canvas.width + this.canvas.height) / 2;
-        return Math.max(0.5, avgRes / 1000.0);
-    }
-    
     updateUniforms() {
         if (!this.gl || !this.currentProgram) return;
         
@@ -1337,62 +904,6 @@ void main() {
             this.gl.uniform2f(this.uniforms.resolution, this.canvas.width, this.canvas.height);
         }
         
-        // New v2.2.0 uniforms
-        if (this.uniforms.noiseOctaves) {
-            this.gl.uniform1i(this.uniforms.noiseOctaves, this.config.noiseOctaves || 8);
-        }
-        if (this.uniforms.useHighQualityTextures) {
-            this.gl.uniform1i(this.uniforms.useHighQualityTextures, this.config.useHighQualityTextures ? 1 : 0);
-        }
-        if (this.uniforms.detailScale) {
-            this.gl.uniform1f(this.uniforms.detailScale, this.calculateDetailScale());
-        }
-        if (this.uniforms.edgeFeather) {
-            this.gl.uniform1f(this.uniforms.edgeFeather, this.config.edgeFeather || 0.0);
-        }
-        if (this.uniforms.frameCurve) {
-            this.gl.uniform1f(this.uniforms.frameCurve, this.config.frameCurve || 0.0);
-        }
-        if (this.uniforms.frameNoiseAmount) {
-            this.gl.uniform1f(this.uniforms.frameNoiseAmount, this.config.frameNoiseAmount || 0.0);
-        }
-        if (this.uniforms.animationEasing) {
-            this.gl.uniform1i(this.uniforms.animationEasing, this.getAnimationEasing());
-        }
-        if (this.uniforms.pulseEnabled) {
-            this.gl.uniform1i(this.uniforms.pulseEnabled, this.config.pulseEnabled ? 1 : 0);
-        }
-        if (this.uniforms.pulseAmount) {
-            this.gl.uniform1f(this.uniforms.pulseAmount, this.config.pulseAmount || 0.0);
-        }
-        if (this.uniforms.pulseSpeed) {
-            this.gl.uniform1f(this.uniforms.pulseSpeed, this.config.pulseSpeed || 1.0);
-        }
-        if (this.uniforms.depthIntensity) {
-            this.gl.uniform1f(this.uniforms.depthIntensity, this.config.depthIntensity || 0.0);
-        }
-        if (this.uniforms.layersEnabled) {
-            this.gl.uniform1i(this.uniforms.layersEnabled, this.config.layersEnabled ? 1 : 0);
-        }
-        if (this.uniforms.layerCount) {
-            this.gl.uniform1i(this.uniforms.layerCount, this.config.layerCount || 1);
-        }
-        if (this.uniforms.layerParallax) {
-            this.gl.uniform1f(this.uniforms.layerParallax, this.config.layerParallax || 0.0);
-        }
-        
-        // Smoke uniforms
-        if (this.uniforms.smokeIntensity) {
-            this.gl.uniform1f(this.uniforms.smokeIntensity, this.config.smokeIntensity || 0.0);
-        }
-        if (this.uniforms.smokeSpeed) {
-            this.gl.uniform1f(this.uniforms.smokeSpeed, this.config.smokeSpeed || 0.3);
-        }
-        if (this.uniforms.smokeColor) {
-            const smokeRgb = this.hexToRgb(this.config.smokeColor || '#333333');
-            this.gl.uniform3f(this.uniforms.smokeColor, smokeRgb.r, smokeRgb.g, smokeRgb.b);
-        }
-        
         if (this.uniforms.noiseTexture && this.textures.noise) {
             this.gl.uniform1i(this.uniforms.noiseTexture, 0);
         }
@@ -1410,38 +921,37 @@ void main() {
         this.canvas.style.height = window.innerHeight + 'px';
         
         this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-        
-        if (this.postProcessor) {
-            this.postProcessor.resize(this.canvas.width, this.canvas.height);
-        }
-        
         this.updateUniforms();
     }
     
-    renderScene() {
-        const gl = this.gl;
+    render() {
+        if (!this.gl || !this.currentProgram) {
+            requestAnimationFrame(() => this.render());
+            return;
+        }
+        
         const time = (Date.now() - this.startTime) / 1000.0;
         
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        this.gl.clearColor(0, 0, 0, 0);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        this.gl.enable(this.gl.BLEND);
+        this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
         
-        gl.useProgram(this.currentProgram);
+        this.gl.useProgram(this.currentProgram);
         
         if (this.uniforms.time) {
-            gl.uniform1f(this.uniforms.time, time);
+            this.gl.uniform1f(this.uniforms.time, time);
         }
         
         // Bind textures
         if (this.textures.noise) {
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, this.textures.noise);
+            this.gl.activeTexture(this.gl.TEXTURE0);
+            this.gl.bindTexture(this.gl.TEXTURE_2D, this.textures.noise);
         }
         if (this.textures.fireProfile) {
-            gl.activeTexture(gl.TEXTURE1);
-            gl.bindTexture(gl.TEXTURE_2D, this.textures.fireProfile);
+            this.gl.activeTexture(this.gl.TEXTURE1);
+            this.gl.bindTexture(this.gl.TEXTURE_2D, this.textures.fireProfile);
         }
         
         // Set matrices
@@ -1459,135 +969,29 @@ void main() {
         ]);
         
         if (this.uniforms.projectionMatrix) {
-            gl.uniformMatrix4fv(this.uniforms.projectionMatrix, false, projectionMatrix);
+            this.gl.uniformMatrix4fv(this.uniforms.projectionMatrix, false, projectionMatrix);
         }
         if (this.uniforms.modelViewMatrix) {
-            gl.uniformMatrix4fv(this.uniforms.modelViewMatrix, false, modelViewMatrix);
+            this.gl.uniformMatrix4fv(this.uniforms.modelViewMatrix, false, modelViewMatrix);
         }
         
         // Bind geometry
-        const aPosition = gl.getAttribLocation(this.currentProgram, 'aPosition');
+        const aPosition = this.gl.getAttribLocation(this.currentProgram, 'aPosition');
         if (aPosition !== -1) {
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.position);
-            gl.enableVertexAttribArray(aPosition);
-            gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.position);
+            this.gl.enableVertexAttribArray(aPosition);
+            this.gl.vertexAttribPointer(aPosition, 3, this.gl.FLOAT, false, 0, 0);
         }
         
-        const aTexCoord = gl.getAttribLocation(this.currentProgram, 'aTexCoord');
+        const aTexCoord = this.gl.getAttribLocation(this.currentProgram, 'aTexCoord');
         if (aTexCoord !== -1) {
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.texCoord);
-            gl.enableVertexAttribArray(aTexCoord);
-            gl.vertexAttribPointer(aTexCoord, 2, gl.FLOAT, false, 0, 0);
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.texCoord);
+            this.gl.enableVertexAttribArray(aTexCoord);
+            this.gl.vertexAttribPointer(aTexCoord, 2, this.gl.FLOAT, false, 0, 0);
         }
         
-        // Draw main effect
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        
-        // Render smoke layer if enabled
-        if (this.config.smokeEnabled && this.programs.smoke) {
-            const prevProgram = this.currentProgram;
-            const prevUniforms = this.uniforms;
-            
-            gl.useProgram(this.programs.smoke);
-            
-            // Cache smoke uniforms if not already cached
-            if (!this.uniforms.smokeUniforms) {
-                this.uniforms.smokeUniforms = {
-                    time: gl.getUniformLocation(this.programs.smoke, 'uTime'),
-                    resolution: gl.getUniformLocation(this.programs.smoke, 'uResolution'),
-                    frameThickness: gl.getUniformLocation(this.programs.smoke, 'uFrameThickness'),
-                    frameMode: gl.getUniformLocation(this.programs.smoke, 'uFrameMode'),
-                    smokeIntensity: gl.getUniformLocation(this.programs.smoke, 'uSmokeIntensity'),
-                    smokeSpeed: gl.getUniformLocation(this.programs.smoke, 'uSmokeSpeed'),
-                    smokeColor: gl.getUniformLocation(this.programs.smoke, 'uSmokeColor'),
-                    detailScale: gl.getUniformLocation(this.programs.smoke, 'uDetailScale'),
-                    projectionMatrix: gl.getUniformLocation(this.programs.smoke, 'uProjectionMatrix'),
-                    modelViewMatrix: gl.getUniformLocation(this.programs.smoke, 'uModelViewMatrix')
-                };
-            }
-            
-            // Set smoke-specific uniforms
-            const smokeUniforms = this.uniforms.smokeUniforms;
-            if (smokeUniforms.time) gl.uniform1f(smokeUniforms.time, time);
-            if (smokeUniforms.resolution) gl.uniform2f(smokeUniforms.resolution, this.canvas.width, this.canvas.height);
-            if (smokeUniforms.frameThickness) gl.uniform1f(smokeUniforms.frameThickness, this.config.frameThickness || 150);
-            if (smokeUniforms.frameMode) gl.uniform1i(smokeUniforms.frameMode, this.getFrameMode());
-            if (smokeUniforms.smokeIntensity) gl.uniform1f(smokeUniforms.smokeIntensity, this.config.smokeIntensity || 0.4);
-            if (smokeUniforms.smokeSpeed) gl.uniform1f(smokeUniforms.smokeSpeed, this.config.smokeSpeed || 0.3);
-            if (smokeUniforms.detailScale) gl.uniform1f(smokeUniforms.detailScale, this.calculateDetailScale());
-            
-            if (smokeUniforms.smokeColor) {
-                const smokeRgb = this.hexToRgb(this.config.smokeColor || '#333333');
-                gl.uniform3f(smokeUniforms.smokeColor, smokeRgb.r, smokeRgb.g, smokeRgb.b);
-            }
-            
-            const projectionMatrix = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-            const modelViewMatrix = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-            if (smokeUniforms.projectionMatrix) gl.uniformMatrix4fv(smokeUniforms.projectionMatrix, false, projectionMatrix);
-            if (smokeUniforms.modelViewMatrix) gl.uniformMatrix4fv(smokeUniforms.modelViewMatrix, false, modelViewMatrix);
-            
-            // Re-bind geometry for smoke
-            const aSmokePosition = gl.getAttribLocation(this.programs.smoke, 'aPosition');
-            if (aSmokePosition !== -1) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.position);
-                gl.enableVertexAttribArray(aSmokePosition);
-                gl.vertexAttribPointer(aSmokePosition, 3, gl.FLOAT, false, 0, 0);
-            }
-            
-            const aSmokeTexCoord = gl.getAttribLocation(this.programs.smoke, 'aTexCoord');
-            if (aSmokeTexCoord !== -1) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.texCoord);
-                gl.enableVertexAttribArray(aSmokeTexCoord);
-                gl.vertexAttribPointer(aSmokeTexCoord, 2, gl.FLOAT, false, 0, 0);
-            }
-            
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            
-            // Restore previous program and uniforms
-            gl.useProgram(prevProgram);
-            this.uniforms = prevUniforms;
-        }
-    }
-    
-    render() {
-        if (!this.gl || !this.currentProgram) {
-            requestAnimationFrame(() => this.render());
-            return;
-        }
-        
-        const time = (Date.now() - this.startTime) / 1000.0;
-        
-        // Multi-pass rendering with bloom
-        if (this.config.bloomEnabled && this.postProcessor && this.postProcessor.isReady()) {
-            // Render to framebuffer
-            this.postProcessor.renderToFramebuffer('scene', () => {
-                this.renderScene();
-            });
-            
-            // Apply bloom
-            const bloomTexture = this.postProcessor.applyBloom(
-                this.postProcessor.textures.scene,
-                {
-                    bloomThreshold: this.config.bloomThreshold || 0.6,
-                    bloomRadius: this.config.bloomRadius || 4
-                }
-            );
-            
-            // Composite to screen
-            this.postProcessor.composite(
-                this.postProcessor.textures.scene,
-                bloomTexture,
-                {
-                    bloomIntensity: this.config.bloomIntensity || 0.8,
-                    chromaticAberration: this.config.chromaticAberration || 0.005,
-                    filmGrain: this.config.filmGrain || 0.03
-                },
-                time
-            );
-        } else {
-            // Direct rendering without bloom
-            this.renderScene();
-        }
+        // Draw
+        this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
         
         requestAnimationFrame(() => this.render());
     }
@@ -1595,5 +999,6 @@ void main() {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+    // Store engine instance globally for debugging and external control
     window.effectsEngine = new EffectsEngine('flameCanvas');
 });
