@@ -14,7 +14,7 @@
  */
 
 class ParticleSystemSOA {
-    constructor(maxParticles = 50000) {
+    constructor(maxParticles = 100000) {
         this.max = maxParticles;
         this.count = 0;
         

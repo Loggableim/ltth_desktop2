@@ -745,6 +745,7 @@ class FireworksEngine {
         if (!this.running) return;
         
         const now = performance.now();
+        // Cap delta time to prevent physics explosions during lag spikes
         const deltaTime = Math.min((now - this.lastTime) / CONFIG.IDEAL_FRAME_TIME, 2.0);
         this.lastTime = now;
         
@@ -785,8 +786,10 @@ class FireworksEngine {
         
         this.fireworks.push(fw);
         
+        // Limit concurrent fireworks to prevent memory issues
         if (this.fireworks.length > CONFIG.maxFireworks) {
-            this.fireworks.shift();
+            // Remove oldest firework (first element)
+            this.fireworks.splice(0, 1);
         }
         
         return id;
@@ -814,8 +817,9 @@ class FireworksEngine {
             });
             
             this.socket.on('fireworks:get-active-count', () => {
+                const stats = this.particles.getStats();
                 this.socket.emit('fireworks:active-count-response', { 
-                    count: this.particles.activeCount,
+                    count: stats.active,
                     fireworks: this.fireworks.length
                 });
             });
@@ -890,7 +894,7 @@ class FireworksEngine {
     }
 
     getActiveCount() {
-        return this.particles.activeCount;
+        return this.particles.getStats().active;
     }
 
     getFireworkCount() {
