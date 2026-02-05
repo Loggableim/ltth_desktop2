@@ -2318,8 +2318,9 @@ class FireworksEngine {
             }
             
             // Remove 50% of oldest flying fireworks (by age)
+            // Note: 'age' field increases over time, so higher age = older firework
             const flyingFW = this.fireworks.filter(fw => !fw.exploded);
-            flyingFW.sort((a, b) => (b.age || 0) - (a.age || 0)); // Oldest first (highest age value)
+            flyingFW.sort((a, b) => (b.age || 0) - (a.age || 0)); // Sort by age descending (oldest/highest age first)
             const toRemoveFlying = Math.ceil(flyingFW.length * 0.5);
             
             for (let i = 0; i < toRemoveFlying; i++) {
@@ -2331,6 +2332,8 @@ class FireworksEngine {
             }
             
             // Clean up fireworks array (remove empty fireworks)
+            // Keep: Non-exploded fireworks (rockets still flying, even with empty particle arrays)
+            // Remove: Exploded fireworks without particles (completed explosions)
             this.fireworks = this.fireworks.filter(fw => {
                 const hasParticles = fw.particles && fw.particles.length > 0;
                 const isValid = !fw.exploded || hasParticles;
