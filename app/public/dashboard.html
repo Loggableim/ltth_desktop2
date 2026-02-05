@@ -738,9 +738,6 @@
                     <button class="sidebar-quick-icon" id="sidebar-quick-flows" data-action="flows" title="Toggle Flows">
                         <i data-lucide="git-branch"></i>
                     </button>
-                    <button class="sidebar-quick-icon" id="sidebar-quick-emoji-rain" data-action="emoji-rain" data-plugin="emoji-rain" title="Toggle Emoji Rain">
-                        <i data-lucide="cloud-rain"></i>
-                    </button>
                     <button class="sidebar-quick-icon" id="sidebar-quick-webgpu-emoji-rain" data-action="webgpu-emoji-rain" data-plugin="webgpu-emoji-rain" title="Toggle WebGPU Emoji Rain">
                         <i data-lucide="zap"></i>
                     </button>
@@ -831,10 +828,6 @@
                         <i class="sidebar-category-toggle" data-lucide="chevron-down"></i>
                     </div>
                     <div class="sidebar-category-items">
-                        <a href="#" class="sidebar-item" data-view="emoji-rain" data-plugin="emoji-rain">
-                            <i data-lucide="cloud-rain"></i>
-                            <span class="sidebar-item-text" data-i18n="navigation.emoji_rain">Emoji Rain</span>
-                        </a>
                         <a href="#" class="sidebar-item" data-view="webgpu-emoji-rain" data-plugin="webgpu-emoji-rain">
                             <i data-lucide="zap"></i>
                             <span class="sidebar-item-text" data-i18n="navigation.webgpu_emoji_rain">WebGPU Emoji Rain</span>
@@ -1176,10 +1169,6 @@
                             <button class="quick-action-btn" id="quick-flows-btn" data-action="flows" data-state="on">
                                 <i data-lucide="git-branch"></i>
                                 <span data-i18n="dashboard.quick_action.flows">Automation Flows</span>
-                            </button>
-                            <button class="quick-action-btn" id="quick-emoji-rain-btn" data-action="emoji-rain" data-state="on" data-plugin="emoji-rain">
-                                <i data-lucide="cloud-rain"></i>
-                                <span data-i18n="dashboard.quick_action.emoji_rain">Emoji Rain</span>
                             </button>
                             <button class="quick-action-btn" id="quick-webgpu-emoji-rain-btn" data-action="webgpu-emoji-rain" data-state="off" data-plugin="webgpu-emoji-rain">
                                 <i data-lucide="zap"></i>
@@ -2056,25 +2045,6 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </section>
-                </div>
-
-                <!-- View: Emoji Rain -->
-                <div id="view-emoji-rain" class="content-view" data-plugin="emoji-rain">
-                    <section class="view-section">
-                        <div class="view-header">
-                            <h2 class="view-title">
-                                <i data-lucide="cloud-rain"></i>
-                                Emoji Rain v2.0
-                            </h2>
-                            <a href="/emoji-rain/ui" target="_blank" class="btn btn-sm btn-ghost">
-                                <i data-lucide="external-link"></i>
-                                Open in New Tab
-                            </a>
-                        </div>
-                        <div class="iframe-container">
-                            <iframe data-src="/emoji-rain/ui" title="Emoji Rain Configuration"></iframe>
                         </div>
                     </section>
                 </div>

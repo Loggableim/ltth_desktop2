@@ -46,12 +46,6 @@ const pluginDescriptions = {
     es: 'Importa configuraciones desde rutas de instalación antiguas a la ubicación de configuración actual. Utilidad para migrar configuraciones durante actualizaciones o reinstalaciones.',
     fr: 'Importe les paramètres depuis d\'anciens chemins d\'installation vers l\'emplacement de configuration actuel. Utilitaire pour migrer les configurations lors de mises à jour ou réinstallations.'
   },
-  'emoji-rain': {
-    en: 'Enhanced physics-based emoji rain with OBS HUD support, game-quality graphics, and 60 FPS performance. Features custom emoji sets, user mappings, and TikTok event integration.',
-    de: 'Verbesserter physikbasierter Emoji-Regen mit OBS-HUD-Unterstützung, Spiele-Qualität-Grafik und 60-FPS-Performance. Bietet benutzerdefinierte Emoji-Sets, Benutzer-Mappings und TikTok-Event-Integration.',
-    es: 'Lluvia de emojis mejorada basada en física con soporte HUD de OBS, gráficos de calidad de juego y rendimiento de 60 FPS. Incluye conjuntos de emojis personalizados, mapeos de usuarios e integración de eventos de TikTok.',
-    fr: 'Pluie d\'émojis améliorée basée sur la physique avec support HUD OBS, graphismes de qualité jeu et performance 60 FPS. Comprend des ensembles d\'émojis personnalisés, mappages d\'utilisateurs et intégration d\'événements TikTok.'
-  },
   'fireworks-webgpu': {
     en: 'WebGPU-accelerated fireworks effects with gift-specific displays, combo systems, and interactive triggers. Features native WebGPU rendering with compute shaders for maximum performance.',
     de: 'WebGPU-beschleunigte Feuerwerk-Effekte mit geschenkspezifischen Anzeigen, Combo-Systemen und interaktiven Triggern. Bietet natives WebGPU-Rendering mit Compute-Shadern für maximale Performance.',

@@ -345,18 +345,6 @@
                 console.log(`[Load Quick Action States] Flows button set to: ${flowsBtn.getAttribute('data-state')}`);
             }
 
-            // Load Emoji Rain state from plugin
-            try {
-                const emojiRainResponse = await fetch('/api/emoji-rain/status');
-                const emojiRainData = await emojiRainResponse.json();
-                const emojiRainBtn = document.getElementById('quick-emoji-rain-btn');
-                if (emojiRainData.success) {
-                    setButtonState(emojiRainBtn, emojiRainData.enabled !== false ? 'on' : 'off');
-                }
-            } catch (error) {
-                console.log('Emoji Rain status not available');
-            }
-
             // Load WebGPU Emoji Rain state from plugin
             try {
                 const webgpuEmojiRainResponse = await fetch('/api/webgpu-emoji-rain/status');
@@ -421,11 +409,6 @@
                 case 'flows':
                     endpoint = '/api/settings';
                     body = { flows_enabled: enabled ? 'true' : 'false' };
-                    break;
-
-                case 'emoji-rain':
-                    endpoint = '/api/emoji-rain/toggle';
-                    body = { enabled };
                     break;
 
                 case 'webgpu-emoji-rain':
@@ -576,7 +559,6 @@
             'tts': 'Text-to-Speech',
             'soundboard': 'Soundboard',
             'flows': 'Automation Flows',
-            'emoji-rain': 'Emoji Rain',
             'osc-bridge': 'OSC-Bridge',
             'openshock-emergency-stop': 'OpenShock Emergency Stop'
         };

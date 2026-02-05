@@ -57,8 +57,7 @@ const WIKI_STRUCTURE = {
                 { id: 'soundboard', title: 'Soundboard', icon: 'music', file: 'plugins/soundboard/README.md' },
                 { id: 'goals', title: 'Goals System', icon: 'target', file: 'plugins/goals/README.md' },
                 { id: 'flows', title: 'Automation Flows', icon: 'git-branch', file: 'wiki/modules/flows.md' },
-                { id: 'alerts', title: 'Alert System', icon: 'bell', file: 'wiki/modules/alerts.md' },
-                { id: 'emoji-rain', title: 'Emoji Rain', icon: 'cloud-rain', file: 'Features/Emoji-Rain.md' }
+                { id: 'alerts', title: 'Alert System', icon: 'bell', file: 'wiki/modules/alerts.md' }
             ]
         },
         {

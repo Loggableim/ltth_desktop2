@@ -196,7 +196,7 @@ app.use((req, res, next) => {
     // Dashboard and plugin UIs need CSP policy
     const isDashboard = req.path === '/' || req.path.includes('/dashboard.html');
     const isPluginUI = req.path.includes('/goals/ui') || req.path.includes('/goals/overlay') ||
-                       req.path.includes('/emoji-rain/ui') || req.path.includes('/gift-milestone/ui') ||
+                       req.path.includes('/gift-milestone/ui') ||
                        req.path.includes('/plugins/') ||
                        req.path.includes('/openshock/') ||
                        req.path.includes('/viewer-xp/') ||
@@ -2616,9 +2616,6 @@ app.delete('/api/animations/:filename', apiLimiter, (req, res) => {
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ========== EMOJI RAIN ROUTES ==========
-// Moved to Emoji Rain Plugin (plugins/emoji-rain)
-
 // ========== MINIGAMES ROUTES ==========
 
 app.post('/api/minigames/roulette', apiLimiter, (req, res) => {
@@ -2863,9 +2860,6 @@ io.on('connection', (socket) => {
         // Handle minigame requests if needed
     });
 });
-
-// ========== EMOJI RAIN HELPER ==========
-// Moved to Emoji Rain Plugin (plugins/emoji-rain)
 
 // ========== TIKTOK EVENT-HANDLER ==========
 

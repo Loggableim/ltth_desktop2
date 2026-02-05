@@ -80,7 +80,7 @@ async function runTest() {
         console.log(`Loaded ${plugins1.length} plugins initially`);
         
         // Verify default active plugins
-        const defaultActive = ['emoji-rain', 'lastevent-spotlight', 'goals', 'quiz-show', 'soundboard', 'tts'];
+        const defaultActive = ['webgpu-emoji-rain', 'lastevent-spotlight', 'goals', 'quiz-show', 'soundboard', 'tts'];
         const activePlugins1 = plugins1.map(p => p.id);
         
         console.log('Active plugins:', activePlugins1.sort().join(', '));
@@ -109,12 +109,12 @@ async function runTest() {
         console.log('Test 3: Disable a default plugin');
         console.log('----------------------------------');
         // Disable a plugin that's enabled by default
-        await loader1.disablePlugin('emoji-rain');
+        await loader1.disablePlugin('webgpu-emoji-rain');
         
         // Verify the plugin is no longer in loaded plugins
         const plugins3 = loader1.getAllPlugins();
-        const emojiPluginDisabled = !plugins3.some(p => p.id === 'emoji-rain');
-        assert.ok(emojiPluginDisabled, 'emoji-rain should be disabled');
+        const emojiPluginDisabled = !plugins3.some(p => p.id === 'webgpu-emoji-rain');
+        assert.ok(emojiPluginDisabled, 'webgpu-emoji-rain should be disabled');
         console.log('✓ Test 3 passed: Plugin disabled successfully\n');
         
         console.log('Test 4: Verify state file was created and contains correct data');
@@ -125,7 +125,7 @@ async function runTest() {
         console.log('State file contents:', JSON.stringify(stateData, null, 2));
         
         assert.strictEqual(stateData['api-bridge'].enabled, true, 'api-bridge should be enabled in state');
-        assert.strictEqual(stateData['emoji-rain'].enabled, false, 'emoji-rain should be disabled in state');
+        assert.strictEqual(stateData['webgpu-emoji-rain'].enabled, false, 'webgpu-emoji-rain should be disabled in state');
         console.log('✓ Test 4 passed: State file contains correct data\n');
         
         console.log('Test 5: State persistence across restart (new PluginLoader instance)');
@@ -141,10 +141,10 @@ async function runTest() {
         
         // Verify that our changes persisted
         const apiBridgeStillEnabled = activePluginIds.includes('api-bridge');
-        const emojiRainStillDisabled = !activePluginIds.includes('emoji-rain');
+        const emojiRainStillDisabled = !activePluginIds.includes('webgpu-emoji-rain');
         
         assert.ok(apiBridgeStillEnabled, 'api-bridge should still be enabled after restart');
-        assert.ok(emojiRainStillDisabled, 'emoji-rain should still be disabled after restart');
+        assert.ok(emojiRainStillDisabled, 'webgpu-emoji-rain should still be disabled after restart');
         
         // Verify other default plugins are still active
         const otherDefaults = ['lastevent-spotlight', 'goals', 'quiz-show', 'soundboard', 'tts'];
@@ -155,17 +155,17 @@ async function runTest() {
         
         console.log('Test 6: Verify state overrides manifest default');
         console.log('--------------------------------------------------');
-        // Re-enable emoji-rain
-        await loader2.enablePlugin('emoji-rain');
+        // Re-enable webgpu-emoji-rain
+        await loader2.enablePlugin('webgpu-emoji-rain');
         
         // Create another new loader instance
         const loader3 = new PluginLoader(pluginsDir, mockApp, mockIO, mockDB, mockLogger, mockConfigPathManager, profileName);
         await loader3.loadAllPlugins();
         
         const plugins5 = loader3.getAllPlugins();
-        const emojiRainReEnabled = plugins5.some(p => p.id === 'emoji-rain');
+        const emojiRainReEnabled = plugins5.some(p => p.id === 'webgpu-emoji-rain');
         
-        assert.ok(emojiRainReEnabled, 'emoji-rain should be enabled again after re-enabling');
+        assert.ok(emojiRainReEnabled, 'webgpu-emoji-rain should be enabled again after re-enabling');
         console.log('✓ Test 6 passed: State correctly overrides manifest default\n');
         
         // Clean up
