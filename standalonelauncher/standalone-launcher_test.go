@@ -210,14 +210,19 @@ func TestGetInstallDirPortableMode(t *testing.T) {
 		t.Fatalf("Failed to create portable.txt: %v", err)
 	}
 	
-	// Note: We cannot easily test getInstallDir() directly because it uses os.Executable()
-	// which returns the test binary path. However, we verify the logic:
-	// 1. Check that portable.txt is detected
+	// Note: We cannot directly test getInstallDir() because it uses os.Executable()
+	// which returns the test binary path, not our temp directory.
+	// This test verifies the marker file creation logic, which is the key
+	// component of the portable mode detection in getInstallDir().
+	// Integration tests or manual testing are needed to verify the full behavior.
+	
+	// Verify that portable.txt marker file detection logic works
 	if _, err := os.Stat(portableMarker); os.IsNotExist(err) {
 		t.Error("portable.txt marker file should exist")
 	}
 	
 	t.Logf("Portable mode marker created at: %s", portableMarker)
+	t.Logf("Note: Full portable mode behavior requires integration testing")
 }
 
 // Test getInstallDir without portable mode (installer mode)
@@ -261,11 +266,14 @@ func TestGetInstallDirCreatesDirectory(t *testing.T) {
 		t.Fatalf("Failed to get user config directory: %v", err)
 	}
 	
-	// Create a unique test directory name to avoid conflicts
-	testDir := filepath.Join(userConfigDir, "PupCid", "LTTH-Launcher-Test-"+fmt.Sprintf("%d", os.Getpid()))
+	// Create a unique test directory name using t.TempDir() pattern
+	testDir := filepath.Join(userConfigDir, "PupCid", "LTTH-Launcher-Test-"+t.Name())
 	
 	// Ensure it doesn't exist before test
 	os.RemoveAll(testDir)
+	
+	// Clean up after test
+	defer os.RemoveAll(testDir)
 	
 	// Create the directory
 	if err := os.MkdirAll(testDir, 0755); err != nil {
@@ -276,9 +284,6 @@ func TestGetInstallDirCreatesDirectory(t *testing.T) {
 	if _, err := os.Stat(testDir); os.IsNotExist(err) {
 		t.Error("Directory should exist after creation")
 	}
-	
-	// Clean up
-	os.RemoveAll(testDir)
 	
 	t.Logf("Successfully created and cleaned up test directory: %s", testDir)
 }
