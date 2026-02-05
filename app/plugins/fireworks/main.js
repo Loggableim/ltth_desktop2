@@ -197,7 +197,6 @@ class FireworksPlugin {
         this.config = savedConfig || {
             // Global settings
             enabled: true,
-            renderer: 'webgl', // 'webgl', 'canvas', 'auto'
             maxParticles: 1000,
             targetFps: 60,
             
@@ -281,11 +280,7 @@ class FireworksPlugin {
             
             // Performance
             gpuAcceleration: true,
-            toasterMode: false, // When enabled, uses Canvas 2D instead of WebGL for better compatibility
             particleSizeRange: [4, 12],
-            trailsEnabled: true,
-            trailLength: 10,
-            glowEnabled: true,
             resolution: 1.0, // Legacy - kept for backward compatibility
             resolutionPreset: '1080p', // Resolution preset: 360p, 540p, 720p, 1080p, 1440p, 4k
             orientation: 'landscape', // 'landscape' or 'portrait'
