@@ -2749,7 +2749,6 @@ class GameEnginePlugin {
 
     // Check for Connect4 moves (simple patterns for non-GCCE mode)
     // Patterns: !c4 A, !c4A, c4 A, c4A, just A (single letter)
-    const messageLower = message.toLowerCase();
     const match = messageLower.match(/^!?c4\s*([a-g])$/i) || messageLower.match(/^([a-g])$/i);
     
     if (match) {

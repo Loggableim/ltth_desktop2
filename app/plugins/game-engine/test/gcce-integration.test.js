@@ -81,6 +81,17 @@ describe('Game Engine GCCE Integration', () => {
         getGameConfig: jest.fn(() => null)
       };
       
+      // Mock game objects to prevent destroy errors
+      plugin.wheelGame = {
+        destroy: jest.fn()
+      };
+      plugin.plinkoGame = {
+        destroy: jest.fn()
+      };
+      plugin.unifiedQueue = {
+        destroy: jest.fn()
+      };
+      
       plugin.destroy();
     }
   });
@@ -89,7 +100,8 @@ describe('Game Engine GCCE Integration', () => {
     test('should register c4 command with GCCE', () => {
       // Setup mock database
       plugin.db = {
-        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4)
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4),
+        getTriggers: jest.fn(() => [])
       };
       
       plugin.registerGCCECommands();
@@ -104,7 +116,8 @@ describe('Game Engine GCCE Integration', () => {
     test('should register c4start command with GCCE', () => {
       // Setup mock database
       plugin.db = {
-        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4)
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4),
+        getTriggers: jest.fn(() => [])
       };
       
       plugin.registerGCCECommands();
@@ -335,7 +348,8 @@ describe('Game Engine GCCE Integration', () => {
         getGameConfig: jest.fn(() => ({
           ...plugin.defaultConfigs.connect4,
           chatCommand: 'start4'
-        }))
+        })),
+        getTriggers: jest.fn(() => [])
       };
       
       plugin.registerGCCECommands();
@@ -350,7 +364,8 @@ describe('Game Engine GCCE Integration', () => {
     test('should default to c4start when no custom command configured', () => {
       // Setup mock database without custom chat command
       plugin.db = {
-        getGameConfig: jest.fn(() => null)
+        getGameConfig: jest.fn(() => null),
+        getTriggers: jest.fn(() => [])
       };
       
       plugin.registerGCCECommands();
@@ -367,7 +382,8 @@ describe('Game Engine GCCE Integration', () => {
         getGameConfig: jest.fn(() => ({
           ...plugin.defaultConfigs.connect4,
           chatCommand: ''
-        }))
+        })),
+        getTriggers: jest.fn(() => [])
       };
       
       plugin.registerGCCECommands();
