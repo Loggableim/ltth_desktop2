@@ -838,43 +838,85 @@
                         ctx.translate(this.x, this.y);
                         ctx.rotate(this.rotation);
                         
+                        const depthScale = 0.6 + this.z * 0.4;
+                        
+                        // Shadow/depth layer
+                        ctx.globalAlpha = this.alpha * 0.3;
+                        ctx.fillStyle = 'rgba(180, 200, 220, 1)';
+                        ctx.beginPath();
                         if (this.snowflakePoints && this.snowflakePoints.length > 0) {
-                            ctx.fillStyle = '#ffffff';
+                            for (let i = 0; i < this.snowflakePoints.length; i++) {
+                                const x = this.snowflakePoints[i].x * this.size * depthScale;
+                                const y = this.snowflakePoints[i].y * this.size * depthScale + 2;
+                                if (i === 0) ctx.moveTo(x, y);
+                                else ctx.lineTo(x, y);
+                            }
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // Main snowflake with radial gradient (crystal effect)
+                        ctx.globalAlpha = this.alpha;
+                        
+                        if (this.snowflakePoints && this.snowflakePoints.length > 0) {
+                            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * depthScale);
+                            gradient.addColorStop(0, '#ffffff');
+                            gradient.addColorStop(0.6, '#f0f8ff');
+                            gradient.addColorStop(1, 'rgba(240, 248, 255, 0.8)');
+                            
+                            ctx.fillStyle = gradient;
                             ctx.beginPath();
                             for (let i = 0; i < this.snowflakePoints.length; i++) {
-                                const x = this.snowflakePoints[i].x * this.size;
-                                const y = this.snowflakePoints[i].y * this.size;
-                                if (i === 0) {
-                                    ctx.moveTo(x, y);
-                                } else {
-                                    ctx.lineTo(x, y);
-                                }
+                                const x = this.snowflakePoints[i].x * this.size * depthScale;
+                                const y = this.snowflakePoints[i].y * this.size * depthScale;
+                                if (i === 0) ctx.moveTo(x, y);
+                                else ctx.lineTo(x, y);
                             }
                             ctx.closePath();
                             ctx.fill();
+                            
+                            // Outline for definition
+                            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                            ctx.lineWidth = 0.5;
+                            ctx.stroke();
                         } else {
+                            // Fallback with gradient
+                            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * depthScale);
+                            gradient.addColorStop(0, '#ffffff');
+                            gradient.addColorStop(1, 'rgba(240, 248, 255, 0.8)');
+                            ctx.fillStyle = gradient;
+                            
                             const points = 6;
-                            ctx.fillStyle = '#ffffff';
                             ctx.beginPath();
                             for (let i = 0; i < points; i++) {
                                 const angle = (i * Math.PI * 2) / points;
-                                const x = Math.cos(angle) * this.size;
-                                const y = Math.sin(angle) * this.size;
-                                if (i === 0) {
-                                    ctx.moveTo(x, y);
-                                } else {
-                                    ctx.lineTo(x, y);
-                                }
+                                const x = Math.cos(angle) * this.size * depthScale;
+                                const y = Math.sin(angle) * this.size * depthScale;
+                                if (i === 0) ctx.moveTo(x, y);
+                                else ctx.lineTo(x, y);
                             }
                             ctx.closePath();
                             ctx.fill();
                         }
                         
-                        if (Math.random() < SNOWFLAKE_SPARKLE_CHANCE) {
-                            ctx.fillStyle = '#ffffdd';
+                        // Enhanced sparkle effect
+                        if (Math.random() < SNOWFLAKE_SPARKLE_CHANCE * 1.5) {
                             ctx.globalAlpha = 0.9;
+                            
+                            // Outer glow
+                            const sparkleGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * 0.6);
+                            sparkleGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                            sparkleGradient.addColorStop(0.5, 'rgba(255, 255, 220, 0.6)');
+                            sparkleGradient.addColorStop(1, 'rgba(255, 255, 220, 0)');
+                            ctx.fillStyle = sparkleGradient;
                             ctx.beginPath();
-                            ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
+                            ctx.arc(0, 0, this.size * 0.6, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            // Bright center
+                            ctx.fillStyle = '#ffffee';
+                            ctx.beginPath();
+                            ctx.arc(0, 0, this.size * 0.3, 0, Math.PI * 2);
                             ctx.fill();
                         }
                         
