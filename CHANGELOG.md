@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-02-05
+
+### Changed
+- **Removed deprecated emoji-rain plugin** - Superseded by webgpu-emoji-rain
+  - The original emoji-rain plugin has been removed from the codebase
+  - Use the newer webgpu-emoji-rain plugin for better performance and WebGPU support
+
 ## [1.3.0] - 2026-02-03
 
 ### Added
