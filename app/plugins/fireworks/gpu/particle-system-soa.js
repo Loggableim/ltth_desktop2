@@ -50,6 +50,8 @@ class ParticleSystemSOA {
         this.emitTrail = new Uint8Array(maxParticles); // Whether particle emits trail
         this.willExplode = new Uint8Array(maxParticles); // Whether particle will create secondary explosion
         this.isSparkle = new Uint8Array(maxParticles); // Whether particle is a sparkle (for flicker effect)
+        this.willBurst = new Uint8Array(maxParticles); // Whether particle will create mini-burst
+        this.willSpiral = new Uint8Array(maxParticles); // Whether particle will create spiral burst
         
         // Firework association (for tracking which firework owns which particles)
         this.fireworkId = new Uint32Array(maxParticles);
@@ -62,6 +64,11 @@ class ParticleSystemSOA {
         this.age = new Float32Array(maxParticles); // Particle age for explosion timing
         this.explosionDelay = new Float32Array(maxParticles); // Delay before explosion
         this.hasExploded = new Uint8Array(maxParticles); // Already triggered explosion
+        this.burstTime = new Float32Array(maxParticles); // Time when particle was created (for burst timing)
+        this.burstDelay = new Float32Array(maxParticles); // Delay before burst
+        this.hasBurst = new Uint8Array(maxParticles); // Already triggered burst
+        this.spiralDelay = new Float32Array(maxParticles); // Delay before spiral
+        this.hasSpiraled = new Uint8Array(maxParticles); // Already triggered spiral
     }
 
     /**
@@ -174,15 +181,39 @@ class ParticleSystemSOA {
      */
     updateSecondaryExplosions() {
         const explosions = [];
+        const bursts = [];
+        const spirals = [];
         
         for (let i = 0; i < this.count; i++) {
-            if (!this.active[i] || !this.willExplode[i] || this.hasExploded[i]) continue;
+            if (!this.active[i]) continue;
             
-            // Check if enough time has passed
-            if (this.age[i] >= this.explosionDelay[i]) {
+            const currentTime = performance.now();
+            
+            // Check for mini-burst
+            if (this.willBurst[i] && !this.hasBurst[i] && (currentTime - this.burstTime[i]) >= this.burstDelay[i]) {
+                this.hasBurst[i] = 1;
+                bursts.push({
+                    x: this.x[i],
+                    y: this.y[i],
+                    hue: this.hue[i],
+                    fireworkId: this.fireworkId[i]
+                });
+            }
+            
+            // Check for spiral burst
+            if (this.willSpiral[i] && !this.hasSpiraled[i] && (currentTime - this.burstTime[i]) >= this.spiralDelay[i]) {
+                this.hasSpiraled[i] = 1;
+                spirals.push({
+                    x: this.x[i],
+                    y: this.y[i],
+                    hue: this.hue[i],
+                    fireworkId: this.fireworkId[i]
+                });
+            }
+            
+            // Check for regular secondary explosion
+            if (this.willExplode[i] && !this.hasExploded[i] && this.age[i] >= this.explosionDelay[i]) {
                 this.hasExploded[i] = 1;
-                
-                // Store explosion data
                 explosions.push({
                     x: this.x[i],
                     y: this.y[i],
@@ -192,7 +223,75 @@ class ParticleSystemSOA {
             }
         }
         
-        return explosions;
+        return { explosions, bursts, spirals };
+    }
+
+    /**
+     * Create mini-burst particles (4-8 particles in radial pattern)
+     * @param {Object} burst - Burst data from updateSecondaryExplosions
+     */
+    createMiniBurst(burst) {
+        const count = 4 + Math.floor(Math.random() * 4);
+        
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.PI * 2 * i) / count;
+            const speed = 0.5 + Math.random() * 1;
+            
+            this.emit({
+                x: burst.x,
+                y: burst.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                size: 1 + Math.random() * 1.5,
+                alpha: 1,
+                hue: burst.hue + (Math.random() - 0.5) * 20,
+                saturation: 100,
+                brightness: 100,
+                decay: 0.02,
+                gravity: 0.05,
+                drag: 0.96,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.3,
+                fireworkId: burst.fireworkId,
+                emitTrail: false,
+                willExplode: false,
+                isSparkle: true
+            });
+        }
+    }
+
+    /**
+     * Create spiral burst particles (6-8 particles in spiral pattern)
+     * @param {Object} spiral - Spiral data from updateSecondaryExplosions
+     */
+    createSpiralBurst(spiral) {
+        const count = 6 + Math.floor(Math.random() * 2);
+        
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.3;
+            const speed = 0.8 + Math.random() * 0.8;
+            
+            this.emit({
+                x: spiral.x,
+                y: spiral.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                size: 1.5 + Math.random() * 1,
+                alpha: 1,
+                hue: spiral.hue + (Math.random() - 0.5) * 30,
+                saturation: 90,
+                brightness: 100,
+                decay: 0.018,
+                gravity: 0.06,
+                drag: 0.97,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.25,
+                fireworkId: spiral.fireworkId,
+                emitTrail: false,
+                willExplode: false,
+                isSparkle: true
+            });
+        }
     }
 
     /**
@@ -271,6 +370,13 @@ class ParticleSystemSOA {
         this.explosionDelay[i] = props.explosionDelay || 0.5;
         this.hasExploded[i] = 0;
         this.isSparkle[i] = props.isSparkle ? 1 : 0;
+        this.willBurst[i] = props.willBurst ? 1 : 0;
+        this.willSpiral[i] = props.willSpiral ? 1 : 0;
+        this.burstTime[i] = performance.now();
+        this.burstDelay[i] = props.burstDelay || 500;
+        this.hasBurst[i] = 0;
+        this.spiralDelay[i] = props.spiralDelay || 600;
+        this.hasSpiraled[i] = 0;
         
         return i;
     }
@@ -308,6 +414,13 @@ class ParticleSystemSOA {
                     this.explosionDelay[writeIdx] = this.explosionDelay[readIdx];
                     this.hasExploded[writeIdx] = this.hasExploded[readIdx];
                     this.isSparkle[writeIdx] = this.isSparkle[readIdx];
+                    this.willBurst[writeIdx] = this.willBurst[readIdx];
+                    this.willSpiral[writeIdx] = this.willSpiral[readIdx];
+                    this.burstTime[writeIdx] = this.burstTime[readIdx];
+                    this.burstDelay[writeIdx] = this.burstDelay[readIdx];
+                    this.hasBurst[writeIdx] = this.hasBurst[readIdx];
+                    this.spiralDelay[writeIdx] = this.spiralDelay[readIdx];
+                    this.hasSpiraled[writeIdx] = this.hasSpiraled[readIdx];
                     this.active[writeIdx] = 1;
                 }
                 writeIdx++;

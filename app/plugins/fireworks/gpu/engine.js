@@ -121,7 +121,9 @@ const ShapeGenerators = {
                 const angle = (Math.PI * 2 * i) / particlesPerRing + (Math.random() - 0.5) * 0.2;
                 particles.push({
                     vx: Math.cos(angle) * ringSpeed,
-                    vy: Math.sin(angle) * ringSpeed
+                    vy: Math.sin(angle) * ringSpeed,
+                    willBurst: true,  // Mark for secondary mini-burst
+                    burstDelay: 500 + Math.random() * 300  // 0.5-0.8s delay
                 });
             }
         }
@@ -199,7 +201,9 @@ const ShapeGenerators = {
             const speed = 1.5 + Math.random() * 1.5;
             particles.push({
                 vx: Math.cos(t + armOffset) * radius * speed,
-                vy: Math.sin(t + armOffset) * radius * speed
+                vy: Math.sin(t + armOffset) * radius * speed,
+                willSpiral: true,  // Mark for secondary spiral burst
+                spiralDelay: 600 + Math.random() * 400  // 0.6-1.0s delay
             });
         }
         return particles;
@@ -692,10 +696,19 @@ class FireworksEngine {
         this.particles.updateRotations(deltaTime);
         this.particles.updateTrails(deltaTime);
         
-        // Check for and trigger secondary explosions
-        const explosions = this.particles.updateSecondaryExplosions();
+        // Check for and trigger secondary explosions, bursts, and spirals
+        const { explosions, bursts, spirals } = this.particles.updateSecondaryExplosions();
+        
         for (const explosion of explosions) {
             this.particles.createSecondaryExplosion(explosion);
+        }
+        
+        for (const burst of bursts) {
+            this.particles.createMiniBurst(burst);
+        }
+        
+        for (const spiral of spirals) {
+            this.particles.createSpiralBurst(spiral);
         }
         
         if (this.frameCount % 60 === 0) {
@@ -767,7 +780,11 @@ class FireworksEngine {
                 emitTrail: !isSparkle && shouldEmitTrail, // Sparkles don't emit trails
                 willExplode: shouldExplode,
                 explosionDelay: 0.3 + Math.random() * 0.3, // Explode after 0.3-0.6 seconds
-                isSparkle: isSparkle  // Pass sparkle flag for flicker effect
+                isSparkle: isSparkle,  // Pass sparkle flag for flicker effect
+                willBurst: vel.willBurst || false,  // From shape generator
+                willSpiral: vel.willSpiral || false,  // From shape generator
+                burstDelay: vel.burstDelay || 500,
+                spiralDelay: vel.spiralDelay || 600
             });
         }
         
