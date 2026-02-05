@@ -1024,7 +1024,7 @@
      */
     drawSunbeams(effect) {
       this.ctx.save();
-      this.ctx.globalCompositeOperation = 'lighter';
+      this.ctx.globalCompositeOperation = 'screen'; // HDR-like blending
       
       const w = this.dimensions.width;
       
@@ -1034,38 +1034,61 @@
           beam.x = -150;
         }
         
-        // Multiple passes for bloom effect
-        const bloomPasses = 3;
-        for (let pass = 0; pass < bloomPasses; pass++) {
-          const bloomScale = 1 + pass * 0.3;
-          const bloomAlpha = beam.opacity * (1 - pass * 0.3) * effect.intensity;
-          
+        // Multi-pass bloom for volumetric effect
+        const bloomPasses = [
+          { scale: 2.5, alpha: 0.03 },
+          { scale: 1.8, alpha: 0.06 },
+          { scale: 1.3, alpha: 0.10 }
+        ];
+        
+        bloomPasses.forEach(pass => {
           this.ctx.save();
           this.ctx.translate(beam.x, beam.y);
           this.ctx.rotate((beam.angle * Math.PI) / 180);
-          this.ctx.scale(bloomScale, 1);
+          this.ctx.scale(pass.scale, 1);
           
-          // Gradient with HDR-like falloff (exponential, not linear)
-          const gradient = this.ctx.createLinearGradient(0, 0, 0, beam.height);
-          gradient.addColorStop(0, `rgba(255, 250, 220, ${bloomAlpha})`);
-          gradient.addColorStop(0.3, `rgba(255, 245, 200, ${bloomAlpha * 0.6})`);
-          gradient.addColorStop(0.6, `rgba(255, 240, 180, ${bloomAlpha * 0.2})`);
-          gradient.addColorStop(1, 'rgba(255, 235, 160, 0)');
+          const bloomAlpha = beam.opacity * pass.alpha * effect.intensity;
+          const bloomGradient = this.ctx.createLinearGradient(0, 0, 0, beam.height);
+          bloomGradient.addColorStop(0, `rgba(255, 250, 220, ${bloomAlpha})`);
+          bloomGradient.addColorStop(0.4, `rgba(255, 240, 180, ${bloomAlpha * 0.7})`);
+          bloomGradient.addColorStop(1, 'rgba(255, 235, 160, 0)');
           
-          // Tapered beam shape (not rectangle)
+          this.ctx.fillStyle = bloomGradient;
           this.ctx.beginPath();
           this.ctx.moveTo(-beam.width / 2, 0);
           this.ctx.lineTo(beam.width / 2, 0);
-          this.ctx.lineTo(beam.width * 0.1, beam.height);
-          this.ctx.lineTo(-beam.width * 0.1, beam.height);
+          this.ctx.lineTo(beam.width * 0.1 * pass.scale, beam.height);
+          this.ctx.lineTo(-beam.width * 0.1 * pass.scale, beam.height);
           this.ctx.closePath();
-          this.ctx.fillStyle = gradient;
           this.ctx.fill();
           
           this.ctx.restore();
-        }
+        });
         
-        // Add dust motes in beam
+        // Main beam with tapered gradient
+        this.ctx.save();
+        this.ctx.translate(beam.x, beam.y);
+        this.ctx.rotate((beam.angle * Math.PI) / 180);
+        
+        const beamGradient = this.ctx.createLinearGradient(0, 0, 0, beam.height);
+        const beamAlpha = beam.opacity * effect.intensity;
+        beamGradient.addColorStop(0, `rgba(255, 252, 230, ${beamAlpha * 0.5})`);
+        beamGradient.addColorStop(0.3, `rgba(255, 245, 200, ${beamAlpha * 0.35})`);
+        beamGradient.addColorStop(0.7, `rgba(255, 240, 180, ${beamAlpha * 0.15})`);
+        beamGradient.addColorStop(1, 'rgba(255, 235, 160, 0)');
+        
+        this.ctx.fillStyle = beamGradient;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-beam.width / 2, 0);
+        this.ctx.lineTo(beam.width / 2, 0);
+        this.ctx.lineTo(beam.width * 0.1, beam.height);
+        this.ctx.lineTo(-beam.width * 0.1, beam.height);
+        this.ctx.closePath();
+        this.ctx.fill();
+        
+        this.ctx.restore();
+        
+        // Add dust motes in beam with depth and glow
         this.drawDustMotes(beam, effect);
       });
       
@@ -1073,7 +1096,7 @@
     }
 
     /**
-     * Draw floating dust particles in sunbeam
+     * Draw floating dust particles in sunbeam with depth and glow
      */
     drawDustMotes(beam, effect) {
       const moteCount = Math.floor(15 * effect.intensity);
@@ -1081,15 +1104,33 @@
       
       this.ctx.save();
       for (let i = 0; i < moteCount; i++) {
-        // Deterministic position based on beam and time
         const seed = beam.x + beam.y + i;
         const moteY = ((seed * 13 + time * 20) % beam.height);
         const moteX = beam.x + Math.sin(seed + time * 2) * beam.width * 0.4;
+        const depth = (i / moteCount); // Depth factor 0-1
+        const depthScale = 0.5 + depth * 0.5;
         
-        this.ctx.globalAlpha = 0.3 + Math.sin(seed + time * 3) * 0.2;
+        const moteAlpha = (0.3 + Math.sin(seed + time * 3) * 0.2) * effect.intensity;
+        
+        // Glow around mote
+        const moteGradient = this.ctx.createRadialGradient(
+          moteX, beam.y + moteY, 0,
+          moteX, beam.y + moteY, 3 * depthScale
+        );
+        moteGradient.addColorStop(0, `rgba(255, 250, 220, ${moteAlpha * 0.8})`);
+        moteGradient.addColorStop(0.5, `rgba(255, 245, 200, ${moteAlpha * 0.4})`);
+        moteGradient.addColorStop(1, 'rgba(255, 240, 180, 0)');
+        
+        this.ctx.fillStyle = moteGradient;
+        this.ctx.beginPath();
+        this.ctx.arc(moteX, beam.y + moteY, 3 * depthScale, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Bright core
+        this.ctx.globalAlpha = moteAlpha;
         this.ctx.fillStyle = '#ffffdd';
         this.ctx.beginPath();
-        this.ctx.arc(moteX, beam.y + moteY, 1 + Math.random() * 1.5, 0, Math.PI * 2);
+        this.ctx.arc(moteX, beam.y + moteY, 1 * depthScale, 0, Math.PI * 2);
         this.ctx.fill();
       }
       this.ctx.restore();
