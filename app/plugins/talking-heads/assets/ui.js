@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadConfig();
   setupEventListeners();
   startAnimationPolling();
+  await loadAvailableSprites(); // Load sprites for manual assignment dropdown
   if (currentConfig?.debugLogging) {
     startLogPolling();
   }
@@ -341,6 +342,39 @@ function setupEventListeners() {
   
   // Clear cache button
   document.getElementById('clearCacheBtn').addEventListener('click', clearCache);
+  
+  // Manual sprite assignment
+  const sourceAvatarSelect = document.getElementById('sourceAvatarSelect');
+  if (sourceAvatarSelect) {
+    sourceAvatarSelect.addEventListener('change', handleSourceAvatarChange);
+  }
+  
+  const assignSpriteBtn = document.getElementById('assignSpriteBtn');
+  if (assignSpriteBtn) {
+    assignSpriteBtn.addEventListener('click', assignManualSprite);
+  }
+  
+  // Debug log controls
+  const refreshLogsBtn = document.getElementById('refreshLogsBtn');
+  if (refreshLogsBtn) {
+    refreshLogsBtn.addEventListener('click', loadLogs);
+  }
+  
+  const clearLogsBtn = document.getElementById('clearLogsBtn');
+  if (clearLogsBtn) {
+    clearLogsBtn.addEventListener('click', clearDebugLogs);
+  }
+  
+  const autoRefreshLogs = document.getElementById('autoRefreshLogs');
+  if (autoRefreshLogs) {
+    autoRefreshLogs.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        startLogPolling();
+      } else {
+        stopLogPolling();
+      }
+    });
+  }
   
   // Debug logging toggle
   document.getElementById('debugLoggingSwitch').addEventListener('change', (e) => {
@@ -759,9 +793,144 @@ function renderAvatarList(avatars = []) {
         <div class="style-name">${escapeHtml(avatar.username)}</div>
         <div class="style-desc">${escapeHtml(avatar.styleKey || '')}</div>
         <div class="log-meta">${createdLabel}</div>
+        <div style="margin-top: 8px;">
+          <a href="/api/talkingheads/export/${encodeURIComponent(avatar.userId)}" 
+             class="btn btn-secondary" 
+             style="font-size: 0.75rem; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;"
+             download>
+            <i data-lucide="download" style="width: 14px; height: 14px;"></i>
+            ZIP Download
+          </a>
+        </div>
       </div>
     `;
   }).join('');
+  
+  // Re-initialize Lucide icons for new elements
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
+  }
+}
+
+/**
+ * Load available sprites for manual assignment
+ */
+async function loadAvailableSprites() {
+  try {
+    const response = await fetch('/api/talkingheads/available-sprites?limit=200');
+    const data = await response.json();
+    
+    if (data.success) {
+      const select = document.getElementById('sourceAvatarSelect');
+      if (!select) return;
+      
+      // Clear and populate dropdown
+      select.innerHTML = '<option value="">-- Bitte Avatar wählen --</option>';
+      
+      data.sprites.forEach(sprite => {
+        const option = document.createElement('option');
+        option.value = sprite.userId;
+        option.textContent = `${sprite.username} (${sprite.styleKey})`;
+        option.dataset.previewUrl = sprite.previewUrl;
+        option.dataset.username = sprite.username;
+        select.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load available sprites:', error);
+  }
+}
+
+/**
+ * Handle source avatar selection change
+ */
+function handleSourceAvatarChange(e) {
+  const select = e.target;
+  const selectedOption = select.options[select.selectedIndex];
+  const previewArea = document.getElementById('spritePreviewArea');
+  const previewImg = document.getElementById('spritePreviewImg');
+  const assignBtn = document.getElementById('assignSpriteBtn');
+  
+  if (selectedOption.value && selectedOption.dataset.previewUrl) {
+    previewImg.src = selectedOption.dataset.previewUrl;
+    previewArea.style.display = 'block';
+    assignBtn.disabled = false;
+  } else {
+    previewArea.style.display = 'none';
+    assignBtn.disabled = true;
+  }
+}
+
+/**
+ * Assign sprites manually from one user to another
+ */
+async function assignManualSprite() {
+  const targetUserInput = document.getElementById('targetUserSearch');
+  const sourceSelect = document.getElementById('sourceAvatarSelect');
+  
+  if (!targetUserInput || !sourceSelect) return;
+  
+  const targetUser = targetUserInput.value.trim();
+  const sourceUserId = sourceSelect.value;
+  const selectedOption = sourceSelect.options[sourceSelect.selectedIndex];
+  
+  if (!targetUser) {
+    showNotification('Bitte Ziel-User eingeben', 'error');
+    return;
+  }
+  
+  if (!sourceUserId) {
+    showNotification('Bitte Quell-Avatar auswählen', 'error');
+    return;
+  }
+  
+  try {
+    appendClientLog(`Assigning sprites from ${selectedOption.dataset.username} to ${targetUser}...`, 'info');
+    
+    const response = await fetch('/api/talkingheads/assign-manual-sprite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: targetUser,
+        username: targetUser,
+        targetUserId: sourceUserId
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showNotification(`Sprites erfolgreich zugewiesen: ${data.sourceUsername} → ${data.username}`, 'success');
+      appendClientLog(`Sprites assigned: ${data.sourceUsername} → ${data.username}`, 'success');
+      
+      // Reload avatar list
+      await loadAvatarList();
+      await loadCacheStats();
+      
+      // Clear inputs
+      targetUserInput.value = '';
+      sourceSelect.selectedIndex = 0;
+      document.getElementById('spritePreviewArea').style.display = 'none';
+      document.getElementById('assignSpriteBtn').disabled = true;
+    } else {
+      throw new Error(data.error || 'Sprite assignment failed');
+    }
+  } catch (error) {
+    console.error('Failed to assign sprite:', error);
+    showNotification(`Fehler: ${error.message}`, 'error');
+    appendClientLog(`Sprite assignment failed: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Clear debug logs display
+ */
+function clearDebugLogs() {
+  const output = document.getElementById('debugLogOutput');
+  if (output) {
+    output.innerHTML = '';
+    showNotification('Debug-Logs geleert', 'info');
+  }
 }
 
 /**
@@ -973,20 +1142,25 @@ function renderLogEntries(logs = []) {
     return;
   }
 
+  // Color mapping for log levels
+  const levelColors = {
+    error: '#f48771',
+    warn: '#dcdcaa',
+    info: '#4ec9b0',
+    debug: '#858585'
+  };
+
   container.innerHTML = logs.map((log) => {
     const level = (log.level || 'info').toLowerCase();
+    const color = levelColors[level] || '#d4d4d4';
     const timeLabel = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '';
     const message = escapeHtml(log.message || '');
-    return `
-      <div class="log-entry">
-        <div class="log-meta">
-          <div>${escapeHtml(timeLabel)}</div>
-          <div class="log-level ${level}">${escapeHtml(level)}</div>
-        </div>
-        <div>${message}</div>
-      </div>
-    `;
+    
+    return `<div style="color: ${color}; margin-bottom: 4px;">[${timeLabel}] [${level.toUpperCase()}] ${message}</div>`;
   }).join('');
+  
+  // Auto-scroll to bottom
+  container.scrollTop = container.scrollHeight;
 }
 
 function appendClientLog(message, level = 'info') {

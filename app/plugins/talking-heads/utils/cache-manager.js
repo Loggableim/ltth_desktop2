@@ -164,9 +164,10 @@ class CacheManager {
 
   /**
    * Clean up old cached avatars based on cache duration
+   * @param {Array<string>} activeUserIds - Array of currently active user IDs to skip
    * @returns {number} Number of deleted entries
    */
-  async cleanupOldCache() {
+  async cleanupOldCache(activeUserIds = []) {
     if (!this.initialized || !this.config.cacheEnabled) return 0;
 
     try {
@@ -180,8 +181,18 @@ class CacheManager {
 
       if (expiredEntries.length === 0) return 0;
 
+      // Filter out active animations
+      const toDelete = expiredEntries.filter(entry => !activeUserIds.includes(entry.user_id));
+
+      if (toDelete.length === 0) {
+        this.logger.info('TalkingHeads: All expired cache entries are currently active, skipping cleanup');
+        return 0;
+      }
+
+      this.logger.info(`TalkingHeads: Cleaning ${toDelete.length} expired cache entries (${expiredEntries.length - toDelete.length} skipped due to active animations)`);
+
       // Delete files
-      for (const entry of expiredEntries) {
+      for (const entry of toDelete) {
         try {
           const files = [
             entry.avatar_path,
@@ -206,13 +217,19 @@ class CacheManager {
         }
       }
 
-      // Delete database entries
-      const result = this.db.prepare(
-        'DELETE FROM talking_heads_cache WHERE last_used < ?'
-      ).run(expiryTime);
+      // Delete database entries for non-active users
+      const userIdsToDelete = toDelete.map(e => e.user_id);
+      if (userIdsToDelete.length > 0) {
+        const placeholders = userIdsToDelete.map(() => '?').join(',');
+        const result = this.db.prepare(
+          `DELETE FROM talking_heads_cache WHERE user_id IN (${placeholders}) AND last_used < ?`
+        ).run(...userIdsToDelete, expiryTime);
 
-      this.logger.info(`TalkingHeads: Cleaned up ${result.changes} old cached avatars`);
-      return result.changes;
+        this.logger.info(`TalkingHeads: Cleaned up ${result.changes} old cached avatars`);
+        return result.changes;
+      }
+
+      return 0;
     } catch (error) {
       this.logger.error('TalkingHeads: Error during cache cleanup', error);
       return 0;
