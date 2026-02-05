@@ -73,10 +73,6 @@
             scripts: ['/js/vdoninja-dashboard.js'],
             plugin: 'vdoninja'
         },
-        'emoji-rain': {
-            scripts: [], // emoji-rain-ui.js is for the iframe UI, not the dashboard
-            plugin: 'emoji-rain'
-        },
         'osc-bridge': {
             scripts: [], // osc-bridge-ui.js is for the iframe UI, not the dashboard
             plugin: 'osc-bridge'
