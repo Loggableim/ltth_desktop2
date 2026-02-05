@@ -1629,6 +1629,8 @@ class FireworksEngine {
         this.EMERGENCY_CLEANUP_THRESHOLD = 1000; // Will be updated from config
         
         // BUG FIX #2: Make engine globally accessible for synchronous access from main.js
+        // This allows main.js to get firework count synchronously instead of via async socket
+        // which has 10-50ms latency causing race conditions with limits
         if (typeof global !== 'undefined') {
             global.fireworksEngineInstance = this;
         }
@@ -1936,7 +1938,7 @@ class FireworksEngine {
 
         // BUG FIX #3: Use cached particle count (updated max once per frame = 16ms)
         const now = performance.now();
-        if (now - this.lastParticleCountUpdate > 16) {
+        if (now - this.lastParticleCountUpdate > CONFIG.IDEAL_FRAME_TIME) {
             this.cachedParticleCount = this.getTotalParticles();
             this.lastParticleCountUpdate = now;
         }
@@ -2317,7 +2319,7 @@ class FireworksEngine {
             
             // Remove 50% of oldest flying fireworks (by age)
             const flyingFW = this.fireworks.filter(fw => !fw.exploded);
-            flyingFW.sort((a, b) => (b.age || 0) - (a.age || 0)); // Oldest first
+            flyingFW.sort((a, b) => (b.age || 0) - (a.age || 0)); // Oldest first (highest age value)
             const toRemoveFlying = Math.ceil(flyingFW.length * 0.5);
             
             for (let i = 0; i < toRemoveFlying; i++) {
