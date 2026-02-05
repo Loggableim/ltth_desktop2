@@ -1087,6 +1087,21 @@ function processSpawnQueue() {
 }
 
 /**
+ * Calculate offsetX with safety clamping to prevent negative coordinates
+ * @param {number} x - The base x coordinate
+ * @returns {number} The offset x coordinate
+ */
+function calculateOffsetX(x) {
+    if (x >= 0 && x <= 1) {
+        // Normalized coordinate: Offset and clamp to 0-1 range
+        return Math.max(0, Math.min(1, x + (Math.random() - 0.5) * 0.2));
+    } else {
+        // Absolute coordinate: Offset in pixels
+        return x + (Math.random() - 0.5) * 100;
+    }
+}
+
+/**
  * Process a single spawn event
  */
 function processSpawn(emoji, x, y, actualCount, username, profilePictureUrl, color, isBurst) {
@@ -1094,7 +1109,7 @@ function processSpawn(emoji, x, y, actualCount, username, profilePictureUrl, col
     if (config.rate_limit_enabled && config.rate_limit_emojis_per_second > 0) {
         for (let i = 0; i < actualCount; i++) {
             const size = config.emoji_min_size_px + Math.random() * (config.emoji_max_size_px - config.emoji_min_size_px);
-            const offsetX = x + (Math.random() - 0.5) * 0.2;
+            const offsetX = calculateOffsetX(x);
             const offsetY = y - i * 5;
             
             rateLimitQueue.push({
@@ -1115,7 +1130,7 @@ function processSpawn(emoji, x, y, actualCount, username, profilePictureUrl, col
         // No rate limiting - spawn immediately
         for (let i = 0; i < actualCount; i++) {
             const size = config.emoji_min_size_px + Math.random() * (config.emoji_max_size_px - config.emoji_min_size_px);
-            const offsetX = x + (Math.random() - 0.5) * 0.2;
+            const offsetX = calculateOffsetX(x);
             const offsetY = y - i * 5;
 
             spawnEmoji(emoji, offsetX, offsetY, size, username, profilePictureUrl, color);
