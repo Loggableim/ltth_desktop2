@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -94,7 +95,7 @@ func TestDownloadFromBranchURL(t *testing.T) {
 	}
 	
 	for _, part := range expectedParts {
-		if !contains(expectedURL, part) {
+		if !strings.Contains(expectedURL, part) {
 			t.Errorf("Expected URL to contain %q, got %q", part, expectedURL)
 		}
 	}
@@ -192,19 +193,4 @@ func TestConstants(t *testing.T) {
 	}
 	
 	t.Logf("Repository: %s/%s (branch: %s)", githubOwner, githubRepo, githubBranch)
-}
-
-// Helper function to check if string contains substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || 
-		(len(s) > 0 && len(substr) > 0 && containsHelper(s, substr)))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

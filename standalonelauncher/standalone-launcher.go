@@ -261,12 +261,8 @@ func (sl *StandaloneLauncher) isRelevantPath(path string) bool {
 	
 	// Check blacklist first
 	for _, prefix := range blacklistPrefixes {
-		// Use HasPrefix for directory/file paths
-		if strings.HasPrefix(path, prefix) {
-			return false
-		}
-		// Only use HasSuffix for file extensions (starting with .)
-		if strings.HasPrefix(prefix, ".") && strings.HasSuffix(path, prefix) {
+		// Check prefix match, or suffix match for file extensions (starting with .)
+		if strings.HasPrefix(path, prefix) || (strings.HasPrefix(prefix, ".") && strings.HasSuffix(path, prefix)) {
 			return false
 		}
 	}
