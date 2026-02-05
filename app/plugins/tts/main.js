@@ -2726,7 +2726,12 @@ class TTSPlugin {
                 hasAssignedVoice: hasUserAssignedVoice === true
             });
 
-            this._logDebug('SPEAK_STEP6', 'Enqueue result', queueResult);
+            this._logDebug('SPEAK_STEP6', 'Enqueue result', {
+                ...queueResult,
+                hasAssignedVoice: hasUserAssignedVoice === true,
+                voice: selectedVoice,
+                engine: selectedEngine
+            });
 
             if (!queueResult.success) {
                 this._logDebug('SPEAK_DENIED', 'Queue rejected item', {

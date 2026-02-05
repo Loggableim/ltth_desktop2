@@ -261,6 +261,76 @@ class QueueManager {
     }
 
     /**
+     * Find next item in queue with assigned custom voice (excluding current user)
+     * @param {string} currentUserId - Current user's ID to exclude
+     * @returns {object|null} Next item with custom voice or null
+     */
+    _findNextItemWithAssignedVoice(currentUserId) {
+        for (const item of this.queue) {
+            // Skip items from the same user (current user)
+            if (item.userId === currentUserId) {
+                continue;
+            }
+
+            // Check if item has assigned custom voice
+            if (item.hasAssignedVoice === true) {
+                return item;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Pre-generate audio for a custom voice item
+     * @param {object} item - Queue item with custom voice
+     */
+    async _preGenerateCustomVoiceItem(item) {
+        const itemId = item.id;
+
+        // Check if already pre-generating this item
+        if (this.preGenerationInProgress.has(itemId)) {
+            return;
+        }
+
+        // Mark as in progress
+        this.preGenerationInProgress.set(itemId, true);
+
+        try {
+            this.logger.info(
+                `🚀 [PRE-GEN] Starting pre-generation for custom voice user: ${item.username} ` +
+                `(${item.engine}/${item.voice})`
+            );
+            this.logger.debug(`[PRE-GEN] Custom voice item details: "${item.text?.substring(0, 30)}...", ID: ${itemId}`);
+
+            const audioData = await this.synthesizeCallback(
+                item.text,
+                item.voice,
+                item.engine,
+                item.synthesisOptions || {}
+            );
+
+            // Store audio data in the queue item
+            const queueItem = this.queue.find(q => q.id === itemId);
+            if (queueItem) {
+                queueItem.audioData = audioData;
+                queueItem.preGenerated = true;
+                this.logger.info(
+                    `✅ [PRE-GEN] Pre-generated audio for ${item.username}: ${audioData?.length || 0} bytes`
+                );
+            } else {
+                this.logger.debug(`[PRE-GEN] Item ${itemId} no longer in queue (may have been removed)`);
+            }
+
+        } catch (error) {
+            this.stats.preGenerationErrors++;
+            this.logger.warn(`❌ [PRE-GEN] Failed for ${item.username}: ${error.message}`);
+        } finally {
+            this.preGenerationInProgress.delete(itemId);
+        }
+    }
+
+    /**
      * Pre-generate audio for a single item
      * @param {object} item - Queue item
      */
@@ -328,6 +398,15 @@ class QueueManager {
         try {
             // Trigger pre-generation for upcoming items BEFORE playing current item
             this._triggerPreGeneration();
+
+            // NEW: Trigger pre-generation for next custom voice item (parallel, non-blocking)
+            if (item.userId && this.synthesizeCallback) {
+                const nextCustomVoiceItem = this._findNextItemWithAssignedVoice(item.userId);
+                if (nextCustomVoiceItem && !nextCustomVoiceItem.audioData && !nextCustomVoiceItem.isStreaming) {
+                    // Start pre-generation for custom voice user (fire and forget)
+                    this._preGenerateCustomVoiceItem(nextCustomVoiceItem);
+                }
+            }
 
             // Call play callback
             await playCallback(item);
