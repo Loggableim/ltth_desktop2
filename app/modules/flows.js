@@ -624,7 +624,7 @@ class FlowEngine {
                     try {
                         const response = await axios({
                             method: 'POST',
-                            url: 'http://localhost:3000/api/emoji-rain/trigger',
+                            url: 'http://localhost:3000/api/webgpu-emoji-rain/trigger',
                             data: {
                                 emoji: emoji,
                                 count: count,
