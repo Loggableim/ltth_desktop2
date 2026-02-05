@@ -1727,6 +1727,20 @@
 
                 if (data.success) {
                     showStatus('status.config_saved', 'success');
+                    
+                    // Log permanent effects status
+                    const permanentEffects = Object.keys(config.effects || {})
+                        .filter(e => config.effects[e]?.permanent === true);
+                    
+                    if (permanentEffects.length > 0) {
+                        console.log('♾️ Active permanent effects:', permanentEffects.join(', '));
+                        // Show additional notification for permanent effects
+                        setTimeout(() => {
+                            showStatus('status.permanent_effects_active', 'info', { 
+                                effects: permanentEffects.map(e => translate(`effects.names.${e}`) || e).join(', ')
+                            });
+                        }, 2000);
+                    }
                 } else {
                     showStatus('status.error_saving_config', 'danger', { error: data.error });
                 }
