@@ -40,6 +40,7 @@ const CONFIG = {
     airResistance: 0.99,
     rocketSpeed: -12,
     rocketAcceleration: -0.08,
+    sparkleChance: 0.15,
     backgroundColor: 'rgba(0, 0, 0, 0)',
     resolutionPreset: '1080p',
     orientation: 'landscape',
@@ -741,26 +742,29 @@ class FireworksEngine {
             // Add trails to a subset of particles for visual effect without lag
             const shouldEmitTrail = Math.random() < 0.3; // 30% of particles emit trails
             
-            // Add secondary explosions to a small subset for extra sparkle (10% chance)
-            const shouldExplode = Math.random() < 0.1;
+            // Sparkle particles - smaller, brighter, no trails
+            const isSparkle = Math.random() < CONFIG.sparkleChance;
+            
+            // Add secondary explosions to a small subset for extra sparkle (10% chance, not on sparkles)
+            const shouldExplode = !isSparkle && Math.random() < 0.1;
             
             this.particles.emit({
                 x: fw.x,
                 y: fw.y,
                 vx: vel.vx,
                 vy: vel.vy,
-                size: 3 + Math.random() * 4,
+                size: isSparkle ? (2 + Math.random() * 2) : (3 + Math.random() * 4),
                 alpha: 1,
                 hue: fw.baseHue + Math.random() * fw.hueRange,
-                saturation: 90,
-                brightness: 95,
-                decay: 0.008 + Math.random() * 0.005,
-                gravity: CONFIG.gravity,
-                drag: 0.98,
+                saturation: isSparkle ? 100 : 90,
+                brightness: isSparkle ? 100 : 95,
+                decay: isSparkle ? 0.015 : (0.008 + Math.random() * 0.005),
+                gravity: isSparkle ? (CONFIG.gravity * 0.8) : CONFIG.gravity,
+                drag: isSparkle ? 0.97 : 0.98,
                 rotation: Math.random() * Math.PI * 2,
                 rotationSpeed: (Math.random() - 0.5) * 0.1,
                 fireworkId: fw.id,
-                emitTrail: shouldEmitTrail,
+                emitTrail: !isSparkle && shouldEmitTrail, // Sparkles don't emit trails
                 willExplode: shouldExplode,
                 explosionDelay: 0.3 + Math.random() * 0.3 // Explode after 0.3-0.6 seconds
             });
