@@ -255,16 +255,20 @@ describe('Weather Plugin Critical Fixes', () => {
             expect(uiContent).toContain('async function saveConfig');
         });
 
-        test('no console.log in production code (except debug)', () => {
-            // Check that console.log is only used for debug/permanent effects logging
+        test('no unexpected console.log in production code', () => {
+            // Check that console.log is only used for intentional debug/permanent effects logging
             const weatherEngineConsole = weatherEngineContent.match(/console\.log/g);
             const mainConsole = mainContent.match(/console\.log/g);
             
             // Should not have console.log in weather-engine.js
             expect(weatherEngineConsole).toBeFalsy();
-            // Main.js might have it for error handling, but not excessive
-            if (mainConsole) {
-                expect(mainConsole.length).toBeLessThan(5);
+            // Main.js should not have console.log (uses logger instead)
+            expect(mainConsole).toBeFalsy();
+            // UI.html can have console.log for permanent effects status (intentional)
+            const uiConsole = uiContent.match(/console\.log/g);
+            if (uiConsole) {
+                // Only for permanent effects logging
+                expect(uiContent).toMatch(/console\.log\(['"]♾️ Active permanent effects:/);
             }
         });
     });

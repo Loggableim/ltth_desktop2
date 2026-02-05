@@ -508,7 +508,7 @@
             
             // Variant 17-20: Irregular/broken snowflakes (realistic imperfections)
             for (let i = 0; i < 4; i++) {
-                const baseVariant = Math.floor(Math.random() * 10);
+                const baseVariant = Math.floor(Math.random() * variants.length);
                 variants.push(addImperfections(variants[baseVariant], 0.15 + Math.random() * 0.2));
             }
             
