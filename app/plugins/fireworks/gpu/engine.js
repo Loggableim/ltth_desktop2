@@ -1597,6 +1597,13 @@ class FireworksEngine {
         this.lastComboTriggerTime = 0;
         this.comboTriggerQueue = [];
         
+        // NEW: Adaptive Frame Skip
+        this.adaptivePerformance = true; // Will be updated from config
+        this.minTargetFps = 30; // Will be updated from config
+        this.frameSkipEnabled = true; // Will be updated from config
+        this.frameSkip = 0;
+        this.adaptiveFpsHistory = []; // Separate FPS history for adaptive frame skip (30 frames)
+        
         this.config = { 
             ...CONFIG,
             toasterMode: false,
@@ -1611,6 +1618,11 @@ class FireworksEngine {
             minFps: CONFIG.minFps,
             giftPopupPosition: CONFIG.giftPopupPosition
         };
+        
+        // Performance limits from config (set via fireworks:config-update)
+        this.MAX_FIREWORKS = 5; // Will be updated from config
+        this.MAX_PARTICLES = 800; // Will be updated from config
+        this.EMERGENCY_CLEANUP_THRESHOLD = 1000; // Will be updated from config
         
         this.running = false;
         this.socket = null;
@@ -1718,6 +1730,13 @@ class FireworksEngine {
             this.socket.on('fireworks:follower-animation', (data) => {
                 this.showFollowerAnimation(data);
             });
+            
+            this.socket.on('fireworks:get-active-count', () => {
+                this.socket.emit('fireworks:active-count-response', { 
+                    count: this.fireworks.length,
+                    particles: this.getTotalParticles()
+                });
+            });
 
             this.socket.on('fireworks:config-update', (data) => {
                 if (data.config) {
@@ -1744,6 +1763,27 @@ class FireworksEngine {
                     }
                     if (data.config.giftPopupPosition !== undefined) {
                         CONFIG.giftPopupPosition = data.config.giftPopupPosition;
+                    }
+                    
+                    // Update performance limits
+                    if (data.config.maxConcurrentFireworks !== undefined) {
+                        this.MAX_FIREWORKS = data.config.maxConcurrentFireworks;
+                    }
+                    if (data.config.maxTotalParticles !== undefined) {
+                        this.MAX_PARTICLES = data.config.maxTotalParticles;
+                    }
+                    if (data.config.emergencyCleanupThreshold !== undefined) {
+                        this.EMERGENCY_CLEANUP_THRESHOLD = data.config.emergencyCleanupThreshold;
+                    }
+                    // Adaptive performance settings (handled in render loop)
+                    if (data.config.adaptivePerformance !== undefined) {
+                        this.adaptivePerformance = data.config.adaptivePerformance;
+                    }
+                    if (data.config.minTargetFps !== undefined) {
+                        this.minTargetFps = data.config.minTargetFps;
+                    }
+                    if (data.config.frameSkipEnabled !== undefined) {
+                        this.frameSkipEnabled = data.config.frameSkipEnabled;
                     }
                     
                     // Resize canvas if resolution or orientation changed
@@ -1876,6 +1916,26 @@ class FireworksEngine {
         const MAX_FIREWORKS_NORMAL = 30;
         const MAX_FIREWORKS_HARD = 50;
         
+        // NEW: Reject wenn zu viele Fireworks (user-configurable limit)
+        if (this.fireworks.length >= this.MAX_FIREWORKS) {
+            if (DEBUG) console.warn(`[Fireworks] MAX_FIREWORKS limit reached (${this.fireworks.length}/${this.MAX_FIREWORKS}), skipping`);
+            return;
+        }
+
+        // NEW: Reject wenn zu viele Partikel (80% threshold)
+        const currentParticles = this.getTotalParticles();
+        if (currentParticles > this.MAX_PARTICLES * 0.8) {
+            if (DEBUG) console.warn(`[Fireworks] Particle limit approaching (${currentParticles}/${this.MAX_PARTICLES}), skipping`);
+            return;
+        }
+
+        // NEW: Reduziere Intensity bei Überlast (60% threshold)
+        let adjustedIntensity = intensity;
+        if (currentParticles > this.MAX_PARTICLES * 0.6) {
+            adjustedIntensity = intensity * 0.5;
+            if (DEBUG) console.log(`[Fireworks] High load (${currentParticles} particles), reducing intensity by 50%: ${intensity.toFixed(2)} -> ${adjustedIntensity.toFixed(2)}`);
+        }
+        
         // Tier priority (higher = more important)
         const tierPriority = {
             'small': 1,
@@ -1944,7 +2004,7 @@ class FireworksEngine {
             targetY: targetY,
             shape: shape,
             colors: colors,
-            intensity: intensity,
+            intensity: adjustedIntensity, // Use adjusted intensity for particle count reduction
             giftImage: giftImg,
             userAvatar: avatarImg,
             avatarParticleChance: avatarParticleChance,
@@ -2221,6 +2281,31 @@ class FireworksEngine {
         const now = performance.now();
         const frameTime = now - this.lastTime;
         
+        // NEW: EMERGENCY CLEANUP - Check particles at start of render
+        const totalParticles = this.getTotalParticles();
+        if (totalParticles > this.EMERGENCY_CLEANUP_THRESHOLD) {
+            console.error(`[Fireworks] EMERGENCY: ${totalParticles} particles! Force cleanup...`);
+            
+            // Lösche die ersten 50% der exploded Fireworks
+            const explodedFW = this.fireworks.filter(fw => fw.exploded);
+            const toRemove = Math.ceil(explodedFW.length * 0.5);
+            
+            for (let i = 0; i < toRemove; i++) {
+                const fw = explodedFW[i];
+                // Gebe alle Partikel sofort frei
+                if (fw.particles && fw.particles.length > 0) {
+                    this.particlePool.releaseAll(fw.particles);
+                    fw.particles = [];
+                }
+                
+                // Entferne Firework
+                const index = this.fireworks.indexOf(fw);
+                if (index > -1) this.fireworks.splice(index, 1);
+            }
+            
+            console.log(`[Fireworks] Emergency cleanup: Removed ${toRemove} fireworks, now ${this.getTotalParticles()} particles`);
+        }
+        
         // Optimization #10: Frame-skip threshold (50ms = 20 FPS)
         const FRAME_SKIP_THRESHOLD = 50;
         
@@ -2272,6 +2357,34 @@ class FireworksEngine {
         const deltaTime = Math.min((now - this.lastTime) / CONFIG.IDEAL_FRAME_TIME, 3);
         this.lastTime = now;
         this.lastRenderTime = now;
+
+        // NEW: Adaptive Frame Skip bei Low FPS
+        if (this.frameSkipEnabled && this.adaptivePerformance) {
+            // Update FPS History
+            const frameDuration = now - this.lastTime;
+            const currentFPS = frameDuration > 0 ? 1000 / frameDuration : 60;
+            this.adaptiveFpsHistory.push(currentFPS);
+            if (this.adaptiveFpsHistory.length > 30) this.adaptiveFpsHistory.shift();
+            
+            // Berechne Average FPS (only if we have enough samples)
+            if (this.adaptiveFpsHistory.length >= 10) {
+                const avgFPS = this.adaptiveFpsHistory.reduce((a, b) => a + b, 0) / this.adaptiveFpsHistory.length;
+                
+                // Wenn FPS < minTargetFps, aktiviere Frame Skip
+                if (avgFPS < this.minTargetFps) {
+                    this.frameSkip++;
+                    
+                    // Jeder zweite Frame wird übersprungen
+                    if (this.frameSkip % 2 === 0) {
+                        if (DEBUG) console.log(`[Fireworks] Frame skip active (avgFPS: ${avgFPS.toFixed(1)} < ${this.minTargetFps})`);
+                        requestAnimationFrame(() => this.render());
+                        return;
+                    }
+                } else {
+                    this.frameSkip = 0;
+                }
+            }
+        }
 
         // Clear with configurable background for trail effect
         const bgColor = this.config.backgroundColor || CONFIG.backgroundColor;

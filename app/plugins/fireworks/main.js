@@ -139,6 +139,13 @@ class FireworksPlugin {
                     }
                 });
                 
+                // Listen for active firework count responses
+                socket.on('fireworks:active-count-response', (data) => {
+                    if (data && data.count !== undefined) {
+                        this.cachedActiveFireworkCount = data.count;
+                    }
+                });
+                
                 // Clean up on disconnect
                 socket.on('disconnect', () => {
                     this.connectedSockets.delete(socket);
@@ -293,6 +300,14 @@ class FireworksPlugin {
             // Queue system - Lag prevention through rate limiting
             queueEnabled: false, // Enable queue system to limit fireworks per second
             maxRocketsPerSecond: 5, // Maximum number of fireworks per second (1-20)
+            
+            // Performance Limits (NEW) - Protect against freezes
+            maxConcurrentFireworks: 5, // Maximum gleichzeitige Fireworks (1-20)
+            maxTotalParticles: 800, // Maximum Partikel global (200-2000)
+            emergencyCleanupThreshold: 1000, // Emergency Cleanup bei X Partikeln (500-3000)
+            adaptivePerformance: true, // Aktiviere Adaptive Performance
+            minTargetFps: 30, // Minimum FPS bevor Frame Skip (20-50)
+            frameSkipEnabled: true, // Aktiviere Frame Skip bei Low FPS
             
             // Advanced
             gravity: 0.1,
@@ -704,6 +719,19 @@ class FireworksPlugin {
             return;
         }
 
+        // Check concurrent firework limit
+        const activeFireworks = this.getActiveFireworkCount();
+        if (activeFireworks >= this.config.maxConcurrentFireworks) {
+            this.api.log(`[FIREWORKS] Limit erreicht (${activeFireworks}/${this.config.maxConcurrentFireworks}), Gift übersprungen`, 'warn');
+            return;
+        }
+
+        // Bei hoher Last: Nur große Gifts zulassen
+        if (activeFireworks >= Math.floor(this.config.maxConcurrentFireworks * 0.6) && coins < 500) {
+            this.api.log(`[FIREWORKS] Hohe Last (${activeFireworks}), kleines Gift (${coins} coins) übersprungen`, 'debug');
+            return;
+        }
+
         // Calculate effective coins (with repeat/combo count)
         const effectiveCoins = coins * repeatCount;
 
@@ -856,6 +884,23 @@ class FireworksPlugin {
             colors.push(`hsl(${hue}, 100%, 60%)`);
         }
         return colors;
+    }
+
+    /**
+     * Get active firework count from overlay
+     * This communicates with the engine to get the current firework count
+     */
+    getActiveFireworkCount() {
+        // Store count from last response, default to 0
+        if (!this.cachedActiveFireworkCount) {
+            this.cachedActiveFireworkCount = 0;
+        }
+        
+        // Request current count from overlay (async, but we use cached value)
+        this.api.emit('fireworks:get-active-count');
+        
+        // Return cached value (updated via socket response)
+        return this.cachedActiveFireworkCount;
     }
 
     /**
