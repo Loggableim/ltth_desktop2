@@ -270,6 +270,17 @@ class PostProcessor {
         });
     }
     
+    isReady() {
+        return this.framebuffers.scene && 
+               this.framebuffers.bright && 
+               this.framebuffers.blur1 && 
+               this.framebuffers.blur2 &&
+               this.programs.extractBright &&
+               this.programs.blurHorizontal &&
+               this.programs.blurVertical &&
+               this.programs.composite;
+    }
+    
     renderToFramebuffer(framebufferName, renderCallback) {
         const gl = this.gl;
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[framebufferName]);

@@ -1485,13 +1485,46 @@ void main() {
         
         // Render smoke layer if enabled
         if (this.config.smokeEnabled && this.programs.smoke) {
-            gl.useProgram(this.programs.smoke);
-            this.setupUniformsForProgram(this.programs.smoke);
-            this.updateUniforms();
+            const prevProgram = this.currentProgram;
+            const prevUniforms = this.uniforms;
             
-            if (this.uniforms.time) {
-                gl.uniform1f(this.uniforms.time, time);
+            gl.useProgram(this.programs.smoke);
+            
+            // Cache smoke uniforms if not already cached
+            if (!this.uniforms.smokeUniforms) {
+                this.uniforms.smokeUniforms = {
+                    time: gl.getUniformLocation(this.programs.smoke, 'uTime'),
+                    resolution: gl.getUniformLocation(this.programs.smoke, 'uResolution'),
+                    frameThickness: gl.getUniformLocation(this.programs.smoke, 'uFrameThickness'),
+                    frameMode: gl.getUniformLocation(this.programs.smoke, 'uFrameMode'),
+                    smokeIntensity: gl.getUniformLocation(this.programs.smoke, 'uSmokeIntensity'),
+                    smokeSpeed: gl.getUniformLocation(this.programs.smoke, 'uSmokeSpeed'),
+                    smokeColor: gl.getUniformLocation(this.programs.smoke, 'uSmokeColor'),
+                    detailScale: gl.getUniformLocation(this.programs.smoke, 'uDetailScale'),
+                    projectionMatrix: gl.getUniformLocation(this.programs.smoke, 'uProjectionMatrix'),
+                    modelViewMatrix: gl.getUniformLocation(this.programs.smoke, 'uModelViewMatrix')
+                };
             }
+            
+            // Set smoke-specific uniforms
+            const smokeUniforms = this.uniforms.smokeUniforms;
+            if (smokeUniforms.time) gl.uniform1f(smokeUniforms.time, time);
+            if (smokeUniforms.resolution) gl.uniform2f(smokeUniforms.resolution, this.canvas.width, this.canvas.height);
+            if (smokeUniforms.frameThickness) gl.uniform1f(smokeUniforms.frameThickness, this.config.frameThickness || 150);
+            if (smokeUniforms.frameMode) gl.uniform1i(smokeUniforms.frameMode, this.getFrameMode());
+            if (smokeUniforms.smokeIntensity) gl.uniform1f(smokeUniforms.smokeIntensity, this.config.smokeIntensity || 0.4);
+            if (smokeUniforms.smokeSpeed) gl.uniform1f(smokeUniforms.smokeSpeed, this.config.smokeSpeed || 0.3);
+            if (smokeUniforms.detailScale) gl.uniform1f(smokeUniforms.detailScale, this.calculateDetailScale());
+            
+            if (smokeUniforms.smokeColor) {
+                const smokeRgb = this.hexToRgb(this.config.smokeColor || '#333333');
+                gl.uniform3f(smokeUniforms.smokeColor, smokeRgb.r, smokeRgb.g, smokeRgb.b);
+            }
+            
+            const projectionMatrix = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+            const modelViewMatrix = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+            if (smokeUniforms.projectionMatrix) gl.uniformMatrix4fv(smokeUniforms.projectionMatrix, false, projectionMatrix);
+            if (smokeUniforms.modelViewMatrix) gl.uniformMatrix4fv(smokeUniforms.modelViewMatrix, false, modelViewMatrix);
             
             // Re-bind geometry for smoke
             const aSmokePosition = gl.getAttribLocation(this.programs.smoke, 'aPosition');
@@ -1510,8 +1543,9 @@ void main() {
             
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
             
-            // Switch back to current effect program
-            gl.useProgram(this.currentProgram);
+            // Restore previous program and uniforms
+            gl.useProgram(prevProgram);
+            this.uniforms = prevUniforms;
         }
     }
     
@@ -1524,7 +1558,7 @@ void main() {
         const time = (Date.now() - this.startTime) / 1000.0;
         
         // Multi-pass rendering with bloom
-        if (this.config.bloomEnabled && this.postProcessor && this.postProcessor.framebuffers.scene) {
+        if (this.config.bloomEnabled && this.postProcessor && this.postProcessor.isReady()) {
             // Render to framebuffer
             this.postProcessor.renderToFramebuffer('scene', () => {
                 this.renderScene();
