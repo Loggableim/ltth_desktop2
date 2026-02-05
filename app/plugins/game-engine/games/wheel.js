@@ -636,6 +636,11 @@ class WheelGame {
    */
   async handleSpinComplete(spinId, segmentIndex, reportedSegmentIndex = null) {
     // FIRST: Clear safety timeout since overlay responded
+    if (!this.activeSpins.has(spinId)) {
+      this.logger.debug(`Spin ${spinId} already completed, ignoring`);
+      return;
+    }
+    
     if (this.spinSafetyTimeout) {
       clearTimeout(this.spinSafetyTimeout);
       this.spinSafetyTimeout = null;
