@@ -332,6 +332,13 @@
         const DIGITAL_NOISE_FREQUENCY = 0.25;
         const FIXED_TIMESTEP = 1000 / 60;
         const MAX_ACCUMULATED = 200;
+        
+        // Lightning effect constants
+        const LIGHTNING_MAX_SEGMENTS_PER_BOLT = 200; // Hard limit per bolt
+        const LIGHTNING_BRANCH_THRESHOLD = 180; // Stop branching when approaching limit
+        const LIGHTNING_DEBUG_THRESHOLD = 150; // Log when segment count is high
+        const LIGHTNING_MAX_TOTAL_SEGMENTS = 1000; // Overflow protection
+        const LIGHTNING_MAX_CONCURRENT = 3; // Maximum simultaneous lightning bolts
 
         /**
          * SimplexNoise - Lightweight Simplex noise implementation for fog effects
@@ -1387,11 +1394,11 @@
             ).length;
             
             if (now >= effect.nextFlash) {
-                // Limit concurrent lightning bolts to 3 maximum
-                if (activeLightningCount < 3) {
+                // Limit concurrent lightning bolts to prevent performance degradation
+                if (activeLightningCount < LIGHTNING_MAX_CONCURRENT) {
                     // Check for segment overflow before generating new bolt
-                    if (lightningSegments.length > 1000) {
-                        log('⚠️ Lightning segment overflow detected, clearing segments', 'warn');
+                    if (lightningSegments.length > LIGHTNING_MAX_TOTAL_SEGMENTS) {
+                        log(`⚠️ Lightning segment overflow detected (${lightningSegments.length} segments), clearing`, 'warn');
                         lightningSegments = [];
                     }
                     
@@ -1428,9 +1435,9 @@
             lightningSegments = subdivideLightning(startX, startY, endX, endY, 6, 1.0, segmentCount);
             lightningFadeTime = Date.now() + 150;
             
-            // Debug logging for segment count monitoring
-            if (segmentCount.count > 150) {
-                log(`⚡ Lightning generated with ${segmentCount.count} segments`, 'debug');
+            // Debug logging for high segment count monitoring
+            if (segmentCount.count > LIGHTNING_DEBUG_THRESHOLD) {
+                log(`⚡ Lightning generated with ${segmentCount.count} segments (threshold: ${LIGHTNING_DEBUG_THRESHOLD})`, 'debug');
             }
         }
 
@@ -1438,8 +1445,8 @@
         function subdivideLightning(x1, y1, x2, y2, generations, brightness, segmentCount = { count: 0 }) {
             const segments = [];
             
-            // Hard limit: max 200 segments per bolt
-            if (segmentCount.count >= 200) {
+            // Hard limit: prevent unbounded segment growth
+            if (segmentCount.count >= LIGHTNING_MAX_SEGMENTS_PER_BOLT) {
                 return segments;
             }
             
@@ -1455,10 +1462,10 @@
             segments.push(...subdivideLightning(x1, y1, midX, midY, generations - 1, brightness, segmentCount));
             segments.push(...subdivideLightning(midX, midY, x2, y2, generations - 1, brightness * 0.9, segmentCount));
             
-            // Reduced branching probability: 0.3 * 0.7^(6-gen) - decreases at higher recursion depths
+            // Reduced branching probability: decreases at higher recursion depths
             const branchProbability = 0.3 * Math.pow(0.7, 6 - generations);
-            // Secondary limit: stop branching if we're approaching limit
-            if (Math.random() < branchProbability && generations > 2 && segmentCount.count < 180) {
+            // Secondary limit: stop branching when approaching hard limit
+            if (Math.random() < branchProbability && generations > 2 && segmentCount.count < LIGHTNING_BRANCH_THRESHOLD) {
                 const branchAngle = (Math.random() - 0.5) * Math.PI / 3;
                 const branchLength = Math.hypot(x2 - midX, y2 - midY) * 0.6;
                 const branchEndX = midX + Math.cos(branchAngle) * branchLength;
