@@ -1,0 +1,29 @@
+{
+  "fireworks": {
+    "title": "Fireworks Superplugin Settings",
+    "subtitle": "GPU-Accelerated Fireworks Effects",
+    "toaster_mode": {
+      "title": "🍞 Toaster Mode (Low-End PCs)",
+      "description": "Uses Canvas 2D rendering instead of WebGL for maximum compatibility",
+      "enabled": "Activar Modo Tostadora",
+      "help": "Optimized for weak systems and maximum compatibility",
+      "changes_title": "🔧 What changes:",
+      "renderer": "Renderer: WebGL → Canvas 2D",
+      "gpu": "GPU Acceleration: Disabled",
+      "compatibility": "Compatibility: Maximum",
+      "performance": "Performance: Reduced but stable",
+      "effects": "Visual Effects: All maintained",
+      "tip_title": "Tip:",
+      "tip": "Use Toaster Mode if your PC slows down during fireworks or if you experience rendering issues in OBS."
+    },
+    "performance_limits": "Límites de Rendimiento",
+    "performance_info": "Estos ajustes protegen contra congelaciones con muchos eventos simultáneos. Valores más bajos = más estabilidad.",
+    "max_concurrent_fireworks": "Fuegos artificiales simultáneos máx",
+    "max_total_particles": "Partículas totales máx",
+    "emergency_cleanup_threshold": "Umbral de limpieza de emergencia",
+    "adaptive_performance": "Rendimiento Adaptativo",
+    "min_target_fps": "FPS objetivo mínimo",
+    "frame_skip_info": "Frame Skip se activa cuando los FPS caen por debajo de este valor",
+    "enable_frame_skip": "Activar Frame Skip"
+  }
+}
