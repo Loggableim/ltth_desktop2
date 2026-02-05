@@ -288,6 +288,12 @@ class QueueManager {
     async _preGenerateCustomVoiceItem(item) {
         const itemId = item.id;
 
+        // Skip if item already has audio data
+        if (item.audioData) {
+            this.logger.debug(`[PRE-GEN] Skipping item ${itemId} - already has audio data`);
+            return;
+        }
+
         // Check if already pre-generating this item
         if (this.preGenerationInProgress.has(itemId)) {
             return;
@@ -402,7 +408,7 @@ class QueueManager {
             // NEW: Trigger pre-generation for next custom voice item (parallel, non-blocking)
             if (item.id && this.synthesizeCallback) {
                 const nextCustomVoiceItem = this._findNextItemWithAssignedVoice(item.id);
-                if (nextCustomVoiceItem && !nextCustomVoiceItem.audioData && !nextCustomVoiceItem.isStreaming) {
+                if (nextCustomVoiceItem && !nextCustomVoiceItem.audioData && !nextCustomVoiceItem.preGenerated && !nextCustomVoiceItem.isStreaming) {
                     // Start pre-generation for custom voice user (fire and forget)
                     this._preGenerateCustomVoiceItem(nextCustomVoiceItem);
                 }

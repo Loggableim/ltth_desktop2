@@ -171,11 +171,14 @@ describe('TTS Queue Manager - Custom Voice Pre-Generation', () => {
         // Try to pre-generate
         await queueManager._preGenerateCustomVoiceItem(item);
         
-        // Pre-generation still occurs (synthesize is called), but this is acceptable
-        // The new audio will replace the old one, which is fine for pre-generation
-        expect(synthesizeCallCount).toBe(1);
-        expect(item.audioData).not.toBeNull();
-        expect(item.preGenerated).toBe(true);
+        // Audio should remain unchanged (no synthesis should occur)
+        expect(item.audioData).toBe(originalAudioData);
+        expect(synthesizeCallCount).toBe(0); // No synthesis call made
+        
+        // Check that skip was logged
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.stringContaining('Skipping item')
+        );
     });
     
     test('should handle pre-generation errors gracefully', async () => {
