@@ -357,6 +357,50 @@ function updateUI() {
     if (giftPopupPositionSelect) {
         giftPopupPositionSelect.value = config.giftPopupPosition || 'bottom';
     }
+    
+    // Performance Limits (NEW)
+    const maxFireworks = config.maxConcurrentFireworks || 5;
+    const maxFireworksSlider = document.getElementById('max-fireworks');
+    const maxFireworksValue = document.getElementById('max-fireworks-value');
+    if (maxFireworksSlider) {
+        maxFireworksSlider.value = maxFireworks;
+    }
+    if (maxFireworksValue) {
+        maxFireworksValue.textContent = maxFireworks;
+    }
+
+    const maxParticlesLimit = config.maxTotalParticles || 800;
+    const maxParticlesLimitSlider = document.getElementById('max-particles-limit');
+    const maxParticlesLimitValue = document.getElementById('max-particles-limit-value');
+    if (maxParticlesLimitSlider) {
+        maxParticlesLimitSlider.value = maxParticlesLimit;
+    }
+    if (maxParticlesLimitValue) {
+        maxParticlesLimitValue.textContent = maxParticlesLimit;
+    }
+
+    const emergencyThreshold = config.emergencyCleanupThreshold || 1000;
+    const emergencyThresholdSlider = document.getElementById('emergency-threshold');
+    const emergencyThresholdValue = document.getElementById('emergency-threshold-value');
+    if (emergencyThresholdSlider) {
+        emergencyThresholdSlider.value = emergencyThreshold;
+    }
+    if (emergencyThresholdValue) {
+        emergencyThresholdValue.textContent = emergencyThreshold;
+    }
+
+    const minTargetFps = config.minTargetFps || 30;
+    const minTargetFpsSlider = document.getElementById('min-target-fps');
+    const minTargetFpsValue = document.getElementById('min-target-fps-value');
+    if (minTargetFpsSlider) {
+        minTargetFpsSlider.value = minTargetFps;
+    }
+    if (minTargetFpsValue) {
+        minTargetFpsValue.textContent = minTargetFps;
+    }
+
+    updateToggle('adaptive-toggle', config.adaptivePerformance !== false);
+    updateToggle('frame-skip-toggle', config.frameSkipEnabled !== false);
 }
 
 function updateToggle(id, value) {
@@ -578,6 +622,34 @@ function setupEventListeners() {
         }
         // Note: Changes take effect after clicking "Save Settings" button
         // This is consistent with other settings
+    });
+    
+    // Performance Limits Sliders (NEW)
+    setupRangeSlider('max-fireworks', 'max-fireworks-value', '', (val) => {
+        config.maxConcurrentFireworks = parseInt(val);
+    });
+
+    setupRangeSlider('max-particles-limit', 'max-particles-limit-value', '', (val) => {
+        config.maxTotalParticles = parseInt(val);
+    });
+
+    setupRangeSlider('emergency-threshold', 'emergency-threshold-value', '', (val) => {
+        config.emergencyCleanupThreshold = parseInt(val);
+    });
+
+    setupRangeSlider('min-target-fps', 'min-target-fps-value', '', (val) => {
+        config.minTargetFps = parseInt(val);
+    });
+
+    // Performance Toggles (NEW)
+    document.getElementById('adaptive-toggle')?.addEventListener('click', function() {
+        this.classList.toggle('active');
+        config.adaptivePerformance = this.classList.contains('active');
+    });
+
+    document.getElementById('frame-skip-toggle')?.addEventListener('click', function() {
+        this.classList.toggle('active');
+        config.frameSkipEnabled = this.classList.contains('active');
     });
     
     // Number inputs

@@ -19,6 +19,15 @@
       "tip_title": "Tip:",
       "tip": "Use Toaster Mode if your PC slows down during fireworks or if you experience rendering issues in OBS."
     },
+    "performance_limits": "Performance Limits",
+    "performance_info": "These settings protect against freezes during many simultaneous events. Lower values = more stability.",
+    "max_concurrent_fireworks": "Max Concurrent Fireworks",
+    "max_total_particles": "Max Total Particles",
+    "emergency_cleanup_threshold": "Emergency Cleanup Threshold",
+    "adaptive_performance": "Adaptive Performance",
+    "min_target_fps": "Minimum Target FPS",
+    "frame_skip_info": "Frame Skip activates when FPS drops below this value",
+    "enable_frame_skip": "Enable Frame Skip",
     "presets": {
       "title": "Presets",
       "description": "Choose a preset based on your system's performance. Use the Benchmark to find the optimal settings.",

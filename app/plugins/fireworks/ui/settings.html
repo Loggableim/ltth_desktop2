@@ -710,6 +710,74 @@
                     </div>
                 </div>
 
+                <!-- Performance Limits (NEW) -->
+                <div class="card rounded-xl p-6 border-2 border-red-500/30">
+                    <h2 class="section-title text-xl font-bold mb-4" data-i18n="fireworks.performance_limits">⚡ Performance Limits</h2>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-yellow-900/20 border border-yellow-700/30 rounded-lg p-3 mb-4">
+                            <p class="text-sm text-yellow-200" data-i18n="fireworks.performance_info">
+                                Diese Einstellungen schützen vor Freezes bei vielen gleichzeitigen Events. Niedrigere Werte = mehr Stabilität.
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <label class="block mb-2" data-i18n="fireworks.max_concurrent_fireworks">Max Gleichzeitige Fireworks</label>
+                            <input type="range" id="max-fireworks" min="1" max="20" value="5" class="w-full">
+                            <div class="flex justify-between text-sm text-gray-400">
+                                <span>1</span>
+                                <span id="max-fireworks-value">5</span>
+                                <span>20</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block mb-2" data-i18n="fireworks.max_total_particles">Max Partikel Global</label>
+                            <input type="range" id="max-particles-limit" min="200" max="2000" step="100" value="800" class="w-full">
+                            <div class="flex justify-between text-sm text-gray-400">
+                                <span>200</span>
+                                <span id="max-particles-limit-value">800</span>
+                                <span>2000</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block mb-2" data-i18n="fireworks.emergency_cleanup_threshold">Emergency Cleanup Schwelle</label>
+                            <input type="range" id="emergency-threshold" min="500" max="3000" step="100" value="1000" class="w-full">
+                            <div class="flex justify-between text-sm text-gray-400">
+                                <span>500</span>
+                                <span id="emergency-threshold-value">1000</span>
+                                <span>3000</span>
+                            </div>
+                        </div>
+                        
+                        <hr class="border-gray-700">
+                        
+                        <div class="flex items-center justify-between">
+                            <label data-i18n="fireworks.adaptive_performance">Adaptive Performance</label>
+                            <div id="adaptive-toggle" class="toggle-switch active" data-config="adaptivePerformance"></div>
+                        </div>
+                        
+                        <div>
+                            <label class="block mb-2" data-i18n="fireworks.min_target_fps">Minimum Target FPS</label>
+                            <input type="range" id="min-target-fps" min="20" max="50" value="30" class="w-full">
+                            <div class="flex justify-between text-sm text-gray-400">
+                                <span>20</span>
+                                <span id="min-target-fps-value">30</span>
+                                <span>50</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1" data-i18n="fireworks.frame_skip_info">
+                                Frame Skip wird aktiviert wenn FPS unter diesen Wert fällt
+                            </p>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <label data-i18n="fireworks.enable_frame_skip">Frame Skip aktivieren</label>
+                            <div id="frame-skip-toggle" class="toggle-switch active" data-config="frameSkipEnabled"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- User Avatar Integration -->
                 <div class="card rounded-xl p-6">
                     <h2 class="section-title text-xl font-bold mb-4" data-i18n="fireworks.user_avatar_integration">👤 User Avatar Integration</h2>
