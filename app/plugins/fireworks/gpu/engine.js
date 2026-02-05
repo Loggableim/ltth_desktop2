@@ -945,14 +945,32 @@ class FireworksEngine {
     handleFinale(data) {
         const count = data.count || 10;
         const delay = data.delay || 100;
+        const tier = data.tier || 'big';  // Finales typically use bigger effects
         
         for (let i = 0; i < count; i++) {
             setTimeout(() => {
+                // Select audio for this firework
+                const audio = this.audioManager.selectAudio(tier, 0, false);
+                
+                if (audio.launchSound) {
+                    this.audioManager.play(audio.launchSound, this.audioManager.LAUNCH_AUDIO_VOLUME);
+                }
+                
+                const onExplodeSound = (intensity) => {
+                    if (audio.explosionSound) {
+                        this.audioManager.play(audio.explosionSound, this.audioManager.NORMAL_EXPLOSION_VOLUME);
+                    }
+                    if (audio.cracklingSound) {
+                        this.audioManager.play(audio.cracklingSound, this.audioManager.CRACKLING_VOLUME);
+                    }
+                };
+                
                 this.trigger({
                     position: { x: 0.2 + Math.random() * 0.6, y: 1.0 },
                     shape: ['burst', 'star', 'heart'][Math.floor(Math.random() * 3)],
                     intensity: 1.5 + Math.random() * 0.5,
-                    particleCount: 150 + Math.floor(Math.random() * 50)
+                    particleCount: 150 + Math.floor(Math.random() * 50),
+                    onExplodeSound  // Pass audio callback for explosion sounds
                 });
             }, i * delay);
         }
