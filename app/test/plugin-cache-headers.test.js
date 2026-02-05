@@ -37,7 +37,7 @@ describe('Plugin Cache Headers', () => {
 
     describe('Overlay Files', () => {
         it('should set no-cache headers for overlay.html files', () => {
-            const req = { path: '/emoji-rain/overlay.html' };
+            const req = { path: '/webgpu-emoji-rain/overlay.html' };
             const res = createMockResponse();
 
             applyCacheHeaders(req, res);
@@ -48,7 +48,7 @@ describe('Plugin Cache Headers', () => {
         });
 
         it('should set no-cache headers for obs-hud.html files', () => {
-            const req = { path: '/emoji-rain/obs-hud.html' };
+            const req = { path: '/webgpu-emoji-rain/obs-hud.html' };
             const res = createMockResponse();
 
             applyCacheHeaders(req, res);
@@ -83,7 +83,7 @@ describe('Plugin Cache Headers', () => {
 
     describe('Other Asset Files', () => {
         it('should set short-term cache headers for CSS files', () => {
-            const req = { path: '/emoji-rain/style.css' };
+            const req = { path: '/webgpu-emoji-rain/style.css' };
             const res = createMockResponse();
 
             applyCacheHeaders(req, res);
@@ -94,7 +94,7 @@ describe('Plugin Cache Headers', () => {
         });
 
         it('should set short-term cache headers for image files', () => {
-            const req = { path: '/emoji-rain/icon.png' };
+            const req = { path: '/webgpu-emoji-rain/icon.png' };
             const res = createMockResponse();
 
             applyCacheHeaders(req, res);
@@ -129,7 +129,7 @@ describe('Plugin Cache Headers', () => {
         });
 
         it('should set no-cache headers for JS files in overlay directory', () => {
-            const req = { path: '/emoji-rain/overlay/script.js' };
+            const req = { path: '/webgpu-emoji-rain/overlay/script.js' };
             const res = createMockResponse();
 
             applyCacheHeaders(req, res);

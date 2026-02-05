@@ -33,13 +33,13 @@ describe('Fireworks Plugin Sidebar Integration', () => {
       expect(dashboardHtml).toContain('data-plugin="fireworks"');
     });
 
-    test('should have fireworks sidebar item in correct location (after emoji-rain)', () => {
-      const emojiRainIndex = dashboardHtml.indexOf('data-view="emoji-rain"');
+    test('should have fireworks sidebar item in correct location (after webgpu-emoji-rain)', () => {
+      const webgpuEmojiRainIndex = dashboardHtml.indexOf('data-view="webgpu-emoji-rain"');
       const fireworksIndex = dashboardHtml.indexOf('data-view="fireworks"');
       
-      expect(emojiRainIndex).toBeGreaterThan(0);
+      expect(webgpuEmojiRainIndex).toBeGreaterThan(0);
       expect(fireworksIndex).toBeGreaterThan(0);
-      expect(fireworksIndex).toBeGreaterThan(emojiRainIndex);
+      expect(fireworksIndex).toBeGreaterThan(webgpuEmojiRainIndex);
     });
 
     test('should use sparkles icon for fireworks', () => {
@@ -153,11 +153,11 @@ describe('Fireworks Plugin Sidebar Integration', () => {
   });
 
   describe('Pattern Consistency', () => {
-    test('sidebar item should follow same pattern as emoji-rain', () => {
-      // Extract emoji-rain sidebar pattern
-      const emojiRainPattern = dashboardHtml.substring(
-        dashboardHtml.indexOf('data-view="emoji-rain"') - 100,
-        dashboardHtml.indexOf('data-view="emoji-rain"') + 200
+    test('sidebar item should follow same pattern as webgpu-emoji-rain', () => {
+      // Extract webgpu-emoji-rain sidebar pattern
+      const webgpuEmojiRainPattern = dashboardHtml.substring(
+        dashboardHtml.indexOf('data-view="webgpu-emoji-rain"') - 100,
+        dashboardHtml.indexOf('data-view="webgpu-emoji-rain"') + 200
       );
       
       // Extract fireworks sidebar pattern
@@ -167,30 +167,30 @@ describe('Fireworks Plugin Sidebar Integration', () => {
       );
       
       // Both should have the same structural elements
-      expect(emojiRainPattern).toContain('class="sidebar-item"');
+      expect(webgpuEmojiRainPattern).toContain('class="sidebar-item"');
       expect(fireworksPattern).toContain('class="sidebar-item"');
-      expect(emojiRainPattern).toContain('<i data-lucide=');
+      expect(webgpuEmojiRainPattern).toContain('<i data-lucide=');
       expect(fireworksPattern).toContain('<i data-lucide=');
-      expect(emojiRainPattern).toContain('sidebar-item-text');
+      expect(webgpuEmojiRainPattern).toContain('sidebar-item-text');
       expect(fireworksPattern).toContain('sidebar-item-text');
     });
 
-    test('view container should follow same pattern as emoji-rain', () => {
+    test('view container should follow same pattern as webgpu-emoji-rain', () => {
       // Check both have view-section
-      const emojiRainView = dashboardHtml.substring(
-        dashboardHtml.indexOf('id="view-emoji-rain"'),
-        dashboardHtml.indexOf('id="view-emoji-rain"') + 800
+      const webgpuEmojiRainView = dashboardHtml.substring(
+        dashboardHtml.indexOf('id="view-webgpu-emoji-rain"'),
+        dashboardHtml.indexOf('id="view-webgpu-emoji-rain"') + 800
       );
       const fireworksView = dashboardHtml.substring(
         dashboardHtml.indexOf('id="view-fireworks"'),
         dashboardHtml.indexOf('id="view-fireworks"') + 800
       );
       
-      expect(emojiRainView).toContain('class="view-section"');
+      expect(webgpuEmojiRainView).toContain('class="view-section"');
       expect(fireworksView).toContain('class="view-section"');
-      expect(emojiRainView).toContain('class="view-header"');
+      expect(webgpuEmojiRainView).toContain('class="view-header"');
       expect(fireworksView).toContain('class="view-header"');
-      expect(emojiRainView).toContain('class="iframe-container"');
+      expect(webgpuEmojiRainView).toContain('class="iframe-container"');
       expect(fireworksView).toContain('class="iframe-container"');
     });
   });
