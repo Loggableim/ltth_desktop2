@@ -207,7 +207,9 @@
             showConnectionStatus: true,
             reconnectDelay: 1000,
             reconnectMaxDelay: 30000,
-            reconnectBackoffMultiplier: 1.5
+            reconnectBackoffMultiplier: 1.5,
+            enablePostProcessing: new URLSearchParams(window.location.search).get('bloom') === 'true',
+            renderQuality: 'high' // 'low', 'medium', 'high'
         };
 
         // DOM elements
@@ -235,6 +237,12 @@
             document.body.appendChild(errorDiv);
             throw new Error('Canvas context initialization failed');
         }
+        
+        // Enable high-quality rendering
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         
         // Get context attributes once
         const contextAttrs = ctx.getContextAttributes();
@@ -751,30 +759,74 @@
                     case 'rain':
                     case 'storm':
                     {
-                        const gradient = ctx.createLinearGradient(
+                        // Depth-based rendering
+                        const depthFactor = 0.5 + this.z * 0.5; // z: 0-1 → depth: 0.5-1.0
+                        const glowIntensity = this.type === 'storm' ? 0.3 : 0.15;
+                        
+                        // Outer glow layer
+                        const glowGradient = ctx.createLinearGradient(
                             this.x, this.y,
                             this.x - this.speedX * 2, this.y - this.length
                         );
-                        const baseColor = this.color || (this.type === 'storm' ? 'rgba(107, 163, 214, ' + this.alpha + ')' : 'rgba(160, 196, 232, ' + this.alpha + ')');
-                        const transparentColor = this.type === 'storm' ? 'rgba(107, 163, 214, 0)' : 'rgba(160, 196, 232, 0)';
-                        gradient.addColorStop(0, baseColor);
-                        gradient.addColorStop(1, transparentColor);
+                        const glowColor = this.type === 'storm' 
+                            ? `rgba(107, 163, 214, ${this.alpha * glowIntensity})` 
+                            : `rgba(160, 196, 232, ${this.alpha * glowIntensity})`;
+                        glowGradient.addColorStop(0, glowColor);
+                        glowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
                         
-                        ctx.strokeStyle = gradient;
-                        ctx.lineWidth = this.width;
+                        ctx.strokeStyle = glowGradient;
+                        ctx.lineWidth = (this.width + 2) * depthFactor;
                         ctx.lineCap = 'round';
                         ctx.beginPath();
                         ctx.moveTo(this.x, this.y);
                         ctx.lineTo(this.x - this.speedX * 2, this.y - this.length);
                         ctx.stroke();
                         
+                        // Main raindrop with depth-based color
+                        const mainGradient = ctx.createLinearGradient(
+                            this.x, this.y,
+                            this.x - this.speedX * 2, this.y - this.length
+                        );
+                        
+                        const baseR = this.type === 'storm' ? 107 : 160;
+                        const baseG = this.type === 'storm' ? 163 : 196;
+                        const baseB = this.type === 'storm' ? 214 : 232;
+                        
+                        const depthR = Math.round(baseR * depthFactor);
+                        const depthG = Math.round(baseG * depthFactor);
+                        const depthB = Math.round(baseB * depthFactor);
+                        
+                        mainGradient.addColorStop(0, `rgba(${depthR}, ${depthG}, ${depthB}, ${this.alpha})`);
+                        mainGradient.addColorStop(0.5, `rgba(${baseR}, ${baseG}, ${baseB}, ${this.alpha * 0.8})`);
+                        mainGradient.addColorStop(1, `rgba(${baseR}, ${baseG}, ${baseB}, 0)`);
+                        
+                        ctx.strokeStyle = mainGradient;
+                        ctx.lineWidth = this.width * depthFactor;
+                        ctx.beginPath();
+                        ctx.moveTo(this.x, this.y);
+                        ctx.lineTo(this.x - this.speedX * 2, this.y - this.length);
+                        ctx.stroke();
+                        
+                        // Enhanced splash rendering
                         if (this.type === 'rain' && this.splashParticles.length > 0) {
                             this.splashParticles.forEach(splash => {
-                                ctx.globalAlpha = splash.life * 0.6;
+                                const splashAlpha = splash.life * 0.7;
+                                
+                                // Glow layer
+                                ctx.globalAlpha = splashAlpha * 0.3;
+                                ctx.fillStyle = 'rgba(200, 230, 255, 1)';
+                                ctx.beginPath();
+                                ctx.arc(splash.x, splash.y, splash.size + 2, 0, Math.PI * 2);
+                                ctx.fill();
+                                
+                                // Main splash
+                                ctx.globalAlpha = splashAlpha;
                                 ctx.fillStyle = 'rgba(180, 210, 240, 1)';
                                 ctx.beginPath();
                                 ctx.arc(splash.x, splash.y, splash.size, 0, Math.PI * 2);
                                 ctx.fill();
+                                
+                                ctx.globalAlpha = this.alpha;
                             });
                         }
                         break;
@@ -786,43 +838,85 @@
                         ctx.translate(this.x, this.y);
                         ctx.rotate(this.rotation);
                         
+                        const depthScale = 0.6 + this.z * 0.4;
+                        
+                        // Shadow/depth layer
+                        ctx.globalAlpha = this.alpha * 0.3;
+                        ctx.fillStyle = 'rgba(180, 200, 220, 1)';
+                        ctx.beginPath();
                         if (this.snowflakePoints && this.snowflakePoints.length > 0) {
-                            ctx.fillStyle = '#ffffff';
+                            for (let i = 0; i < this.snowflakePoints.length; i++) {
+                                const x = this.snowflakePoints[i].x * this.size * depthScale;
+                                const y = this.snowflakePoints[i].y * this.size * depthScale + 2;
+                                if (i === 0) ctx.moveTo(x, y);
+                                else ctx.lineTo(x, y);
+                            }
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // Main snowflake with radial gradient (crystal effect)
+                        ctx.globalAlpha = this.alpha;
+                        
+                        if (this.snowflakePoints && this.snowflakePoints.length > 0) {
+                            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * depthScale);
+                            gradient.addColorStop(0, '#ffffff');
+                            gradient.addColorStop(0.6, '#f0f8ff');
+                            gradient.addColorStop(1, 'rgba(240, 248, 255, 0.8)');
+                            
+                            ctx.fillStyle = gradient;
                             ctx.beginPath();
                             for (let i = 0; i < this.snowflakePoints.length; i++) {
-                                const x = this.snowflakePoints[i].x * this.size;
-                                const y = this.snowflakePoints[i].y * this.size;
-                                if (i === 0) {
-                                    ctx.moveTo(x, y);
-                                } else {
-                                    ctx.lineTo(x, y);
-                                }
+                                const x = this.snowflakePoints[i].x * this.size * depthScale;
+                                const y = this.snowflakePoints[i].y * this.size * depthScale;
+                                if (i === 0) ctx.moveTo(x, y);
+                                else ctx.lineTo(x, y);
                             }
                             ctx.closePath();
                             ctx.fill();
+                            
+                            // Outline for definition
+                            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                            ctx.lineWidth = 0.5;
+                            ctx.stroke();
                         } else {
+                            // Fallback with gradient
+                            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * depthScale);
+                            gradient.addColorStop(0, '#ffffff');
+                            gradient.addColorStop(1, 'rgba(240, 248, 255, 0.8)');
+                            ctx.fillStyle = gradient;
+                            
                             const points = 6;
-                            ctx.fillStyle = '#ffffff';
                             ctx.beginPath();
                             for (let i = 0; i < points; i++) {
                                 const angle = (i * Math.PI * 2) / points;
-                                const x = Math.cos(angle) * this.size;
-                                const y = Math.sin(angle) * this.size;
-                                if (i === 0) {
-                                    ctx.moveTo(x, y);
-                                } else {
-                                    ctx.lineTo(x, y);
-                                }
+                                const x = Math.cos(angle) * this.size * depthScale;
+                                const y = Math.sin(angle) * this.size * depthScale;
+                                if (i === 0) ctx.moveTo(x, y);
+                                else ctx.lineTo(x, y);
                             }
                             ctx.closePath();
                             ctx.fill();
                         }
                         
-                        if (Math.random() < SNOWFLAKE_SPARKLE_CHANCE) {
-                            ctx.fillStyle = '#ffffdd';
+                        // Enhanced sparkle effect
+                        if (Math.random() < SNOWFLAKE_SPARKLE_CHANCE * 1.5) {
                             ctx.globalAlpha = 0.9;
+                            
+                            // Outer glow
+                            const sparkleGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * 0.6);
+                            sparkleGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                            sparkleGradient.addColorStop(0.5, 'rgba(255, 255, 220, 0.6)');
+                            sparkleGradient.addColorStop(1, 'rgba(255, 255, 220, 0)');
+                            ctx.fillStyle = sparkleGradient;
                             ctx.beginPath();
-                            ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
+                            ctx.arc(0, 0, this.size * 0.6, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            // Bright center
+                            ctx.fillStyle = '#ffffee';
+                            ctx.beginPath();
+                            ctx.arc(0, 0, this.size * 0.3, 0, Math.PI * 2);
                             ctx.fill();
                         }
                         
@@ -832,17 +926,57 @@
                     
                     case 'fog':
                     {
-                        const fogGradient = ctx.createRadialGradient(
-                            this.x, this.y, 0,
-                            this.x, this.y, this.size
+                        const baseX = this.x;
+                        const baseY = this.y;
+                        
+                        // Perlin noise displacement for organic edges
+                        const noiseScale = 0.003;
+                        const noiseTime = Date.now() * 0.0001;
+                        const noiseOffsetX = noise.noise2D(baseX * noiseScale, noiseTime) * 30;
+                        const noiseOffsetY = noise.noise2D(baseY * noiseScale, noiseTime + 100) * 30;
+                        
+                        const finalX = baseX + noiseOffsetX;
+                        const finalY = baseY + noiseOffsetY;
+                        
+                        // Layer 1: Large soft base
+                        const baseGradient = ctx.createRadialGradient(
+                            finalX, finalY, 0,
+                            finalX, finalY, this.size * 1.2
                         );
-                        fogGradient.addColorStop(0, `hsla(${this.hue}, 15%, 75%, ${this.alpha})`);
-                        fogGradient.addColorStop(0.5, `hsla(${this.hue}, 15%, 70%, ${this.alpha * 0.5})`);
-                        fogGradient.addColorStop(1, 'rgba(180, 180, 200, 0)');
-                        ctx.fillStyle = fogGradient;
+                        baseGradient.addColorStop(0, `hsla(${this.hue}, 15%, 80%, ${this.alpha * 0.8})`);
+                        baseGradient.addColorStop(0.5, `hsla(${this.hue}, 15%, 75%, ${this.alpha * 0.4})`);
+                        baseGradient.addColorStop(1, 'rgba(200, 200, 220, 0)');
+                        ctx.fillStyle = baseGradient;
                         ctx.beginPath();
-                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                        ctx.arc(finalX, finalY, this.size * 1.2, 0, Math.PI * 2);
                         ctx.fill();
+                        
+                        // Layer 2: Medium density core
+                        const coreGradient = ctx.createRadialGradient(
+                            finalX, finalY, 0,
+                            finalX, finalY, this.size * 0.7
+                        );
+                        coreGradient.addColorStop(0, `hsla(${this.hue + 5}, 18%, 78%, ${this.alpha})`);
+                        coreGradient.addColorStop(0.6, `hsla(${this.hue}, 15%, 73%, ${this.alpha * 0.6})`);
+                        coreGradient.addColorStop(1, 'rgba(190, 190, 210, 0)');
+                        ctx.fillStyle = coreGradient;
+                        ctx.beginPath();
+                        ctx.arc(finalX, finalY, this.size * 0.7, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Layer 3: Highlight/light scatter
+                        const highlightGradient = ctx.createRadialGradient(
+                            finalX - this.size * 0.15, finalY - this.size * 0.15, 0,
+                            finalX - this.size * 0.15, finalY - this.size * 0.15, this.size * 0.4
+                        );
+                        highlightGradient.addColorStop(0, `hsla(${this.hue - 10}, 20%, 85%, ${this.alpha * 0.5})`);
+                        highlightGradient.addColorStop(0.5, `hsla(${this.hue - 5}, 18%, 82%, ${this.alpha * 0.25})`);
+                        highlightGradient.addColorStop(1, 'rgba(220, 220, 240, 0)');
+                        ctx.fillStyle = highlightGradient;
+                        ctx.beginPath();
+                        ctx.arc(finalX - this.size * 0.15, finalY - this.size * 0.15, this.size * 0.4, 0, Math.PI * 2);
+                        ctx.fill();
+                        
                         break;
                     }
                 }
@@ -1376,6 +1510,11 @@
                     effect.nextShake = Date.now() + 800 + Math.random() * 2500;
                 }
             }
+            
+            // Apply optional post-processing (bloom)
+            if (config.enablePostProcessing) {
+                applyPostProcessing();
+            }
 
             if (config.debug) {
                 updateDebugInfo();
@@ -1476,32 +1615,57 @@
             return segments;
         }
 
-        // Draw lightning with glow effect
+        // Draw lightning with HDR multi-layer glow
         function drawLightning(fadeProgress) {
             ctx.save();
             
-            const alpha = 1 - fadeProgress;
+            const brightness = 1.0 - fadeProgress;
             
-            ctx.shadowColor = `rgba(180, 200, 255, ${0.8 * alpha})`;
-            ctx.shadowBlur = 30;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             
-            const widths = [15, 8, 3, 1];
-            widths.forEach((width, i) => {
-                ctx.lineWidth = width;
-                const baseAlpha = alpha * (i === 3 ? 1 : (0.3 - i * 0.05));
-                ctx.strokeStyle = i === 3 
-                    ? `rgba(255, 255, 255, ${baseAlpha})` 
-                    : `rgba(200, 220, 255, ${baseAlpha})`;
+            // Multi-pass glow for atmospheric scatter
+            const glowPasses = [
+                { width: 20, alpha: 0.08, color: 'rgba(180, 220, 255, ' },
+                { width: 12, alpha: 0.15, color: 'rgba(200, 230, 255, ' },
+                { width: 6, alpha: 0.25, color: 'rgba(220, 240, 255, ' },
+                { width: 3, alpha: 0.4, color: 'rgba(240, 250, 255, ' }
+            ];
+            
+            // Render glow passes (outer to inner)
+            glowPasses.forEach(pass => {
+                ctx.strokeStyle = pass.color + (pass.alpha * brightness) + ')';
+                ctx.lineWidth = pass.width;
                 
                 ctx.beginPath();
-                lightningSegments.forEach(seg => {
-                    ctx.moveTo(seg.x1, seg.y1);
+                lightningSegments.forEach((seg, i) => {
+                    if (i === 0) ctx.moveTo(seg.x1, seg.y1);
                     ctx.lineTo(seg.x2, seg.y2);
                 });
                 ctx.stroke();
             });
+            
+            // Main lightning core (bright white)
+            ctx.strokeStyle = `rgba(255, 255, 255, ${brightness * 0.95})`;
+            ctx.lineWidth = 1.5;
+            
+            ctx.beginPath();
+            lightningSegments.forEach((seg, i) => {
+                if (i === 0) ctx.moveTo(seg.x1, seg.y1);
+                ctx.lineTo(seg.x2, seg.y2);
+            });
+            ctx.stroke();
+            
+            // Inner highlight (electric blue)
+            ctx.strokeStyle = `rgba(150, 200, 255, ${brightness * 0.6})`;
+            ctx.lineWidth = 0.8;
+            
+            ctx.beginPath();
+            lightningSegments.forEach((seg, i) => {
+                if (i === 0) ctx.moveTo(seg.x1, seg.y1);
+                ctx.lineTo(seg.x2, seg.y2);
+            });
+            ctx.stroke();
             
             ctx.restore();
         }
@@ -1559,10 +1723,10 @@
             });
         }
 
-        // Draw sunbeams with HDR bloom effect
+        // Draw sunbeams with volumetric bloom effect
         function drawSunbeams(effect) {
             ctx.save();
-            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalCompositeOperation = 'screen'; // HDR-like blending
             
             const w = window.innerWidth;
             
@@ -1572,33 +1736,59 @@
                     beam.x = -150;
                 }
                 
-                const bloomPasses = 3;
-                for (let pass = 0; pass < bloomPasses; pass++) {
-                    const bloomScale = 1 + pass * 0.3;
-                    const bloomAlpha = beam.opacity * (1 - pass * 0.3) * effect.intensity;
-                    
+                // Multi-pass bloom for volumetric effect
+                const bloomPasses = [
+                    { scale: 2.5, alpha: 0.03 },
+                    { scale: 1.8, alpha: 0.06 },
+                    { scale: 1.3, alpha: 0.10 }
+                ];
+                
+                bloomPasses.forEach(pass => {
                     ctx.save();
                     ctx.translate(beam.x, beam.y);
                     ctx.rotate((beam.angle * Math.PI) / 180);
-                    ctx.scale(bloomScale, 1);
+                    ctx.scale(pass.scale, 1);
                     
-                    const gradient = ctx.createLinearGradient(0, 0, 0, beam.height);
-                    gradient.addColorStop(0, `rgba(255, 250, 220, ${bloomAlpha})`);
-                    gradient.addColorStop(0.3, `rgba(255, 245, 200, ${bloomAlpha * 0.6})`);
-                    gradient.addColorStop(0.6, `rgba(255, 240, 180, ${bloomAlpha * 0.2})`);
-                    gradient.addColorStop(1, 'rgba(255, 235, 160, 0)');
+                    const bloomAlpha = beam.opacity * pass.alpha * effect.intensity;
+                    const bloomGradient = ctx.createLinearGradient(0, 0, 0, beam.height);
+                    bloomGradient.addColorStop(0, `rgba(255, 250, 220, ${bloomAlpha})`);
+                    bloomGradient.addColorStop(0.4, `rgba(255, 240, 180, ${bloomAlpha * 0.7})`);
+                    bloomGradient.addColorStop(1, 'rgba(255, 235, 160, 0)');
                     
+                    ctx.fillStyle = bloomGradient;
                     ctx.beginPath();
                     ctx.moveTo(-beam.width / 2, 0);
                     ctx.lineTo(beam.width / 2, 0);
-                    ctx.lineTo(beam.width * 0.1, beam.height);
-                    ctx.lineTo(-beam.width * 0.1, beam.height);
+                    ctx.lineTo(beam.width * 0.1 * pass.scale, beam.height);
+                    ctx.lineTo(-beam.width * 0.1 * pass.scale, beam.height);
                     ctx.closePath();
-                    ctx.fillStyle = gradient;
                     ctx.fill();
                     
                     ctx.restore();
-                }
+                });
+                
+                // Main beam with tapered gradient
+                ctx.save();
+                ctx.translate(beam.x, beam.y);
+                ctx.rotate((beam.angle * Math.PI) / 180);
+                
+                const beamGradient = ctx.createLinearGradient(0, 0, 0, beam.height);
+                const beamAlpha = beam.opacity * effect.intensity;
+                beamGradient.addColorStop(0, `rgba(255, 252, 230, ${beamAlpha * 0.5})`);
+                beamGradient.addColorStop(0.3, `rgba(255, 245, 200, ${beamAlpha * 0.35})`);
+                beamGradient.addColorStop(0.7, `rgba(255, 240, 180, ${beamAlpha * 0.15})`);
+                beamGradient.addColorStop(1, 'rgba(255, 235, 160, 0)');
+                
+                ctx.fillStyle = beamGradient;
+                ctx.beginPath();
+                ctx.moveTo(-beam.width / 2, 0);
+                ctx.lineTo(beam.width / 2, 0);
+                ctx.lineTo(beam.width * 0.1, beam.height);
+                ctx.lineTo(-beam.width * 0.1, beam.height);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.restore();
                 
                 drawDustMotes(beam, effect);
             });
@@ -1606,7 +1796,7 @@
             ctx.restore();
         }
 
-        // Draw floating dust particles in sunbeam
+        // Draw floating dust particles in sunbeam with depth
         function drawDustMotes(beam, effect) {
             const moteCount = Math.floor(15 * effect.intensity);
             const time = Date.now() * 0.001;
@@ -1616,11 +1806,30 @@
                 const seed = beam.x + beam.y + i;
                 const moteY = ((seed * 13 + time * 20) % beam.height);
                 const moteX = beam.x + Math.sin(seed + time * 2) * beam.width * 0.4;
+                const depth = (i / moteCount); // Depth factor 0-1
+                const depthScale = 0.5 + depth * 0.5;
                 
-                ctx.globalAlpha = 0.3 + Math.sin(seed + time * 3) * 0.2;
+                const moteAlpha = (0.3 + Math.sin(seed + time * 3) * 0.2) * effect.intensity;
+                
+                // Glow around mote
+                const moteGradient = ctx.createRadialGradient(
+                    moteX, beam.y + moteY, 0,
+                    moteX, beam.y + moteY, 3 * depthScale
+                );
+                moteGradient.addColorStop(0, `rgba(255, 250, 220, ${moteAlpha * 0.8})`);
+                moteGradient.addColorStop(0.5, `rgba(255, 245, 200, ${moteAlpha * 0.4})`);
+                moteGradient.addColorStop(1, 'rgba(255, 240, 180, 0)');
+                
+                ctx.fillStyle = moteGradient;
+                ctx.beginPath();
+                ctx.arc(moteX, beam.y + moteY, 3 * depthScale, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Bright core
+                ctx.globalAlpha = moteAlpha;
                 ctx.fillStyle = '#ffffdd';
                 ctx.beginPath();
-                ctx.arc(moteX, beam.y + moteY, 1 + Math.random() * 1.5, 0, Math.PI * 2);
+                ctx.arc(moteX, beam.y + moteY, 1 * depthScale, 0, Math.PI * 2);
                 ctx.fill();
             }
             ctx.restore();
@@ -1701,6 +1910,29 @@
                 }
             }
             
+            ctx.restore();
+        }
+
+        /**
+         * Apply post-processing effects (bloom/glow)
+         * Optional - can impact performance
+         */
+        function applyPostProcessing() {
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = 0.15;
+            ctx.filter = 'blur(8px)';
+            
+            // Create temporary canvas for bloom effect
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(canvas, 0, 0);
+            
+            ctx.drawImage(tempCanvas, 0, 0);
+            
+            ctx.filter = 'none';
             ctx.restore();
         }
 
