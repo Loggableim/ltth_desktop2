@@ -6,10 +6,10 @@
 // ============================================================================
 // Per-user gain control constants (must match backend)
 const MIN_GAIN = 0.0;           // Minimum gain multiplier (0%)
-const MAX_GAIN = 2.5;           // Maximum gain multiplier (250%)
+const MAX_GAIN = 3.0;           // Maximum gain multiplier (300%)
 const DEFAULT_GAIN = 1.0;       // Default gain multiplier (100%)
 const MIN_GAIN_PERCENT = 0;     // Minimum gain percentage for UI
-const MAX_GAIN_PERCENT = 250;   // Maximum gain percentage for UI
+const MAX_GAIN_PERCENT = 300;   // Maximum gain percentage for UI
 const DEFAULT_GAIN_PERCENT = 100; // Default gain percentage for UI
 
 // ============================================================================
@@ -1070,11 +1070,11 @@ function renderUsers() {
                         <div class="flex items-center gap-2">
                             <input type="range" 
                                 class="user-gain-slider flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" 
-                                min="0" max="250" step="5" value="${volumeGainPercent}"
+                                min="0" max="300" step="5" value="${volumeGainPercent}"
                                 data-user-id="${user.user_id}">
                             <input type="number" 
                                 class="user-gain-input w-16 bg-gray-600 border border-gray-500 rounded px-2 py-1 text-xs text-center" 
-                                min="0" max="250" step="1" value="${volumeGainPercent}"
+                                min="0" max="300" step="1" value="${volumeGainPercent}"
                                 data-user-id="${user.user_id}">
                             <span class="text-xs text-gray-400">%</span>
                             <button class="user-gain-reset bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-xs" data-user-id="${user.user_id}">

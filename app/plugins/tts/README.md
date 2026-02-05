@@ -44,7 +44,7 @@ Enterprise-grade Text-to-Speech plugin for Pup Cids Little TikTok Helper with mu
   - Replace or drop policies
 
 ### Additional Features
-- **Per-user volume gain control (0-250%)**
+- **Per-user volume gain control (0-300%)**
   - Individual volume adjustment per user
   - Live updates during playback
   - UI controls in both user list and voice assignment modal
@@ -215,9 +215,9 @@ curl -X POST http://localhost:3000/api/tts/users/{userId}/gain \
 ```
 
 The `gain` parameter controls per-user output volume:
-- **Range:** 0.0 to 2.5 (0% to 250%)
+- **Range:** 0.0 to 3.0 (0% to 300%)
 - **Default:** 1.0 (100%)
-- **UI Range:** 0-250% with 5% slider steps and 1% input precision
+- **UI Range:** 0-300% with 5% slider steps and 1% input precision
 - **Server-side clamping:** Automatically limited to valid range
 - **Live updates:** Changes propagate immediately to running playback
 - **Reset:** One-click reset to 100% in both modal and user list
@@ -261,9 +261,9 @@ curl -X POST http://localhost:3000/api/tts/users/{userId}/blacklist \
 - `POST /api/tts/users/:userId/unblacklist` - Remove from blacklist
 - `POST /api/tts/users/:userId/voice` - Assign voice with optional gain
   - Body: `{ username, voiceId, engine, emotion?, gain? }`
-  - `gain`: Volume multiplier 0.0-2.5 (0-250%), default 1.0 (100%)
+  - `gain`: Volume multiplier 0.0-3.0 (0-300%), default 1.0 (100%)
 - `POST /api/tts/users/:userId/gain` - Update user volume gain
-  - Body: `{ gain }` - Volume multiplier 0.0-2.5, clamped server-side
+  - Body: `{ gain }` - Volume multiplier 0.0-3.0, clamped server-side
 - `DELETE /api/tts/users/:userId/voice` - Remove voice assignment
 - `DELETE /api/tts/users/:userId` - Delete user record
 
