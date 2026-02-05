@@ -305,7 +305,9 @@ class TalkingHeadsPlugin {
     Object.entries(sprites || {}).forEach(([key, value]) => {
       if (value) {
         const filename = value.split(/[\\/]/).pop();
-        relativeSprites[key] = `/api/talkingheads/sprite/${filename}`;
+        // Sanitize filename: only allow alphanumeric, underscore, dash, and dot
+        const safeFilename = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        relativeSprites[key] = `/api/talkingheads/sprite/${encodeURIComponent(safeFilename)}`;
       }
     });
     return relativeSprites;
@@ -342,6 +344,49 @@ class TalkingHeadsPlugin {
   _getRecentLogs(limit = 100) {
     const startIndex = Math.max(0, this.logBuffer.length - limit);
     return this.logBuffer.slice(startIndex);
+  }
+
+  /**
+   * Sanitize user input to prevent XSS and injection attacks
+   * @param {any} input - Input to sanitize
+   * @param {string} type - Type of sanitization to apply
+   * @returns {any} Sanitized input
+   * @private
+   */
+  _sanitizeInput(input, type) {
+    if (input === null || input === undefined) {
+      return input;
+    }
+
+    switch (type) {
+      case 'userId':
+        // Only alphanumeric, underscore, dash - max 64 chars
+        return String(input).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+      
+      case 'username':
+        // Remove HTML special characters, max 50 chars
+        return String(input).replace(/[<>'"&]/g, '').slice(0, 50);
+      
+      case 'styleKey':
+        // Whitelist against valid style templates
+        const validKeys = getStyleKeys();
+        return validKeys.includes(input) ? input : this.config.defaultStyle || 'cartoon';
+      
+      case 'url':
+        // Validate URL format and ensure HTTPS only
+        try {
+          const url = new URL(String(input));
+          if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+            return null;
+          }
+          return url.href;
+        } catch {
+          return null;
+        }
+      
+      default:
+        return input;
+    }
   }
 
   /**
@@ -756,17 +801,31 @@ class TalkingHeadsPlugin {
           return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
+        // Sanitize inputs
+        const sanitizedUserId = this._sanitizeInput(userId, 'userId');
+        const sanitizedUsername = this._sanitizeInput(username, 'username');
+        const sanitizedStyleKey = this._sanitizeInput(styleKey, 'styleKey');
+        const sanitizedProfileImageUrl = profileImageUrl ? this._sanitizeInput(profileImageUrl, 'url') : '';
+
+        if (!sanitizedUserId || !sanitizedUsername) {
+          return res.status(400).json({ success: false, error: 'Invalid input parameters' });
+        }
+
+        if (profileImageUrl && !sanitizedProfileImageUrl) {
+          return res.status(400).json({ success: false, error: 'Invalid profile image URL' });
+        }
+
         const result = await this._generateAvatarAndSprites(
-          userId,
-          username,
-          profileImageUrl || '',
-          styleKey || this.config.defaultStyle
+          sanitizedUserId,
+          sanitizedUsername,
+          sanitizedProfileImageUrl,
+          sanitizedStyleKey
         );
 
         // Emit socket event to notify UI of new avatar
         this.io.emit('talkingheads:avatar:generated', {
-          userId,
-          username,
+          userId: sanitizedUserId,
+          username: sanitizedUsername,
           styleKey: result.styleKey,
           sprites: this._getRelativeSpritePaths(result.sprites)
         });
@@ -856,41 +915,40 @@ class TalkingHeadsPlugin {
           return res.status(400).json({ success: false, error: 'Missing required fields: userId and username' });
         }
 
-        // Validate profile image URL if provided
-        if (profileImageUrl) {
-          try {
-            const url = new URL(profileImageUrl);
-            if (!['http:', 'https:'].includes(url.protocol)) {
-              return res.status(400).json({ 
-                success: false, 
-                error: 'Invalid profile image URL: Only HTTP/HTTPS URLs are allowed' 
-              });
-            }
-          } catch (error) {
-            return res.status(400).json({ 
-              success: false, 
-              error: 'Invalid profile image URL format' 
-            });
-          }
+        // Sanitize inputs
+        const sanitizedUserId = this._sanitizeInput(userId, 'userId');
+        const sanitizedUsername = this._sanitizeInput(username, 'username');
+        const sanitizedStyleKey = this._sanitizeInput(styleKey, 'styleKey');
+        const sanitizedProfileImageUrl = profileImageUrl ? this._sanitizeInput(profileImageUrl, 'url') : null;
+
+        if (!sanitizedUserId || !sanitizedUsername) {
+          return res.status(400).json({ success: false, error: 'Invalid input parameters' });
         }
 
-        const style = styleKey || this.config.defaultStyle;
+        if (profileImageUrl && !sanitizedProfileImageUrl) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Invalid profile image URL: Only HTTP/HTTPS URLs are allowed' 
+          });
+        }
+
+        const style = sanitizedStyleKey;
 
         // Step 1: Analyze profile image and username with LLM (if available and profile image exists)
         let avatarDescription = null;
         let llmFallbackReason = null;
         
-        if (profileImageUrl && this._getOpenAIApiKey()) {
+        if (sanitizedProfileImageUrl && this._getOpenAIApiKey()) {
           try {
-            this._log(`Analyzing profile for user ${username} with LLM...`, 'info');
-            avatarDescription = await this._analyzeProfileWithLLM(username, profileImageUrl, style);
-            this._log(`LLM analysis complete for ${username}: ${avatarDescription}`, 'debug');
+            this._log(`Analyzing profile for user ${sanitizedUsername} with LLM...`, 'info');
+            avatarDescription = await this._analyzeProfileWithLLM(sanitizedUsername, sanitizedProfileImageUrl, style);
+            this._log(`LLM analysis complete for ${sanitizedUsername}: ${avatarDescription}`, 'debug');
           } catch (error) {
             llmFallbackReason = error.message;
-            this._log(`LLM analysis failed for ${username}: ${error.message}. Using default prompt.`, 'warn');
+            this._log(`LLM analysis failed for ${sanitizedUsername}: ${error.message}. Using default prompt.`, 'warn');
             avatarDescription = null;
           }
-        } else if (!profileImageUrl) {
+        } else if (!sanitizedProfileImageUrl) {
           llmFallbackReason = 'No profile image URL provided';
         } else {
           llmFallbackReason = 'OpenAI API key not configured';
@@ -898,17 +956,17 @@ class TalkingHeadsPlugin {
 
         // Step 2: Generate avatar and sprites
         const result = await this._generateAvatarAndSprites(
-          userId,
-          username,
-          profileImageUrl || '',
+          sanitizedUserId,
+          sanitizedUsername,
+          sanitizedProfileImageUrl || '',
           style,
           avatarDescription // Pass the LLM-generated description as override
         );
 
         // Emit socket event to notify UI of new avatar
         this.io.emit('talkingheads:avatar:generated', {
-          userId,
-          username,
+          userId: sanitizedUserId,
+          username: sanitizedUsername,
           styleKey: result.styleKey,
           sprites: this._getRelativeSpritePaths(result.sprites)
         });
