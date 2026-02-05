@@ -157,6 +157,116 @@
             border: 2px solid #fff;
         }
 
+        .info-panel {
+            background: rgba(102, 126, 234, 0.08);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: left;
+            max-height: 400px;
+            overflow-y: auto;
+            border-left: 4px solid #667eea;
+        }
+
+        .theme-night .info-panel {
+            background: rgba(102, 126, 234, 0.15);
+            border-left-color: #667eea;
+        }
+
+        .theme-day .info-panel {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .theme-highcontrast .info-panel {
+            background: #111;
+            border: 2px solid #fff;
+            border-left: 4px solid #fff;
+        }
+
+        .info-section {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .info-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .info-section h3 {
+            color: #667eea;
+            font-size: 16px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .theme-night .info-section h3 {
+            color: #818cf8;
+        }
+
+        .theme-highcontrast .info-section h3 {
+            color: #fff;
+        }
+
+        .info-section p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #555;
+            margin: 5px 0;
+        }
+
+        .theme-night .info-section p {
+            color: #d1d5db;
+        }
+
+        .theme-highcontrast .info-section p {
+            color: #fff;
+        }
+
+        .info-section a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .theme-highcontrast .info-section a {
+            color: #fff;
+            text-decoration: underline;
+        }
+
+        .info-section a:hover {
+            text-decoration: underline;
+        }
+
+        .info-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .info-badge.warning {
+            background: #f59e0b;
+        }
+
+        .info-badge.success {
+            background: #10b981;
+        }
+
+        .theme-highcontrast .info-badge {
+            background: #fff;
+            color: #000;
+        }
+
         .status-title {
             font-size: 18px;
             font-weight: bold;
@@ -350,6 +460,35 @@
             </div>
         </div>
         
+        <div class="info-panel" id="info-panel">
+            <div class="info-section">
+                <h3>🔑 Eulerstream API Key <span class="info-badge warning">WICHTIG</span></h3>
+                <p><strong>Nach der Installation erforderlich:</strong> Du benötigst einen kostenlosen API Key von Eulerstream, um TikTok LIVE zu streamen.</p>
+                <p>📍 <strong>Wo bekommst du den Key?</strong> <a href="https://www.eulerstream.com" target="_blank" rel="noopener noreferrer">eulerstream.com</a></p>
+                <p>⚠️ <strong>Backup Key:</strong> LTTH enthält einen Notfall-Backup-Key. Wenn dieser verwendet wird, erscheint eine 10-Sekunden-Warnung. <strong>Bitte hole dir deinen eigenen kostenlosen Key!</strong></p>
+                <p>💡 <strong>Verwendung:</strong> Nach der Installation öffne die Einstellungen und trage deinen API Key unter "TikTok Settings" ein.</p>
+            </div>
+            
+            <div class="info-section">
+                <h3>⚙️ Node.js Installation <span class="info-badge success">AUTO</span></h3>
+                <p><strong>Automatische Installation:</strong> Der Launcher installiert Node.js v20 LTS automatisch, wenn es nicht gefunden wird.</p>
+                <p>🔍 <strong>Prüfung:</strong> Zuerst wird nach einer bestehenden Node.js-Installation gesucht (portable oder global).</p>
+                <p>📦 <strong>Bei Fehler:</strong> Falls die automatische Installation fehlschlägt, installiere Node.js v20 LTS manuell von <a href="https://nodejs.org" target="_blank" rel="noopener noreferrer">nodejs.org</a></p>
+                <p>💾 <strong>Portable Installation:</strong> Node.js wird im <code>runtime/node/</code> Verzeichnis installiert und bleibt lokal.</p>
+            </div>
+            
+            <div class="info-section">
+                <h3>🔌 Optionale API-Keys</h3>
+                <p><strong>Diese APIs können zusätzlich konfiguriert werden:</strong></p>
+                <p>🤖 <strong>OpenAI (ChatGPT):</strong> Für AnimazingPal AI-Chatbot mit Langzeitgedächtnis - <a href="https://platform.openai.com" target="_blank" rel="noopener noreferrer">platform.openai.com</a></p>
+                <p>🎤 <strong>Google Cloud TTS:</strong> Für 30+ zusätzliche Text-to-Speech Stimmen - <a href="https://cloud.google.com/text-to-speech" target="_blank" rel="noopener noreferrer">cloud.google.com/text-to-speech</a></p>
+                <p>🎙️ <strong>Fish Audio TTS:</strong> Alternative TTS mit WebSocket-Streaming - <a href="https://fish.audio" target="_blank" rel="noopener noreferrer">fish.audio</a></p>
+                <p>⚡ <strong>OpenShock API:</strong> Für OpenShock Integration - <a href="https://openshock.app" target="_blank" rel="noopener noreferrer">openshock.app</a></p>
+                <p>📺 <strong>OBS WebSocket:</strong> Für OBS-Szenen-Steuerung - In OBS aktivieren unter Tools → WebSocket Server</p>
+                <p><em>Alle diese APIs sind optional und können nach der Installation in den jeweiligen Plugin-Einstellungen konfiguriert werden.</em></p>
+            </div>
+        </div>
+        
         <div class="status-panel">
             <div class="status-title">Installation läuft...</div>
             <div class="status" id="status">Initialisiere...</div>
@@ -425,6 +564,9 @@
         const errorEl = document.getElementById('error');
         const errorMessageEl = document.getElementById('error-message');
         const spinnerEl = document.getElementById('spinner');
+        const infoPanelEl = document.getElementById('info-panel');
+        
+        let installationStarted = false;
 
         eventSource.onmessage = function(event) {
             try {
@@ -436,6 +578,12 @@
                     errorEl.classList.add('show');
                     spinnerEl.style.display = 'none';
                 } else {
+                    // Hide info panel once installation starts (progress > 0)
+                    if (!installationStarted && data.progress > 0) {
+                        installationStarted = true;
+                        infoPanelEl.style.display = 'none';
+                    }
+                    
                     // Update progress
                     if (data.progress !== undefined) {
                         progressEl.style.width = data.progress + '%';
