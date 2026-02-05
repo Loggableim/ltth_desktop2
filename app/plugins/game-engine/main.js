@@ -1949,6 +1949,12 @@ class GameEnginePlugin {
       }
       const c4ChatCommand = connect4Config?.chatCommand || 'c4start';
 
+      // Load all chat command triggers from database
+      const triggers = this.db.getTriggers();
+      const chatCommandTriggers = triggers.filter(t => t.trigger_type === 'command');
+      
+      this.logger.debug(`💬 [GAME ENGINE] Found ${chatCommandTriggers.length} chat command triggers in database`);
+
       // Define game commands
       const commands = [
         {
@@ -2041,6 +2047,57 @@ class GameEnginePlugin {
           handler: async (args, context) => await this.handleWheelCommand(args, context)
         }
       ];
+
+      // Register custom triggers from database
+      // These are commands added via Admin UI that should trigger games
+      chatCommandTriggers.forEach(trigger => {
+        // Extract command name without prefix (remove /, !, etc.)
+        const commandName = trigger.trigger_value.replace(/^[!/]/, '');
+        
+        // Check if command is already registered (avoid duplicates)
+        if (commands.some(cmd => cmd.name === commandName)) {
+          this.logger.debug(`💬 [GAME ENGINE] Skipping duplicate command: ${commandName}`);
+          return;
+        }
+        
+        // Determine appropriate handler based on game type
+        let handler;
+        let description;
+        let syntax = `/${commandName}`;
+        
+        if (trigger.game_type === 'connect4') {
+          handler = async (args, context) => await this.handleConnect4StartCommand(args, context);
+          description = `Start Connect4 game (custom trigger: ${trigger.trigger_value})`;
+        } else if (trigger.game_type === 'chess') {
+          handler = async (args, context) => await this.handleChessStartCommand(args, context);
+          description = `Start Chess game (custom trigger: ${trigger.trigger_value})`;
+        } else if (trigger.game_type === 'plinko') {
+          handler = async (args, context) => await this.handlePlinkoCommand(args, context);
+          description = `Play Plinko (custom trigger: ${trigger.trigger_value})`;
+        } else if (trigger.game_type === 'wheel') {
+          handler = async (args, context) => await this.handleWheelCommand(args, context);
+          description = `Spin the Wheel (custom trigger: ${trigger.trigger_value})`;
+        } else {
+          // Unknown game type, skip
+          this.logger.warn(`💬 [GAME ENGINE] Unknown game type for trigger: ${trigger.game_type}`);
+          return;
+        }
+        
+        // Add custom command to GCCE
+        commands.push({
+          name: commandName,
+          description: description,
+          syntax: syntax,
+          permission: 'all',
+          enabled: true,
+          minArgs: 0,
+          maxArgs: trigger.game_type === 'plinko' ? 1 : 0,
+          category: 'Games',
+          handler: handler
+        });
+        
+        this.logger.debug(`💬 [GAME ENGINE] Added custom DB trigger command: ${commandName} -> ${trigger.game_type}`);
+      });
 
       // Unregister old commands first (in case of reload)
       try {
@@ -2609,14 +2666,29 @@ class GameEnginePlugin {
     }
 
     // Check if this chat message triggers a game from database triggers
+    // Support multiple formats: exact match, /command, !command
     const triggers = this.db.getTriggers();
-    const matchingTrigger = triggers.find(t => 
-      t.trigger_type === 'command' && 
-      message.toLowerCase() === t.trigger_value.toLowerCase()
-    );
+    const messageLower = message.toLowerCase();
+    
+    const matchingTrigger = triggers.find(t => {
+      if (t.trigger_type !== 'command') {
+        return false;
+      }
+      
+      const triggerValue = t.trigger_value.toLowerCase();
+      const triggerWithoutPrefix = triggerValue.replace(/^[!/]/, '');
+      const messageWithoutPrefix = messageLower.replace(/^[!/]/, '');
+      
+      // Check for exact match or match without prefixes
+      return messageLower === triggerValue ||
+             messageWithoutPrefix === triggerWithoutPrefix ||
+             messageLower === `/${triggerWithoutPrefix}` ||
+             messageLower === `!${triggerWithoutPrefix}`;
+    });
 
     if (matchingTrigger) {
       // Chat command trigger found - start or queue game
+      this.logger.debug(`💬 [GAME ENGINE] DB trigger matched: "${message}" -> ${matchingTrigger.game_type} (trigger: ${matchingTrigger.trigger_value})`);
       this.handleGameStart(matchingTrigger.game_type, viewerId, viewerNickname, 'command', matchingTrigger.trigger_value);
       return;
     }
@@ -2677,7 +2749,6 @@ class GameEnginePlugin {
 
     // Check for Connect4 moves (simple patterns for non-GCCE mode)
     // Patterns: !c4 A, !c4A, c4 A, c4A, just A (single letter)
-    const messageLower = message.toLowerCase();
     const match = messageLower.match(/^!?c4\s*([a-g])$/i) || messageLower.match(/^([a-g])$/i);
     
     if (match) {

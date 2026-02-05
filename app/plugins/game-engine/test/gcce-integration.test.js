@@ -81,6 +81,17 @@ describe('Game Engine GCCE Integration', () => {
         getGameConfig: jest.fn(() => null)
       };
       
+      // Mock game objects to prevent destroy errors
+      plugin.wheelGame = {
+        destroy: jest.fn()
+      };
+      plugin.plinkoGame = {
+        destroy: jest.fn()
+      };
+      plugin.unifiedQueue = {
+        destroy: jest.fn()
+      };
+      
       plugin.destroy();
     }
   });
@@ -89,7 +100,8 @@ describe('Game Engine GCCE Integration', () => {
     test('should register c4 command with GCCE', () => {
       // Setup mock database
       plugin.db = {
-        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4)
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4),
+        getTriggers: jest.fn(() => [])
       };
       
       plugin.registerGCCECommands();
@@ -104,7 +116,8 @@ describe('Game Engine GCCE Integration', () => {
     test('should register c4start command with GCCE', () => {
       // Setup mock database
       plugin.db = {
-        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4)
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4),
+        getTriggers: jest.fn(() => [])
       };
       
       plugin.registerGCCECommands();
@@ -335,7 +348,8 @@ describe('Game Engine GCCE Integration', () => {
         getGameConfig: jest.fn(() => ({
           ...plugin.defaultConfigs.connect4,
           chatCommand: 'start4'
-        }))
+        })),
+        getTriggers: jest.fn(() => [])
       };
       
       plugin.registerGCCECommands();
@@ -350,7 +364,8 @@ describe('Game Engine GCCE Integration', () => {
     test('should default to c4start when no custom command configured', () => {
       // Setup mock database without custom chat command
       plugin.db = {
-        getGameConfig: jest.fn(() => null)
+        getGameConfig: jest.fn(() => null),
+        getTriggers: jest.fn(() => [])
       };
       
       plugin.registerGCCECommands();
@@ -367,7 +382,8 @@ describe('Game Engine GCCE Integration', () => {
         getGameConfig: jest.fn(() => ({
           ...plugin.defaultConfigs.connect4,
           chatCommand: ''
-        }))
+        })),
+        getTriggers: jest.fn(() => [])
       };
       
       plugin.registerGCCECommands();
@@ -375,6 +391,242 @@ describe('Game Engine GCCE Integration', () => {
       // Check that default command is used
       const defaultCommand = registeredCommands.find(cmd => cmd.name === 'c4start');
       expect(defaultCommand).toBeDefined();
+    });
+  });
+
+  describe('Database Trigger Integration', () => {
+    beforeEach(() => {
+      // Reset registered commands
+      registeredCommands = [];
+    });
+
+    test('should register custom DB triggers for Connect4', () => {
+      // Setup mock database with triggers
+      plugin.db = {
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4),
+        getTriggers: jest.fn(() => [
+          {
+            id: 1,
+            game_type: 'connect4',
+            trigger_type: 'command',
+            trigger_value: '/play',
+            enabled: 1
+          },
+          {
+            id: 2,
+            game_type: 'connect4',
+            trigger_type: 'command',
+            trigger_value: '!challenge',
+            enabled: 1
+          }
+        ])
+      };
+      
+      plugin.registerGCCECommands();
+      
+      // Check that custom triggers are registered
+      const playCommand = registeredCommands.find(cmd => cmd.name === 'play');
+      expect(playCommand).toBeDefined();
+      expect(playCommand.description).toContain('custom trigger: /play');
+      expect(playCommand.permission).toBe('all');
+      
+      const challengeCommand = registeredCommands.find(cmd => cmd.name === 'challenge');
+      expect(challengeCommand).toBeDefined();
+      expect(challengeCommand.description).toContain('custom trigger: !challenge');
+    });
+
+    test('should not register duplicate commands from DB triggers', () => {
+      // Setup mock database with a trigger that duplicates existing command
+      plugin.db = {
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4),
+        getTriggers: jest.fn(() => [
+          {
+            id: 1,
+            game_type: 'connect4',
+            trigger_type: 'command',
+            trigger_value: '/c4', // This already exists
+            enabled: 1
+          }
+        ])
+      };
+      
+      plugin.registerGCCECommands();
+      
+      // Count how many c4 commands are registered
+      const c4Commands = registeredCommands.filter(cmd => cmd.name === 'c4');
+      expect(c4Commands.length).toBe(1); // Should only have one
+    });
+
+    test('should register DB triggers for different game types', () => {
+      // Setup mock database with triggers for multiple games
+      plugin.db = {
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4),
+        getTriggers: jest.fn(() => [
+          {
+            id: 1,
+            game_type: 'connect4',
+            trigger_type: 'command',
+            trigger_value: '/play',
+            enabled: 1
+          },
+          {
+            id: 2,
+            game_type: 'chess',
+            trigger_type: 'command',
+            trigger_value: '/chess',
+            enabled: 1
+          },
+          {
+            id: 3,
+            game_type: 'plinko',
+            trigger_type: 'command',
+            trigger_value: '/drop',
+            enabled: 1
+          }
+        ])
+      };
+      
+      plugin.registerGCCECommands();
+      
+      // Check that all game type commands are registered
+      const playCommand = registeredCommands.find(cmd => cmd.name === 'play');
+      expect(playCommand).toBeDefined();
+      
+      const chessCommand = registeredCommands.find(cmd => cmd.name === 'chess');
+      expect(chessCommand).toBeDefined();
+      
+      const dropCommand = registeredCommands.find(cmd => cmd.name === 'drop');
+      expect(dropCommand).toBeDefined();
+    });
+
+    test('should handle DB trigger matching in chat command handler', () => {
+      // Setup mock database
+      plugin.db = {
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4),
+        getTriggers: jest.fn(() => [
+          {
+            id: 1,
+            game_type: 'connect4',
+            trigger_type: 'command',
+            trigger_value: '/play',
+            enabled: 1
+          }
+        ])
+      };
+      
+      plugin.handleGameStart = jest.fn();
+      plugin.wheelGame = {
+        findWheelByChatCommand: jest.fn(() => null)
+      };
+      
+      // Test exact match
+      plugin.handleChatCommand({
+        uniqueId: 'user123',
+        nickname: 'TestUser',
+        comment: '/play'
+      });
+      
+      expect(plugin.handleGameStart).toHaveBeenCalledWith(
+        'connect4',
+        'user123',
+        'TestUser',
+        'command',
+        '/play'
+      );
+    });
+
+    test('should match DB triggers with different prefixes', () => {
+      // Setup mock database
+      plugin.db = {
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4),
+        getTriggers: jest.fn(() => [
+          {
+            id: 1,
+            game_type: 'connect4',
+            trigger_type: 'command',
+            trigger_value: 'play', // No prefix in DB
+            enabled: 1
+          }
+        ])
+      };
+      
+      plugin.handleGameStart = jest.fn();
+      plugin.wheelGame = {
+        findWheelByChatCommand: jest.fn(() => null)
+      };
+      
+      // Test with / prefix
+      plugin.handleChatCommand({
+        uniqueId: 'user123',
+        nickname: 'TestUser',
+        comment: '/play'
+      });
+      
+      expect(plugin.handleGameStart).toHaveBeenCalledWith(
+        'connect4',
+        'user123',
+        'TestUser',
+        'command',
+        'play'
+      );
+      
+      plugin.handleGameStart.mockClear();
+      
+      // Test with ! prefix
+      plugin.handleChatCommand({
+        uniqueId: 'user123',
+        nickname: 'TestUser',
+        comment: '!play'
+      });
+      
+      expect(plugin.handleGameStart).toHaveBeenCalledWith(
+        'connect4',
+        'user123',
+        'TestUser',
+        'command',
+        'play'
+      );
+    });
+
+    test('should match DB triggers when stored with prefix', () => {
+      // Setup mock database with trigger that has prefix
+      plugin.db = {
+        getGameConfig: jest.fn(() => plugin.defaultConfigs.connect4),
+        getTriggers: jest.fn(() => [
+          {
+            id: 1,
+            game_type: 'connect4',
+            trigger_type: 'command',
+            trigger_value: '/challenge', // Prefix in DB
+            enabled: 1
+          }
+        ])
+      };
+      
+      plugin.handleGameStart = jest.fn();
+      plugin.wheelGame = {
+        findWheelByChatCommand: jest.fn(() => null)
+      };
+      
+      // Test with exact match
+      plugin.handleChatCommand({
+        uniqueId: 'user123',
+        nickname: 'TestUser',
+        comment: '/challenge'
+      });
+      
+      expect(plugin.handleGameStart).toHaveBeenCalled();
+      
+      plugin.handleGameStart.mockClear();
+      
+      // Test with ! prefix (should also match)
+      plugin.handleChatCommand({
+        uniqueId: 'user123',
+        nickname: 'TestUser',
+        comment: '!challenge'
+      });
+      
+      expect(plugin.handleGameStart).toHaveBeenCalled();
     });
   });
 });
