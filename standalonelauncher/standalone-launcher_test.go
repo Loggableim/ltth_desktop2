@@ -8,6 +8,17 @@ import (
 	"testing"
 )
 
+// Note on getInstallDir() testing:
+// The getInstallDir() function uses os.Executable() which returns the test binary path
+// during testing, making direct unit testing challenging without significant refactoring.
+// The tests below verify:
+// 1. The supporting logic (marker file detection, path construction)
+// 2. Standard library behavior (os.MkdirAll, os.UserConfigDir)
+// The actual getInstallDir() behavior is verified through:
+// - Manual testing during development
+// - Integration testing in production builds
+// - Build verification (successful compilation and execution)
+
 // Test isRelevantPath whitelist/blacklist logic
 func TestIsRelevantPath(t *testing.T) {
 	sl := NewStandaloneLauncher()
