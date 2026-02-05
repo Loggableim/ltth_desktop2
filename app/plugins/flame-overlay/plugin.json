@@ -1,7 +1,7 @@
 {
   "id": "flame-overlay",
   "name": "TikTok Visual Effects Overlay",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Advanced WebGL effects overlay with 4 stunning visual modes, real-time preview, frame positioning, and support up to 4K resolution. Features: Flames, Particle Burst, Energy Waves, Electric Lightning. Fully customizable colors, intensity, speed, and precise frame positioning with transparent background for OBS.",
   "author": "Pup Cid",
   "entry": "main.js",
