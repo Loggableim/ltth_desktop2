@@ -261,14 +261,14 @@ class QueueManager {
     }
 
     /**
-     * Find next item in queue with assigned custom voice (excluding current user)
-     * @param {string} currentUserId - Current user's ID to exclude
+     * Find next item in queue with assigned custom voice
+     * @param {string} currentItemId - Current item's ID to exclude (to avoid re-processing current item)
      * @returns {object|null} Next item with custom voice or null
      */
-    _findNextItemWithAssignedVoice(currentUserId) {
+    _findNextItemWithAssignedVoice(currentItemId) {
         for (const item of this.queue) {
-            // Skip items from the same user (current user)
-            if (item.userId === currentUserId) {
+            // Skip the current item being processed
+            if (item.id === currentItemId) {
                 continue;
             }
 
@@ -400,8 +400,8 @@ class QueueManager {
             this._triggerPreGeneration();
 
             // NEW: Trigger pre-generation for next custom voice item (parallel, non-blocking)
-            if (item.userId && this.synthesizeCallback) {
-                const nextCustomVoiceItem = this._findNextItemWithAssignedVoice(item.userId);
+            if (item.id && this.synthesizeCallback) {
+                const nextCustomVoiceItem = this._findNextItemWithAssignedVoice(item.id);
                 if (nextCustomVoiceItem && !nextCustomVoiceItem.audioData && !nextCustomVoiceItem.isStreaming) {
                     // Start pre-generation for custom voice user (fire and forget)
                     this._preGenerateCustomVoiceItem(nextCustomVoiceItem);

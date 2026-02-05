@@ -57,9 +57,9 @@ describe('TTS Queue Manager - Custom Voice Pre-Generation', () => {
         }
     });
     
-    test('should find next custom voice item in queue (excluding current user)', () => {
+    test('should find next custom voice item in queue (excluding current item)', () => {
         // Enqueue items
-        queueManager.enqueue({
+        const item1 = queueManager.enqueue({
             userId: 'user1',
             username: 'User1',
             text: 'Message 1',
@@ -79,8 +79,8 @@ describe('TTS Queue Manager - Custom Voice Pre-Generation', () => {
         });
         
         queueManager.enqueue({
-            userId: 'user3',
-            username: 'User3',
+            userId: 'user1',
+            username: 'User1',
             text: 'Message 3',
             voice: 'voice3',
             engine: 'elevenlabs',
@@ -88,11 +88,15 @@ describe('TTS Queue Manager - Custom Voice Pre-Generation', () => {
             hasAssignedVoice: true
         });
         
-        // Find next custom voice item (excluding user1)
-        const nextItem = queueManager._findNextItemWithAssignedVoice('user1');
+        // Get the first item's ID
+        const firstItem = queueManager.queue[0];
+        
+        // Find next custom voice item (excluding first item by ID)
+        const nextItem = queueManager._findNextItemWithAssignedVoice(firstItem.id);
         
         expect(nextItem).not.toBeNull();
-        expect(nextItem.userId).toBe('user3');
+        expect(nextItem.text).toBe('Message 3');
+        expect(nextItem.userId).toBe('user1'); // Same user is OK!
         expect(nextItem.hasAssignedVoice).toBe(true);
     });
     
@@ -117,7 +121,8 @@ describe('TTS Queue Manager - Custom Voice Pre-Generation', () => {
             hasAssignedVoice: false
         });
         
-        const nextItem = queueManager._findNextItemWithAssignedVoice('user1');
+        const firstItem = queueManager.queue[0];
+        const nextItem = queueManager._findNextItemWithAssignedVoice(firstItem.id);
         
         expect(nextItem).toBeNull();
     });
@@ -323,7 +328,7 @@ describe('TTS Queue Manager - Custom Voice Pre-Generation', () => {
         );
     });
     
-    test('scenario: multiple custom voice users in queue', async () => {
+    test('scenario: multiple custom voice users in queue - finds next custom voice (same or different user)', async () => {
         // Enqueue messages from different users
         queueManager.enqueue({
             userId: 'user1',
@@ -355,11 +360,58 @@ describe('TTS Queue Manager - Custom Voice Pre-Generation', () => {
             hasAssignedVoice: true
         });
         
-        // When processing User1's first message, should find User2's message (not User1's second message)
-        const nextCustomVoiceItem = queueManager._findNextItemWithAssignedVoice('user1');
+        const firstItem = queueManager.queue[0];
+        
+        // When processing User1's first message, should find User2's message (next custom voice item)
+        const nextCustomVoiceItem = queueManager._findNextItemWithAssignedVoice(firstItem.id);
         
         expect(nextCustomVoiceItem).not.toBeNull();
         expect(nextCustomVoiceItem.userId).toBe('user2');
         expect(nextCustomVoiceItem.text).toBe('Message 1 from User2');
+    });
+    
+    test('scenario from problem statement: same user with custom voice gets next message pre-generated', async () => {
+        // Scenario: PupCid has custom voice, sends two messages
+        queueManager.enqueue({
+            userId: 'pupcid',
+            username: 'PupCid',
+            text: 'Hallo Welt',
+            voice: 'rachel',
+            engine: 'elevenlabs',
+            audioData: Buffer.from('audio1'),
+            hasAssignedVoice: true
+        });
+        
+        queueManager.enqueue({
+            userId: 'otheruser',
+            username: 'OtherUser',
+            text: 'Test',
+            voice: 'voice2',
+            engine: 'google',
+            audioData: Buffer.from('audio2'),
+            hasAssignedVoice: false
+        });
+        
+        queueManager.enqueue({
+            userId: 'pupcid',
+            username: 'PupCid',
+            text: 'Wie geht\'s?',
+            voice: 'rachel',
+            engine: 'elevenlabs',
+            audioData: null, // Not yet generated
+            hasAssignedVoice: true
+        });
+        
+        const firstItem = queueManager.queue[0];
+        
+        // While message 1 is playing, find next custom voice item
+        const nextCustomVoiceItem = queueManager._findNextItemWithAssignedVoice(firstItem.id);
+        
+        // Should find OtherUser's message first (next in queue), but they don't have custom voice
+        // So should find PupCid's second message
+        expect(nextCustomVoiceItem).not.toBeNull();
+        expect(nextCustomVoiceItem.userId).toBe('pupcid');
+        expect(nextCustomVoiceItem.text).toBe('Wie geht\'s?');
+        expect(nextCustomVoiceItem.hasAssignedVoice).toBe(true);
     });
 });
