@@ -843,15 +843,52 @@ func (sl *StandaloneLauncher) startApplication(nodePath, appDir string) error {
 	return cmd.Wait()
 }
 
-func (sl *StandaloneLauncher) run() error {
-	// Get executable directory
+// getInstallDir determines the installation directory
+// If portable.txt exists next to the executable, uses portable mode (same directory)
+// Otherwise uses system directory (installer mode)
+func (sl *StandaloneLauncher) getInstallDir() (string, error) {
+	// Get executable path
 	exePath, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("Kann Programmverzeichnis nicht ermitteln: %v", err)
+		return "", fmt.Errorf("Kann Programmverzeichnis nicht ermitteln: %v", err)
 	}
 	
-	sl.baseDir = filepath.Dir(exePath)
-	sl.logger.Printf("Base directory: %s\n", sl.baseDir)
+	exeDir := filepath.Dir(exePath)
+	
+	// Check for portable mode marker file
+	portableMarker := filepath.Join(exeDir, "portable.txt")
+	if _, err := os.Stat(portableMarker); err == nil {
+		// Portable mode: use executable directory
+		sl.logger.Printf("Portable mode detected (portable.txt found)\n")
+		return exeDir, nil
+	}
+	
+	// Installer mode: use system directory
+	userConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("Kann Konfigurationsverzeichnis nicht ermitteln: %v", err)
+	}
+	
+	installDir := filepath.Join(userConfigDir, "PupCid", "LTTH-Launcher")
+	
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(installDir, 0755); err != nil {
+		return "", fmt.Errorf("Kann Installationsverzeichnis nicht erstellen: %v", err)
+	}
+	
+	sl.logger.Printf("Installer mode: using system directory\n")
+	return installDir, nil
+}
+
+func (sl *StandaloneLauncher) run() error {
+	// Determine installation directory (portable or installer mode)
+	baseDir, err := sl.getInstallDir()
+	if err != nil {
+		return err
+	}
+	
+	sl.baseDir = baseDir
+	sl.logger.Printf("Installation directory: %s\n", sl.baseDir)
 	
 	// Start HTTP server in background
 	http.HandleFunc("/", sl.serveSplash)

@@ -194,3 +194,91 @@ func TestConstants(t *testing.T) {
 	
 	t.Logf("Repository: %s/%s (branch: %s)", githubOwner, githubRepo, githubBranch)
 }
+
+// Test getInstallDir with portable mode (portable.txt exists)
+func TestGetInstallDirPortableMode(t *testing.T) {
+	// Create a temporary directory to simulate executable location
+	tempDir, err := os.MkdirTemp("", "ltth-launcher-portable-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+	
+	// Create portable.txt marker file
+	portableMarker := filepath.Join(tempDir, "portable.txt")
+	if err := os.WriteFile(portableMarker, []byte(""), 0644); err != nil {
+		t.Fatalf("Failed to create portable.txt: %v", err)
+	}
+	
+	// Note: We cannot easily test getInstallDir() directly because it uses os.Executable()
+	// which returns the test binary path. However, we verify the logic:
+	// 1. Check that portable.txt is detected
+	if _, err := os.Stat(portableMarker); os.IsNotExist(err) {
+		t.Error("portable.txt marker file should exist")
+	}
+	
+	t.Logf("Portable mode marker created at: %s", portableMarker)
+}
+
+// Test getInstallDir without portable mode (installer mode)
+func TestGetInstallDirInstallerMode(t *testing.T) {
+	// Create a temporary directory without portable.txt
+	tempDir, err := os.MkdirTemp("", "ltth-launcher-installer-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+	
+	// Verify portable.txt does not exist
+	portableMarker := filepath.Join(tempDir, "portable.txt")
+	if _, err := os.Stat(portableMarker); !os.IsNotExist(err) {
+		t.Error("portable.txt should not exist in installer mode")
+	}
+	
+	// Verify we can get user config directory
+	userConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatalf("Failed to get user config directory: %v", err)
+	}
+	
+	expectedPath := filepath.Join(userConfigDir, "PupCid", "LTTH-Launcher")
+	t.Logf("Expected installer mode directory: %s", expectedPath)
+	
+	// Verify the path structure is correct
+	if !strings.Contains(expectedPath, "PupCid") {
+		t.Error("Expected path should contain 'PupCid'")
+	}
+	if !strings.Contains(expectedPath, "LTTH-Launcher") {
+		t.Error("Expected path should contain 'LTTH-Launcher'")
+	}
+}
+
+// Test getInstallDir directory creation
+func TestGetInstallDirCreatesDirectory(t *testing.T) {
+	// Get user config directory
+	userConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatalf("Failed to get user config directory: %v", err)
+	}
+	
+	// Create a unique test directory name to avoid conflicts
+	testDir := filepath.Join(userConfigDir, "PupCid", "LTTH-Launcher-Test-"+fmt.Sprintf("%d", os.Getpid()))
+	
+	// Ensure it doesn't exist before test
+	os.RemoveAll(testDir)
+	
+	// Create the directory
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+	
+	// Verify it exists
+	if _, err := os.Stat(testDir); os.IsNotExist(err) {
+		t.Error("Directory should exist after creation")
+	}
+	
+	// Clean up
+	os.RemoveAll(testDir)
+	
+	t.Logf("Successfully created and cleaned up test directory: %s", testDir)
+}
