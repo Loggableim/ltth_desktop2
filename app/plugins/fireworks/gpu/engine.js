@@ -707,7 +707,21 @@ class FireworksEngine {
             fw.rocketVy += CONFIG.rocketAcceleration * dt;
             fw.y += fw.rocketVy * dt;
             
+            // Update rocket particle position if it exists
+            if (fw.rocketParticleId !== null && fw.rocketParticleId < this.particles.count) {
+                const i = fw.rocketParticleId;
+                if (this.particles.active[i]) {
+                    this.particles.x[i] = fw.x;
+                    this.particles.y[i] = fw.y;
+                    this.particles.vy[i] = fw.rocketVy;
+                }
+            }
+            
             if (fw.y <= fw.targetY) {
+                // Mark rocket particle as done before explosion
+                if (fw.rocketParticleId !== null && fw.rocketParticleId < this.particles.count) {
+                    this.particles.active[fw.rocketParticleId] = 0;
+                }
                 this.explode(fw);
             }
         }
@@ -799,6 +813,28 @@ class FireworksEngine {
         const id = this.nextFireworkId++;
         
         const fw = new Firework(x, y, targetY, shape, intensity, particleCount, baseHue, hueRange, id, options.onExplodeSound);
+        
+        // Create rocket particle with trail
+        const rocketParticleId = this.particles.emit({
+            x: fw.x,
+            y: fw.y,
+            vx: 0,
+            vy: fw.rocketVy,
+            size: 4 + intensity * 2,
+            alpha: 1,
+            hue: baseHue,
+            saturation: 80,
+            brightness: 100,
+            decay: 0, // Rocket doesn't decay until explosion
+            gravity: CONFIG.rocketAcceleration,
+            drag: 1.0, // No drag on rocket
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 0.2,
+            fireworkId: id,
+            emitTrail: true, // Rockets emit trails!
+            willExplode: false
+        });
+        fw.rocketParticleId = rocketParticleId;
         
         this.fireworks.push(fw);
         
