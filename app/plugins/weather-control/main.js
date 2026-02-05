@@ -309,6 +309,17 @@ class WeatherControlPlugin {
                 if (effectsChanged) {
                     this.api.log('♾️ [WEATHER CONTROL] Permanent effects changed, syncing...', 'info');
                     this.syncPermanentEffects();
+                    
+                    // ✅ NEW: Notify all overlays that config changed
+                    this.api.emit('weather:config-changed', { 
+                        timestamp: Date.now(),
+                        permanentEffects: Array.from(
+                            this.supportedEffects.filter(effect => 
+                                this.config.effects[effect]?.permanent === true && 
+                                this.config.effects[effect]?.enabled !== false
+                            )
+                        )
+                    });
                 }
                 
                 // Re-register commands if names changed
@@ -668,8 +679,19 @@ class WeatherControlPlugin {
 
             io.on('connection', (socket) => {
                 try {
-                    this.api.log('🔄 [WEATHER CONTROL] Syncing permanent effects for new overlay client', 'debug');
-                    this.syncPermanentEffects(socket);
+                    this.api.log('🔄 [WEATHER CONTROL] New overlay client connected, waiting for ready signal...', 'debug');
+                    
+                    // Wait for Ready-Signal from client
+                    socket.on('weather:client-ready', () => {
+                        this.api.log('✅ [WEATHER CONTROL] Client ready, syncing permanent effects...', 'debug');
+                        this.syncPermanentEffects(socket);
+                    });
+                    
+                    // Allow clients to request permanent effects explicitly
+                    socket.on('weather:request-permanent-effects', () => {
+                        this.api.log('🔄 [WEATHER CONTROL] Client requested permanent effects', 'debug');
+                        this.syncPermanentEffects(socket);
+                    });
                 } catch (error) {
                     this.api.log(`❌ [WEATHER CONTROL] Error syncing permanent effects: ${error.message}`, 'error');
                 }
@@ -688,13 +710,16 @@ class WeatherControlPlugin {
                 )
         );
 
-        // When called for a specific socket, only start desired effects for that client
+        // When called for a specific socket, send ALL desired permanent effects
         if (targetSocket) {
             desiredEffects.forEach(effect => this.emitPermanentEffect(effect, targetSocket));
+            // ✅ FIX: Update activePermanentEffects during socket sync
+            this.activePermanentEffects = desiredEffects;
+            this.api.log(`✅ [WEATHER CONTROL] Synced ${desiredEffects.size} permanent effects to new client`, 'debug');
             return;
         }
 
-        // Stop effects that are no longer permanent
+        // Global sync: stop outdated effects, start new ones
         this.activePermanentEffects.forEach((effect) => {
             if (!desiredEffects.has(effect)) {
                 this.api.emit('weather:stop-effect', { action: effect, meta: { triggeredBy: 'permanent-toggle' } });
@@ -702,7 +727,6 @@ class WeatherControlPlugin {
             }
         });
 
-        // Start new permanent effects
         desiredEffects.forEach((effect) => {
             if (!this.activePermanentEffects.has(effect)) {
                 this.emitPermanentEffect(effect);
