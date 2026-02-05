@@ -180,9 +180,6 @@ class GameEnginePlugin {
 
       // Register socket events
       this.registerSocketEvents();
-
-      // Register TikTok events
-      this.registerTikTokEvents();
       
       // Start gift deduplication cleanup (runs every 5 seconds for better memory efficiency)
       this.giftDedupCleanupInterval = setInterval(() => {
@@ -201,31 +198,41 @@ class GameEnginePlugin {
         }
       }, 5000); // Run every 5 seconds
 
-
-      // Register GCCE commands (attempt immediately)
-      // If GCCE is not loaded yet, we'll retry when it becomes available
+      // Register GCCE commands FIRST (before TikTok events)
+      // This ensures we know if GCCE is available before deciding whether to register fallback chat handler
       this.registerGCCECommands();
       
       // Set up retry mechanism for GCCE command registration
       // This handles the case where Game Engine loads before GCCE
       if (!this.gcceCommandsRegistered) {
+        this.logger.warn('⚠️ [GAME ENGINE] GCCE not available yet, starting retry mechanism');
         this.gcceRetryCount = 0;
         this.gcceRetryInterval = setInterval(() => {
-          if (this.gcceRetryCount < 5) {
-            this.gcceRetryCount++;
-            this.logger.debug(`💬 [GAME ENGINE] Retrying GCCE command registration (attempt ${this.gcceRetryCount}/5)`);
-            this.registerGCCECommands();
-            if (this.gcceCommandsRegistered) {
-              clearInterval(this.gcceRetryInterval);
-              this.gcceRetryInterval = null;
-            }
-          } else {
+          this.gcceRetryCount++;
+          if (this.gcceRetryCount > 5) {
+            this.logger.error('❌ [GAME ENGINE] Failed to register GCCE commands after 5 retries');
             clearInterval(this.gcceRetryInterval);
             this.gcceRetryInterval = null;
-            this.logger.warn('💬 [GAME ENGINE] GCCE not available after 5 retries, chat commands will use fallback mode');
+            return;
+          }
+          this.logger.debug(`💬 [GAME ENGINE] Retrying GCCE command registration (attempt ${this.gcceRetryCount}/5)`);
+          this.registerGCCECommands();
+          
+          // If registration succeeds during retry, we need to re-register TikTok events
+          // to switch from fallback chat handler to GCCE-based handling
+          if (this.gcceCommandsRegistered) {
+            this.logger.info('✅ [GAME ENGINE] GCCE commands registered on retry #' + this.gcceRetryCount);
+            clearInterval(this.gcceRetryInterval);
+            this.gcceRetryInterval = null;
+            // Note: The fallback chat handler (if already registered) checks the 
+            // gcceCommandsRegistered flag at runtime in handleChatCommand (line 2723)
+            // to avoid processing commands when GCCE becomes available after initial registration.
           }
         }, 2000); // Retry every 2 seconds
       }
+
+      // Register TikTok events (conditional chat handler based on GCCE status)
+      this.registerTikTokEvents();
 
       this.logger.info('✅ LTTH Game Engine initialized successfully');
       this.logger.info('   - Connect4 game available');
@@ -1920,10 +1927,17 @@ class GameEnginePlugin {
       this.handleGiftTrigger(data);
     });
 
-    // Listen for chat messages (for non-GCCE mode)
-    this.api.registerTikTokEvent('chat', (data) => {
-      this.handleChatCommand(data);
-    });
+    // Only register chat handler if GCCE is NOT handling commands
+    // This prevents double registration that would cause the fallback handler
+    // to intercept messages before GCCE can process them
+    if (!this.gcceCommandsRegistered) {
+      this.api.registerTikTokEvent('chat', (data) => {
+        this.handleChatCommand(data);
+      });
+      this.logger.info('💬 [GAME ENGINE] Fallback chat handler registered (GCCE not available)');
+    } else {
+      this.logger.info('💬 [GAME ENGINE] Chat commands handled by GCCE');
+    }
   }
 
   /**

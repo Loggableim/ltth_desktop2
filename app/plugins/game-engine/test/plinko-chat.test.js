@@ -86,6 +86,12 @@ describe('Plinko Chat Command Integration', () => {
       }))
     };
 
+    // Mock wheel game (needed for handleChatCommand to check wheel commands)
+    plugin.wheelGame = {
+      findWheelByChatCommand: jest.fn(() => null), // Return null = no wheel command match
+      destroy: jest.fn()
+    };
+
     plugin.db = {
       getTriggers: jest.fn(() => []),
       getGameConfig: jest.fn(() => null),
