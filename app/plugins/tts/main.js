@@ -11,6 +11,7 @@ const LanguageDetector = require('./utils/language-detector');
 const ProfanityFilter = require('./utils/profanity-filter');
 const PermissionManager = require('./utils/permission-manager');
 const QueueManager = require('./utils/queue-manager');
+const EventTTSHandler = require('./event-tts-handler');
 
 /**
  * TTS Plugin - Main Class
@@ -520,6 +521,13 @@ class TTSPlugin {
             // Register TikTok events (for chat messages)
             this._registerTikTokEvents();
 
+            // Initialize Event TTS Handler
+            this.eventTTSHandler = null;
+            if (this.config.eventTTS?.enabled) {
+                this.eventTTSHandler = new EventTTSHandler(this);
+                this.eventTTSHandler.init();
+            }
+
             // Register synthesis callback for pre-generation
             this.queueManager.setSynthesizeCallback(async (text, voice, engine, options) => {
                 return this._synthesizeForPreGeneration(text, voice, engine, options);
@@ -589,7 +597,50 @@ class TTSPlugin {
             // Message prefix filter - ignore messages starting with these prefixes
             messagePrefixFilter: [], // e.g., ['!', '/', '.'] - messages starting with these will be ignored
             // Username announcement - prepend "[username] sagt:" before TTS message
-            announceUsername: false // Enable username announcement before reading chat messages
+            announceUsername: false, // Enable username announcement before reading chat messages
+            
+            // Event TTS Configuration
+            eventTTS: {
+                enabled: false,
+                volume: 80,
+                voice: null,
+                priorityOverChat: false,
+                
+                events: {
+                    gift: {
+                        enabled: true,
+                        template: '{username} hat {giftName} geschenkt!',
+                        minCoins: 0,
+                        cooldownSeconds: 0
+                    },
+                    follow: {
+                        enabled: true,
+                        template: '{username} folgt dir jetzt!',
+                        cooldownSeconds: 5
+                    },
+                    share: {
+                        enabled: true,
+                        template: '{username} hat den Stream geteilt!',
+                        cooldownSeconds: 10
+                    },
+                    subscribe: {
+                        enabled: true,
+                        template: '{username} hat abonniert!',
+                        cooldownSeconds: 0
+                    },
+                    like: {
+                        enabled: false,
+                        template: '{username} liked!',
+                        minLikes: 10,
+                        cooldownSeconds: 30
+                    },
+                    join: {
+                        enabled: false,
+                        template: '{username} ist beigetreten!',
+                        cooldownSeconds: 60
+                    }
+                }
+            }
         };
 
         // Try to load from database
@@ -1649,6 +1700,37 @@ class TTSPlugin {
                     totalDebugLogs: this.debugLogs.length
                 }
             });
+        });
+
+        // Event TTS Configuration Endpoints
+        // GET /api/tts/event-config
+        this.api.registerRoute('GET', '/api/tts/event-config', (req, res) => {
+            res.json({ success: true, data: this.config.eventTTS });
+        });
+
+        // POST /api/tts/event-config
+        this.api.registerRoute('POST', '/api/tts/event-config', async (req, res) => {
+            try {
+                const newConfig = req.body;
+                
+                this.config.eventTTS = { ...this.config.eventTTS, ...newConfig };
+                this.api.setConfig('eventTTS', this.config.eventTTS);
+                
+                // Handler neu initialisieren
+                if (this.eventTTSHandler) {
+                    this.eventTTSHandler.destroy();
+                    this.eventTTSHandler = null;
+                }
+                if (this.config.eventTTS.enabled) {
+                    this.eventTTSHandler = new EventTTSHandler(this);
+                    this.eventTTSHandler.init();
+                }
+                
+                res.json({ success: true, data: this.config.eventTTS });
+            } catch (error) {
+                this.logger.error(`Event TTS config update failed: ${error.message}`);
+                res.status(500).json({ success: false, error: error.message });
+            }
         });
 
         // Get recent active chat users for autocomplete
@@ -3235,6 +3317,12 @@ class TTSPlugin {
         try {
             // Stop queue processing
             this.queueManager.stopProcessing();
+
+            // Destroy Event TTS Handler
+            if (this.eventTTSHandler) {
+                this.eventTTSHandler.destroy();
+                this.eventTTSHandler = null;
+            }
 
             // Clear debug logs to free memory
             this.debugLogs = [];

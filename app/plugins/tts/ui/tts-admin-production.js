@@ -189,6 +189,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadConfig();
         console.log('✓ Config loaded');
 
+        // Load Event TTS configuration
+        if (statusEl) statusEl.textContent = 'Loading Event TTS configuration...';
+        try {
+            await loadEventTTSConfig();
+            console.log('✓ Event TTS config loaded');
+        } catch (error) {
+            if (!isPageUnloading && error.name !== 'AbortError') {
+                console.error('✗ Event TTS config load failed:', error);
+                showNotification('Failed to load Event TTS config (non-critical)', 'warning');
+            }
+        }
+
         // Load voices
         if (statusEl) statusEl.textContent = 'Loading voices...';
         await loadVoices();
@@ -574,6 +586,9 @@ async function saveConfig() {
             console.warn('[TTS Config] Save successful but config has NO customFishVoices field!');
         }
         
+        // Save Event TTS configuration as well
+        await saveEventTTSConfig();
+        
         showNotification('Configuration saved successfully', 'success');
         
         // Re-render Fish.audio custom voices list after save
@@ -772,6 +787,7 @@ async function loadVoices() {
         voices = data.voices;
         populateVoiceSelect();
         populateManualVoiceSelect(); // Also populate manual assignment dropdown
+        populateEventTTSVoiceSelect(); // Populate Event TTS voice dropdown
 
     } catch (error) {
         console.error('Failed to load voices:', error);
@@ -872,6 +888,45 @@ function populateManualVoiceSelect() {
     });
 
     console.log(`[TTS] Populated manual voice select with ${sortedVoices.length} voices for engine '${engine}'`);
+}
+
+/**
+ * Populate Event TTS voice dropdown with voices from default engine
+ */
+function populateEventTTSVoiceSelect() {
+    const select = document.getElementById('eventTTSVoice');
+    if (!select) return;
+
+    // Store current selection
+    const currentValue = select.value;
+    
+    select.innerHTML = '<option value="">Standard Voice verwenden</option>';
+
+    const engine = document.getElementById('defaultEngine')?.value || 'tiktok';
+    const engineVoices = voices[engine];
+
+    if (!engineVoices) {
+        return;
+    }
+
+    // Sort voices by name
+    const sortedVoices = Object.entries(engineVoices).sort((a, b) => {
+        return a[1].name.localeCompare(b[1].name);
+    });
+
+    sortedVoices.forEach(([id, voice]) => {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = voice.name || id;
+        select.appendChild(option);
+    });
+
+    // Restore previous selection if still valid
+    if (currentValue && engineVoices[currentValue]) {
+        select.value = currentValue;
+    }
+
+    console.log(`[TTS] Populated Event TTS voice select with ${sortedVoices.length} voices for engine '${engine}'`);
 }
 
 /**
@@ -1807,6 +1862,7 @@ function setupEventListeners() {
             const previousVoice = document.getElementById('defaultVoice')?.value;
             const previousEngine = currentConfig.defaultEngine;
             populateVoiceSelect();
+            populateEventTTSVoiceSelect(); // Also update Event TTS voice dropdown
             const newVoice = document.getElementById('defaultVoice')?.value;
 
             // Show/hide emotion selector
@@ -1969,6 +2025,231 @@ function setupEventListeners() {
 
     // Initialize voice clones tab
     initVoiceClonesTab();
+
+    // Event TTS event listeners
+    setupEventTTSListeners();
+}
+
+// ============================================================================
+// EVENT TTS FUNCTIONS
+// ============================================================================
+
+/**
+ * Load Event TTS configuration
+ */
+async function loadEventTTSConfig() {
+    try {
+        const data = await fetchJSON('/api/tts/event-config');
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load Event TTS config');
+        }
+        
+        const config = data.data || {};
+        
+        // Populate master settings
+        const setValue = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) {
+                if (el.type === 'checkbox') {
+                    el.checked = value;
+                } else {
+                    el.value = value;
+                }
+            }
+        };
+        
+        const setText = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        };
+        
+        setValue('eventTTSEnabled', config.enabled || false);
+        setValue('eventTTSVolume', config.volume || 80);
+        setText('eventTTSVolumeValue', config.volume || 80);
+        setValue('eventTTSVoice', config.voice || '');
+        setValue('eventTTSPriority', config.priorityOverChat || false);
+        
+        // Populate event-specific settings
+        const events = config.events || {};
+        
+        // Gift
+        if (events.gift) {
+            setValue('eventTTSGiftEnabled', events.gift.enabled !== false);
+            setValue('eventTTSGiftTemplate', events.gift.template || '{username} hat {giftName} geschenkt!');
+            setValue('eventTTSGiftMinCoins', events.gift.minCoins || 0);
+            setValue('eventTTSGiftCooldown', events.gift.cooldownSeconds || 0);
+        }
+        
+        // Follow
+        if (events.follow) {
+            setValue('eventTTSFollowEnabled', events.follow.enabled !== false);
+            setValue('eventTTSFollowTemplate', events.follow.template || '{username} folgt dir jetzt!');
+            setValue('eventTTSFollowCooldown', events.follow.cooldownSeconds || 5);
+        }
+        
+        // Share
+        if (events.share) {
+            setValue('eventTTSShareEnabled', events.share.enabled !== false);
+            setValue('eventTTSShareTemplate', events.share.template || '{username} hat den Stream geteilt!');
+            setValue('eventTTSShareCooldown', events.share.cooldownSeconds || 10);
+        }
+        
+        // Subscribe
+        if (events.subscribe) {
+            setValue('eventTTSSubscribeEnabled', events.subscribe.enabled !== false);
+            setValue('eventTTSSubscribeTemplate', events.subscribe.template || '{username} hat abonniert!');
+            setValue('eventTTSSubscribeCooldown', events.subscribe.cooldownSeconds || 0);
+        }
+        
+        // Like
+        if (events.like) {
+            setValue('eventTTSLikeEnabled', events.like.enabled || false);
+            setValue('eventTTSLikeTemplate', events.like.template || '{username} liked!');
+            setValue('eventTTSLikeMinLikes', events.like.minLikes || 10);
+            setValue('eventTTSLikeCooldown', events.like.cooldownSeconds || 30);
+        }
+        
+        // Join
+        if (events.join) {
+            setValue('eventTTSJoinEnabled', events.join.enabled || false);
+            setValue('eventTTSJoinTemplate', events.join.template || '{username} ist beigetreten!');
+            setValue('eventTTSJoinCooldown', events.join.cooldownSeconds || 60);
+        }
+        
+        console.log('Event TTS config loaded successfully');
+        
+    } catch (error) {
+        console.error('Failed to load Event TTS config:', error);
+        showNotification(`Failed to load Event TTS config: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Save Event TTS configuration
+ */
+async function saveEventTTSConfig() {
+    try {
+        const getValue = (id) => {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            if (el.type === 'checkbox') return el.checked;
+            if (el.type === 'number') return parseInt(el.value, 10);
+            return el.value;
+        };
+        
+        const config = {
+            enabled: getValue('eventTTSEnabled'),
+            volume: getValue('eventTTSVolume'),
+            voice: getValue('eventTTSVoice') || null,
+            priorityOverChat: getValue('eventTTSPriority'),
+            events: {
+                gift: {
+                    enabled: getValue('eventTTSGiftEnabled'),
+                    template: getValue('eventTTSGiftTemplate'),
+                    minCoins: getValue('eventTTSGiftMinCoins'),
+                    cooldownSeconds: getValue('eventTTSGiftCooldown')
+                },
+                follow: {
+                    enabled: getValue('eventTTSFollowEnabled'),
+                    template: getValue('eventTTSFollowTemplate'),
+                    cooldownSeconds: getValue('eventTTSFollowCooldown')
+                },
+                share: {
+                    enabled: getValue('eventTTSShareEnabled'),
+                    template: getValue('eventTTSShareTemplate'),
+                    cooldownSeconds: getValue('eventTTSShareCooldown')
+                },
+                subscribe: {
+                    enabled: getValue('eventTTSSubscribeEnabled'),
+                    template: getValue('eventTTSSubscribeTemplate'),
+                    cooldownSeconds: getValue('eventTTSSubscribeCooldown')
+                },
+                like: {
+                    enabled: getValue('eventTTSLikeEnabled'),
+                    template: getValue('eventTTSLikeTemplate'),
+                    minLikes: getValue('eventTTSLikeMinLikes'),
+                    cooldownSeconds: getValue('eventTTSLikeCooldown')
+                },
+                join: {
+                    enabled: getValue('eventTTSJoinEnabled'),
+                    template: getValue('eventTTSJoinTemplate'),
+                    cooldownSeconds: getValue('eventTTSJoinCooldown')
+                }
+            }
+        };
+        
+        const response = await fetch('/api/tts/event-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to save Event TTS config');
+        }
+        
+        showNotification('Event TTS configuration saved successfully!', 'success');
+        console.log('Event TTS config saved successfully');
+        
+    } catch (error) {
+        console.error('Failed to save Event TTS config:', error);
+        showNotification(`Failed to save Event TTS config: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Event TTS with a sample message
+ */
+async function testEventTTS() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'Dies ist ein Test für Event TTS!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:test'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Event TTS');
+        }
+        
+        showNotification('Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Event TTS:', error);
+        showNotification(`Failed to test Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Setup Event TTS event listeners
+ */
+function setupEventTTSListeners() {
+    // Volume slider
+    const volumeSlider = document.getElementById('eventTTSVolume');
+    const volumeValue = document.getElementById('eventTTSVolumeValue');
+    if (volumeSlider && volumeValue) {
+        volumeSlider.addEventListener('input', (e) => {
+            volumeValue.textContent = e.target.value;
+        });
+    }
+    
+    // Test button
+    const testBtn = document.getElementById('testEventTTSBtn');
+    if (testBtn) {
+        testBtn.addEventListener('click', testEventTTS);
+    }
+    
+    // Note: Save is handled by main saveConfig button which we'll extend
 }
 
 // ============================================================================
