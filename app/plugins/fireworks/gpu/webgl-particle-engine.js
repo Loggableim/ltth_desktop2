@@ -32,12 +32,13 @@ class WebGLParticleEngine {
      */
     init() {
         try {
-            // Request WebGL2 context with optimal settings
+            // Request WebGL2 context with optimal settings for OBS capture
             this.gl = this.canvas.getContext('webgl2', {
                 antialias: false,        // Disable AA for performance
                 alpha: true,             // Enable transparency
-                premultipliedAlpha: true, // Premultiplied alpha for proper OBS transparency
-                desynchronized: true,    // Reduce input latency
+                premultipliedAlpha: false, // Use standard alpha (easier for OBS)
+                preserveDrawingBuffer: true, // Preserve for OBS capture
+                desynchronized: false,   // Disable for compatibility
                 powerPreference: 'high-performance' // Use discrete GPU if available
             });
 
@@ -151,8 +152,8 @@ class WebGLParticleEngine {
                     // Output with brighter core for better visibility
                     vec3 finalColor = v_color.rgb * (1.0 + (1.0 - dist) * 0.5);
                     
-                    // Premultiply alpha for proper OBS transparency
-                    outColor = vec4(finalColor * alpha, alpha);
+                    // Standard alpha output for OBS transparency
+                    outColor = vec4(finalColor, alpha);
                 }
             `;
 
@@ -263,11 +264,10 @@ class WebGLParticleEngine {
             // Unbind VAO
             gl.bindVertexArray(null);
 
-            // Enable blending for transparency with proper OBS support
+            // Enable blending for transparency with OBS support
             gl.enable(gl.BLEND);
-            // Use ONE, ONE_MINUS_SRC_ALPHA for premultiplied alpha with additive glow
-            // This preserves transparency for OBS while maintaining glow effects
-            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+            // Use standard alpha blending for OBS compatibility
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
             // Disable depth testing (2D rendering)
             gl.disable(gl.DEPTH_TEST);
