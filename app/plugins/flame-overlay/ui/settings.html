@@ -533,6 +533,200 @@
             </div>
         </div>
         
+        <!-- Quality Settings -->
+        <div class="section">
+            <h2 class="section-title">🎯 Qualitätseinstellungen</h2>
+            
+            <div class="form-group">
+                <label for="noiseOctaves">Rausch-Oktaven (Detail-Stufen): <span class="slider-value" id="noiseOctavesValue">8</span></label>
+                <input type="range" id="noiseOctaves" min="4" max="12" value="8" step="1">
+                <small style="color: #888;">Höhere Werte = mehr Details, aber niedrigere Performance</small>
+            </div>
+            
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="useHighQualityTextures" checked>
+                    <label for="useHighQualityTextures">Hochqualitative Texturen verwenden</label>
+                </div>
+                <small style="color: #888;">Verbessert die visuelle Qualität auf Kosten von mehr GPU-Speicher</small>
+            </div>
+            
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="detailScaleAuto" checked>
+                    <label for="detailScaleAuto">Automatische Detail-Skalierung</label>
+                </div>
+                <small style="color: #888;">Passt Details automatisch an die Auflösung an</small>
+            </div>
+        </div>
+        
+        <!-- Edge Settings -->
+        <div class="section">
+            <h2 class="section-title">✂️ Kanten-Einstellungen</h2>
+            
+            <div class="form-group">
+                <label for="edgeFeather">Kanten-Weichzeichnung: <span class="slider-value" id="edgeFeatherValue">0.30</span></label>
+                <input type="range" id="edgeFeather" min="0" max="1" value="0.3" step="0.05">
+                <small style="color: #888;">Steuert wie weich die Flammen an den Kanten auslaufen</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="frameCurve">Rahmen-Krümmung: <span class="slider-value" id="frameCurveValue">0.00</span></label>
+                <input type="range" id="frameCurve" min="0" max="1" value="0" step="0.05">
+                <small style="color: #888;">Fügt eine organische Krümmung zum Rahmen hinzu</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="frameNoiseAmount">Rahmen-Rauschen: <span class="slider-value" id="frameNoiseAmountValue">0.00</span></label>
+                <input type="range" id="frameNoiseAmount" min="0" max="1" value="0" step="0.05">
+                <small style="color: #888;">Fügt Rauschen an den Rahmenkanten für organischeren Look hinzu</small>
+            </div>
+        </div>
+        
+        <!-- Animation Advanced -->
+        <div class="section">
+            <h2 class="section-title">🎬 Erweiterte Animation</h2>
+            
+            <div class="form-group">
+                <label for="animationEasing">Animations-Easing:</label>
+                <select id="animationEasing">
+                    <option value="linear">Linear (Gleichmäßig)</option>
+                    <option value="sine">Sine (Wellenförmig)</option>
+                    <option value="quad">Quad (Beschleunigend)</option>
+                    <option value="elastic">Elastic (Elastisch)</option>
+                </select>
+                <small style="color: #888;">Bestimmt die Bewegungskurve der Animationen</small>
+            </div>
+            
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="pulseEnabled">
+                    <label for="pulseEnabled">Puls-Effekt aktivieren</label>
+                </div>
+                <small style="color: #888;">Flammen pulsieren rhythmisch</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="pulseAmount">Puls-Intensität: <span class="slider-value" id="pulseAmountValue">0.20</span></label>
+                <input type="range" id="pulseAmount" min="0" max="1" value="0.2" step="0.05">
+            </div>
+            
+            <div class="form-group">
+                <label for="pulseSpeed">Puls-Geschwindigkeit: <span class="slider-value" id="pulseSpeedValue">1.0</span></label>
+                <input type="range" id="pulseSpeed" min="0.1" max="3" value="1" step="0.1">
+            </div>
+        </div>
+        
+        <!-- Bloom Section -->
+        <div class="section">
+            <h2 class="section-title">💫 Bloom-Effekt (Leuchten)</h2>
+            
+            <div class="form-group">
+                <div class="checkbox-group" style="background: #333; padding: 15px; border-radius: 8px; border: 2px solid #ff6600;">
+                    <input type="checkbox" id="bloomEnabled">
+                    <label for="bloomEnabled" style="font-size: 16px; font-weight: bold; color: #ff9933;">✨ Bloom aktivieren (starkes Leuchten)</label>
+                </div>
+                <small style="color: #888;">Erzeugt einen intensiven Glow-Effekt um helle Bereiche</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="bloomIntensity">Bloom-Intensität: <span class="slider-value" id="bloomIntensityValue">0.8</span></label>
+                <input type="range" id="bloomIntensity" min="0" max="2" value="0.8" step="0.1">
+                <small style="color: #888;">Stärke des Bloom-Effekts</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="bloomThreshold">Bloom-Schwellwert: <span class="slider-value" id="bloomThresholdValue">0.60</span></label>
+                <input type="range" id="bloomThreshold" min="0" max="1" value="0.6" step="0.05">
+                <small style="color: #888;">Ab welcher Helligkeit der Bloom-Effekt einsetzt</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="bloomRadius">Bloom-Radius: <span class="slider-value" id="bloomRadiusValue">4</span></label>
+                <input type="range" id="bloomRadius" min="1" max="10" value="4" step="1">
+                <small style="color: #888;">Reichweite des Bloom-Effekts</small>
+            </div>
+        </div>
+        
+        <!-- Layers Section -->
+        <div class="section">
+            <h2 class="section-title">📚 Ebenen & Tiefe</h2>
+            
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="layersEnabled" checked>
+                    <label for="layersEnabled">Mehrere Ebenen aktivieren</label>
+                </div>
+                <small style="color: #888;">Erzeugt Tiefe durch mehrere Flammen-Schichten</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="layerCount">Anzahl Ebenen: <span class="slider-value" id="layerCountValue">3</span></label>
+                <input type="range" id="layerCount" min="1" max="3" value="3" step="1">
+                <small style="color: #888;">Mehr Ebenen = mehr Tiefe, aber niedrigere Performance</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="layerParallax">Parallax-Effekt: <span class="slider-value" id="layerParallaxValue">0.30</span></label>
+                <input type="range" id="layerParallax" min="0" max="1" value="0.3" step="0.05">
+                <small style="color: #888;">Stärke des 3D-Tiefeneffekts zwischen Ebenen</small>
+            </div>
+        </div>
+        
+        <!-- Post-FX Section -->
+        <div class="section">
+            <h2 class="section-title">🎨 Nachbearbeitungs-Effekte</h2>
+            
+            <div class="form-group">
+                <label for="chromaticAberration">Chromatische Aberration: <span class="slider-value" id="chromaticAberrationValue">0.005</span></label>
+                <input type="range" id="chromaticAberration" min="0" max="0.02" value="0.005" step="0.001">
+                <small style="color: #888;">Farbverschiebung an Kanten (Retro-Kamera-Effekt)</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="filmGrain">Film-Körnung: <span class="slider-value" id="filmGrainValue">0.03</span></label>
+                <input type="range" id="filmGrain" min="0" max="0.1" value="0.03" step="0.01">
+                <small style="color: #888;">Analoges Film-Rauschen für organischeren Look</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="depthIntensity">Tiefen-Intensität: <span class="slider-value" id="depthIntensityValue">0.50</span></label>
+                <input type="range" id="depthIntensity" min="0" max="1" value="0.5" step="0.05">
+                <small style="color: #888;">Stärke des Tiefeneffekts im gesamten Bild</small>
+            </div>
+        </div>
+        
+        <!-- Smoke Section -->
+        <div class="section">
+            <h2 class="section-title">💨 Rauch-Effekt</h2>
+            
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="smokeEnabled">
+                    <label for="smokeEnabled">Rauch-Effekt aktivieren</label>
+                </div>
+                <small style="color: #888;">Fügt atmosphärischen Rauch hinzu</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="smokeIntensity">Rauch-Intensität: <span class="slider-value" id="smokeIntensityValue">0.40</span></label>
+                <input type="range" id="smokeIntensity" min="0" max="1" value="0.4" step="0.05">
+                <small style="color: #888;">Dichte des Rauch-Effekts</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="smokeSpeed">Rauch-Geschwindigkeit: <span class="slider-value" id="smokeSpeedValue">0.30</span></label>
+                <input type="range" id="smokeSpeed" min="0.1" max="1" value="0.3" step="0.05">
+                <small style="color: #888;">Geschwindigkeit der Rauch-Animation</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="smokeColor">Rauch-Farbe:</label>
+                <input type="color" id="smokeColor" value="#333333">
+                <small style="color: #888;">Grundfarbe des Rauchs</small>
+            </div>
+        </div>
+        
         <!-- Action Buttons -->
         <div class="section">
             <button class="btn" onclick="saveConfig()">💾 Einstellungen speichern</button>
@@ -564,7 +758,9 @@
         // Configuration constants
         const LANDSCAPE_PRESETS = ['tiktok-landscape', 'hd-landscape', '2k-landscape', '4k-landscape'];
         const REALTIME_UPDATE_ELEMENTS = ['effectType', 'frameMode', 'flameColor', 'backgroundTint', 
-                                          'enableGlow', 'enableAdditiveBlend', 'maskOnlyEdges', 'highDPI'];
+                                          'enableGlow', 'enableAdditiveBlend', 'maskOnlyEdges', 'highDPI',
+                                          'useHighQualityTextures', 'detailScaleAuto', 'animationEasing',
+                                          'pulseEnabled', 'bloomEnabled', 'layersEnabled', 'smokeEnabled', 'smokeColor'];
         const CUSTOM_RESOLUTION_INPUTS = ['customWidth', 'customHeight'];
         
         // Initialize socket.io with error handling
@@ -695,6 +891,14 @@
                     let value = e.target.value;
                     if (e.target.id === 'frameThickness') {
                         value += ' px';
+                    } else if (e.target.id === 'chromaticAberration') {
+                        value = parseFloat(value).toFixed(3);
+                    } else if (['edgeFeather', 'frameCurve', 'frameNoiseAmount', 'pulseAmount', 
+                               'bloomThreshold', 'layerParallax', 'filmGrain', 'depthIntensity',
+                               'smokeIntensity', 'smokeSpeed'].includes(e.target.id)) {
+                        value = parseFloat(value).toFixed(2);
+                    } else if (['noiseOctaves', 'bloomRadius', 'layerCount'].includes(e.target.id)) {
+                        value = parseInt(value);
                     }
                     valueSpan.textContent = value;
                 }
@@ -759,6 +963,37 @@
                 enableGlow: document.getElementById('enableGlow').checked,
                 enableAdditiveBlend: document.getElementById('enableAdditiveBlend').checked,
                 highDPI: document.getElementById('highDPI').checked,
+                // Quality Settings
+                noiseOctaves: parseInt(document.getElementById('noiseOctaves').value),
+                useHighQualityTextures: document.getElementById('useHighQualityTextures').checked,
+                detailScaleAuto: document.getElementById('detailScaleAuto').checked,
+                // Edge Settings
+                edgeFeather: parseFloat(document.getElementById('edgeFeather').value),
+                frameCurve: parseFloat(document.getElementById('frameCurve').value),
+                frameNoiseAmount: parseFloat(document.getElementById('frameNoiseAmount').value),
+                // Animation Advanced
+                animationEasing: document.getElementById('animationEasing').value,
+                pulseEnabled: document.getElementById('pulseEnabled').checked,
+                pulseAmount: parseFloat(document.getElementById('pulseAmount').value),
+                pulseSpeed: parseFloat(document.getElementById('pulseSpeed').value),
+                // Bloom
+                bloomEnabled: document.getElementById('bloomEnabled').checked,
+                bloomIntensity: parseFloat(document.getElementById('bloomIntensity').value),
+                bloomThreshold: parseFloat(document.getElementById('bloomThreshold').value),
+                bloomRadius: parseInt(document.getElementById('bloomRadius').value),
+                // Layers
+                layersEnabled: document.getElementById('layersEnabled').checked,
+                layerCount: parseInt(document.getElementById('layerCount').value),
+                layerParallax: parseFloat(document.getElementById('layerParallax').value),
+                // Post-FX
+                chromaticAberration: parseFloat(document.getElementById('chromaticAberration').value),
+                filmGrain: parseFloat(document.getElementById('filmGrain').value),
+                depthIntensity: parseFloat(document.getElementById('depthIntensity').value),
+                // Smoke
+                smokeEnabled: document.getElementById('smokeEnabled').checked,
+                smokeIntensity: parseFloat(document.getElementById('smokeIntensity').value),
+                smokeSpeed: parseFloat(document.getElementById('smokeSpeed').value),
+                smokeColor: document.getElementById('smokeColor').value,
                 // Currently single-frame only, but array structure supports future multi-frame feature
                 framePositions: [{
                     x: frameX,
@@ -846,6 +1081,60 @@
                     document.getElementById('enableGlow').checked = config.enableGlow !== false;
                     document.getElementById('enableAdditiveBlend').checked = config.enableAdditiveBlend !== false;
                     document.getElementById('highDPI').checked = config.highDPI !== false;
+                    
+                    // Quality Settings
+                    document.getElementById('noiseOctaves').value = config.noiseOctaves || 8;
+                    document.getElementById('noiseOctavesValue').textContent = config.noiseOctaves || 8;
+                    document.getElementById('useHighQualityTextures').checked = config.useHighQualityTextures !== false;
+                    document.getElementById('detailScaleAuto').checked = config.detailScaleAuto !== false;
+                    
+                    // Edge Settings
+                    document.getElementById('edgeFeather').value = config.edgeFeather !== undefined ? config.edgeFeather : 0.3;
+                    document.getElementById('edgeFeatherValue').textContent = (config.edgeFeather !== undefined ? config.edgeFeather : 0.3).toFixed(2);
+                    document.getElementById('frameCurve').value = config.frameCurve || 0;
+                    document.getElementById('frameCurveValue').textContent = (config.frameCurve || 0).toFixed(2);
+                    document.getElementById('frameNoiseAmount').value = config.frameNoiseAmount || 0;
+                    document.getElementById('frameNoiseAmountValue').textContent = (config.frameNoiseAmount || 0).toFixed(2);
+                    
+                    // Animation Advanced
+                    document.getElementById('animationEasing').value = config.animationEasing || 'linear';
+                    document.getElementById('pulseEnabled').checked = config.pulseEnabled || false;
+                    document.getElementById('pulseAmount').value = config.pulseAmount !== undefined ? config.pulseAmount : 0.2;
+                    document.getElementById('pulseAmountValue').textContent = (config.pulseAmount !== undefined ? config.pulseAmount : 0.2).toFixed(2);
+                    document.getElementById('pulseSpeed').value = config.pulseSpeed || 1.0;
+                    document.getElementById('pulseSpeedValue').textContent = config.pulseSpeed || 1.0;
+                    
+                    // Bloom
+                    document.getElementById('bloomEnabled').checked = config.bloomEnabled || false;
+                    document.getElementById('bloomIntensity').value = config.bloomIntensity !== undefined ? config.bloomIntensity : 0.8;
+                    document.getElementById('bloomIntensityValue').textContent = config.bloomIntensity !== undefined ? config.bloomIntensity : 0.8;
+                    document.getElementById('bloomThreshold').value = config.bloomThreshold !== undefined ? config.bloomThreshold : 0.6;
+                    document.getElementById('bloomThresholdValue').textContent = (config.bloomThreshold !== undefined ? config.bloomThreshold : 0.6).toFixed(2);
+                    document.getElementById('bloomRadius').value = config.bloomRadius || 4;
+                    document.getElementById('bloomRadiusValue').textContent = config.bloomRadius || 4;
+                    
+                    // Layers
+                    document.getElementById('layersEnabled').checked = config.layersEnabled !== false;
+                    document.getElementById('layerCount').value = config.layerCount || 3;
+                    document.getElementById('layerCountValue').textContent = config.layerCount || 3;
+                    document.getElementById('layerParallax').value = config.layerParallax !== undefined ? config.layerParallax : 0.3;
+                    document.getElementById('layerParallaxValue').textContent = (config.layerParallax !== undefined ? config.layerParallax : 0.3).toFixed(2);
+                    
+                    // Post-FX
+                    document.getElementById('chromaticAberration').value = config.chromaticAberration !== undefined ? config.chromaticAberration : 0.005;
+                    document.getElementById('chromaticAberrationValue').textContent = (config.chromaticAberration !== undefined ? config.chromaticAberration : 0.005).toFixed(3);
+                    document.getElementById('filmGrain').value = config.filmGrain !== undefined ? config.filmGrain : 0.03;
+                    document.getElementById('filmGrainValue').textContent = (config.filmGrain !== undefined ? config.filmGrain : 0.03).toFixed(2);
+                    document.getElementById('depthIntensity').value = config.depthIntensity !== undefined ? config.depthIntensity : 0.5;
+                    document.getElementById('depthIntensityValue').textContent = (config.depthIntensity !== undefined ? config.depthIntensity : 0.5).toFixed(2);
+                    
+                    // Smoke
+                    document.getElementById('smokeEnabled').checked = config.smokeEnabled || false;
+                    document.getElementById('smokeIntensity').value = config.smokeIntensity !== undefined ? config.smokeIntensity : 0.4;
+                    document.getElementById('smokeIntensityValue').textContent = (config.smokeIntensity !== undefined ? config.smokeIntensity : 0.4).toFixed(2);
+                    document.getElementById('smokeSpeed').value = config.smokeSpeed !== undefined ? config.smokeSpeed : 0.3;
+                    document.getElementById('smokeSpeedValue').textContent = (config.smokeSpeed !== undefined ? config.smokeSpeed : 0.3).toFixed(2);
+                    document.getElementById('smokeColor').value = config.smokeColor || '#333333';
                     
                     // Frame position
                     if (config.framePositions && config.framePositions.length > 0) {
