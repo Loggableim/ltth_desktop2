@@ -926,17 +926,57 @@
                     
                     case 'fog':
                     {
-                        const fogGradient = ctx.createRadialGradient(
-                            this.x, this.y, 0,
-                            this.x, this.y, this.size
+                        const baseX = this.x;
+                        const baseY = this.y;
+                        
+                        // Perlin noise displacement for organic edges
+                        const noiseScale = 0.003;
+                        const noiseTime = Date.now() * 0.0001;
+                        const noiseOffsetX = noise.noise2D(baseX * noiseScale, noiseTime) * 30;
+                        const noiseOffsetY = noise.noise2D(baseY * noiseScale, noiseTime + 100) * 30;
+                        
+                        const finalX = baseX + noiseOffsetX;
+                        const finalY = baseY + noiseOffsetY;
+                        
+                        // Layer 1: Large soft base
+                        const baseGradient = ctx.createRadialGradient(
+                            finalX, finalY, 0,
+                            finalX, finalY, this.size * 1.2
                         );
-                        fogGradient.addColorStop(0, `hsla(${this.hue}, 15%, 75%, ${this.alpha})`);
-                        fogGradient.addColorStop(0.5, `hsla(${this.hue}, 15%, 70%, ${this.alpha * 0.5})`);
-                        fogGradient.addColorStop(1, 'rgba(180, 180, 200, 0)');
-                        ctx.fillStyle = fogGradient;
+                        baseGradient.addColorStop(0, `hsla(${this.hue}, 15%, 80%, ${this.alpha * 0.8})`);
+                        baseGradient.addColorStop(0.5, `hsla(${this.hue}, 15%, 75%, ${this.alpha * 0.4})`);
+                        baseGradient.addColorStop(1, 'rgba(200, 200, 220, 0)');
+                        ctx.fillStyle = baseGradient;
                         ctx.beginPath();
-                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                        ctx.arc(finalX, finalY, this.size * 1.2, 0, Math.PI * 2);
                         ctx.fill();
+                        
+                        // Layer 2: Medium density core
+                        const coreGradient = ctx.createRadialGradient(
+                            finalX, finalY, 0,
+                            finalX, finalY, this.size * 0.7
+                        );
+                        coreGradient.addColorStop(0, `hsla(${this.hue + 5}, 18%, 78%, ${this.alpha})`);
+                        coreGradient.addColorStop(0.6, `hsla(${this.hue}, 15%, 73%, ${this.alpha * 0.6})`);
+                        coreGradient.addColorStop(1, 'rgba(190, 190, 210, 0)');
+                        ctx.fillStyle = coreGradient;
+                        ctx.beginPath();
+                        ctx.arc(finalX, finalY, this.size * 0.7, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Layer 3: Highlight/light scatter
+                        const highlightGradient = ctx.createRadialGradient(
+                            finalX - this.size * 0.15, finalY - this.size * 0.15, 0,
+                            finalX - this.size * 0.15, finalY - this.size * 0.15, this.size * 0.4
+                        );
+                        highlightGradient.addColorStop(0, `hsla(${this.hue - 10}, 20%, 85%, ${this.alpha * 0.5})`);
+                        highlightGradient.addColorStop(0.5, `hsla(${this.hue - 5}, 18%, 82%, ${this.alpha * 0.25})`);
+                        highlightGradient.addColorStop(1, 'rgba(220, 220, 240, 0)');
+                        ctx.fillStyle = highlightGradient;
+                        ctx.beginPath();
+                        ctx.arc(finalX - this.size * 0.15, finalY - this.size * 0.15, this.size * 0.4, 0, Math.PI * 2);
+                        ctx.fill();
+                        
                         break;
                     }
                 }
