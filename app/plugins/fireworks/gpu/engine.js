@@ -788,7 +788,7 @@ class FireworksEngine {
         
         // Limit concurrent fireworks to prevent memory issues
         if (this.fireworks.length > CONFIG.maxFireworks) {
-            // Remove oldest firework (first element)
+            // Remove oldest firework using splice for explicit intent and O(n) efficiency
             this.fireworks.splice(0, 1);
         }
         

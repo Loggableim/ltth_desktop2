@@ -14,6 +14,10 @@
  */
 
 class ParticleSystemSOA {
+    /**
+     * Struct-of-Arrays particle system for high-performance GPU rendering
+     * @param {number} maxParticles - Maximum particle capacity (default 100k = ~8MB memory, matches WebGL engine capacity)
+     */
     constructor(maxParticles = 100000) {
         this.max = maxParticles;
         this.count = 0;
