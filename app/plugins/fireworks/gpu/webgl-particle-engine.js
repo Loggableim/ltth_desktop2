@@ -266,8 +266,12 @@ class WebGLParticleEngine {
 
             // Enable blending for transparency with OBS support
             gl.enable(gl.BLEND);
-            // Use standard alpha blending for OBS compatibility
-            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            // Hybrid blending: Additive RGB for glow, preserved alpha for OBS
+            // This maintains both the visual glow effect AND OBS transparency
+            gl.blendFuncSeparate(
+                gl.ONE, gl.ONE_MINUS_SRC_ALPHA,  // RGB: Additive blending for glow effect
+                gl.ONE, gl.ONE_MINUS_SRC_ALPHA   // Alpha: Preserve transparency for OBS
+            );
 
             // Disable depth testing (2D rendering)
             gl.disable(gl.DEPTH_TEST);

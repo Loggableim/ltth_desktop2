@@ -49,6 +49,7 @@ class ParticleSystemSOA {
         this.active = new Uint8Array(maxParticles);
         this.emitTrail = new Uint8Array(maxParticles); // Whether particle emits trail
         this.willExplode = new Uint8Array(maxParticles); // Whether particle will create secondary explosion
+        this.isSparkle = new Uint8Array(maxParticles); // Whether particle is a sparkle (for flicker effect)
         
         // Firework association (for tracking which firework owns which particles)
         this.fireworkId = new Uint32Array(maxParticles);
@@ -96,6 +97,11 @@ class ParticleSystemSOA {
     updateAlphas(dt) {
         for (let i = 0; i < this.count; i++) {
             if (!this.active[i]) continue;
+            
+            // Sparkle flicker effect
+            if (this.isSparkle[i] && Math.random() < 0.3) {
+                this.brightness[i] = 80 + Math.random() * 20;
+            }
             
             // Decay alpha
             this.alpha[i] -= this.decay[i] * dt;
@@ -264,6 +270,7 @@ class ParticleSystemSOA {
         this.age[i] = 0;
         this.explosionDelay[i] = props.explosionDelay || 0.5;
         this.hasExploded[i] = 0;
+        this.isSparkle[i] = props.isSparkle ? 1 : 0;
         
         return i;
     }
@@ -300,6 +307,7 @@ class ParticleSystemSOA {
                     this.age[writeIdx] = this.age[readIdx];
                     this.explosionDelay[writeIdx] = this.explosionDelay[readIdx];
                     this.hasExploded[writeIdx] = this.hasExploded[readIdx];
+                    this.isSparkle[writeIdx] = this.isSparkle[readIdx];
                     this.active[writeIdx] = 1;
                 }
                 writeIdx++;

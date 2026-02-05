@@ -766,7 +766,8 @@ class FireworksEngine {
                 fireworkId: fw.id,
                 emitTrail: !isSparkle && shouldEmitTrail, // Sparkles don't emit trails
                 willExplode: shouldExplode,
-                explosionDelay: 0.3 + Math.random() * 0.3 // Explode after 0.3-0.6 seconds
+                explosionDelay: 0.3 + Math.random() * 0.3, // Explode after 0.3-0.6 seconds
+                isSparkle: isSparkle  // Pass sparkle flag for flicker effect
             });
         }
         
