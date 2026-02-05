@@ -2264,6 +2264,9 @@
                     state.reconnectAttempts = 0;
                     log('✅ Connected to server');
                     updateConnectionStatus('connected', '✓ Connected');
+                    
+                    // Signal to backend: Client is ready for events
+                    state.socket.emit('weather:client-ready');
                 });
 
                 state.socket.on('disconnect', (reason) => {
@@ -2283,6 +2286,9 @@
                     state.reconnectAttempts = 0;
                     log(`✅ Reconnected after ${attemptNumber} attempts`);
                     updateConnectionStatus('connected', '✓ Reconnected');
+                    
+                    // Re-sync permanent effects after reconnection
+                    state.socket.emit('weather:client-ready');
                 });
 
                 state.socket.on('reconnect_error', (error) => {
@@ -2310,6 +2316,25 @@
                         log(`🛑 Received stop event for effect: ${data.action}`);
                         stopEffect(data.action);
                     }
+                });
+
+                state.socket.on('weather:config-changed', (data) => {
+                    log('⚙️ Weather config changed, reloading permanent effects...', data);
+                    
+                    // Stop all current effects
+                    Object.keys(effects).forEach(type => {
+                        if (effects[type] && effects[type].stop) {
+                            effects[type].stop();
+                        }
+                    });
+                    state.activeEffects = [];
+                    
+                    // Request fresh permanent effects after brief delay
+                    // Delay allows effects cleanup to complete before requesting new state
+                    const CONFIG_RELOAD_DELAY = 100;
+                    setTimeout(() => {
+                        state.socket.emit('weather:request-permanent-effects');
+                    }, CONFIG_RELOAD_DELAY);
                 });
 
                 state.socket.on('connect_error', (error) => {
