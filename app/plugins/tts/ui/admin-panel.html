@@ -447,6 +447,214 @@
 
             </div>
 
+            <!-- Event TTS Settings -->
+            <div class="bg-gray-800 rounded-lg p-6 shadow-xl col-span-full">
+                <h2 class="text-2xl font-bold mb-4">🎉 Event TTS - Automatische Event-Ansagen</h2>
+                <p class="text-gray-400 text-sm mb-4">TikTok Events automatisch vorlesen lassen (Gifts, Follows, Shares, etc.)</p>
+
+                <div class="space-y-6">
+                    <!-- Master Toggle -->
+                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-semibold">Master Enable/Disable</h3>
+                                <p class="text-sm text-gray-400">Event TTS System aktivieren/deaktivieren</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="eventTTSEnabled" class="sr-only peer">
+                                <div class="w-14 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <!-- Volume -->
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Lautstärke: <span id="eventTTSVolumeValue">80</span>%</label>
+                                <input type="range" id="eventTTSVolume" min="0" max="100" value="80" class="w-full">
+                                <p class="text-xs text-gray-400 mt-1">Unabhängig von Chat-TTS Lautstärke</p>
+                            </div>
+
+                            <!-- Voice Selection -->
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Stimme (optional)</label>
+                                <select id="eventTTSVoice" class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2">
+                                    <option value="">Standard Voice verwenden</option>
+                                    <!-- Populated dynamically -->
+                                </select>
+                                <p class="text-xs text-gray-400 mt-1">Leer = Default Voice nutzen</p>
+                            </div>
+
+                            <!-- Priority -->
+                            <div class="flex items-center space-x-2">
+                                <input type="checkbox" id="eventTTSPriority" class="w-4 h-4">
+                                <label for="eventTTSPriority" class="text-sm">Priorität über Chat-TTS</label>
+                                <p class="text-xs text-gray-400 mt-1">Events werden vor Chat-Nachrichten abgespielt</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Event Type Settings -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <!-- Gift Events -->
+                        <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-md font-semibold">🎁 Gift Events</h3>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="eventTTSGiftEnabled" class="sr-only peer" checked>
+                                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Template</label>
+                                    <input type="text" id="eventTTSGiftTemplate" value="{username} hat {giftName} geschenkt!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    <p class="text-xs text-gray-400 mt-1">Variablen: {username}, {nickname}, {giftName}, {giftCount}, {coins}</p>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Min. Coins</label>
+                                        <input type="number" id="eventTTSGiftMinCoins" value="0" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
+                                        <input type="number" id="eventTTSGiftCooldown" value="0" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Follow Events -->
+                        <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-md font-semibold">👥 Follow Events</h3>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="eventTTSFollowEnabled" class="sr-only peer" checked>
+                                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Template</label>
+                                    <input type="text" id="eventTTSFollowTemplate" value="{username} folgt dir jetzt!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    <p class="text-xs text-gray-400 mt-1">Variablen: {username}, {nickname}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
+                                    <input type="number" id="eventTTSFollowCooldown" value="5" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Share Events -->
+                        <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-md font-semibold">📤 Share Events</h3>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="eventTTSShareEnabled" class="sr-only peer" checked>
+                                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Template</label>
+                                    <input type="text" id="eventTTSShareTemplate" value="{username} hat den Stream geteilt!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    <p class="text-xs text-gray-400 mt-1">Variablen: {username}, {nickname}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
+                                    <input type="number" id="eventTTSShareCooldown" value="10" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Subscribe Events -->
+                        <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-md font-semibold">⭐ Subscribe Events</h3>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="eventTTSSubscribeEnabled" class="sr-only peer" checked>
+                                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Template</label>
+                                    <input type="text" id="eventTTSSubscribeTemplate" value="{username} hat abonniert!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    <p class="text-xs text-gray-400 mt-1">Variablen: {username}, {nickname}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
+                                    <input type="number" id="eventTTSSubscribeCooldown" value="0" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Like Events -->
+                        <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-md font-semibold">❤️ Like Events</h3>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="eventTTSLikeEnabled" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Template</label>
+                                    <input type="text" id="eventTTSLikeTemplate" value="{username} liked!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    <p class="text-xs text-gray-400 mt-1">Variablen: {username}, {nickname}, {likeCount}</p>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Min. Likes</label>
+                                        <input type="number" id="eventTTSLikeMinLikes" value="10" min="1" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
+                                        <input type="number" id="eventTTSLikeCooldown" value="30" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Join Events -->
+                        <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-md font-semibold">🚪 Join Events</h3>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="eventTTSJoinEnabled" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Template</label>
+                                    <input type="text" id="eventTTSJoinTemplate" value="{username} ist beigetreten!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    <p class="text-xs text-gray-400 mt-1">Variablen: {username}, {nickname}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
+                                    <input type="number" id="eventTTSJoinCooldown" value="60" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Test Button -->
+                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-md font-semibold">🧪 Test Event TTS</h3>
+                                <p class="text-sm text-gray-400">Teste die Event TTS Konfiguration</p>
+                            </div>
+                            <button id="testEventTTSBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded transition">
+                                🔊 Test abspielen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="mt-6">
                 <button id="saveConfigBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition">
                     💾 Save Configuration
