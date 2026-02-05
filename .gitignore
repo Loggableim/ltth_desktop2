@@ -58,3 +58,4 @@ build-src/assets/node/
 build-src/installer/*.exe
 LTTH-Setup-*.exe
 test-quiz-timing.js
+test-new-voices.js
