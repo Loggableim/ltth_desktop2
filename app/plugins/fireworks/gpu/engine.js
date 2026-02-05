@@ -689,6 +689,7 @@ class FireworksEngine {
         this.particles.updatePositions(deltaTime);
         this.particles.updateAlphas(deltaTime);
         this.particles.updateRotations(deltaTime);
+        this.particles.updateTrails(deltaTime);
         
         if (this.frameCount % 60 === 0) {
             this.particles.compact();
@@ -717,6 +718,9 @@ class FireworksEngine {
         const velocities = generator(fw.particleCount, fw.intensity);
         
         for (const vel of velocities) {
+            // Add trails to a subset of particles for visual effect without lag
+            const shouldEmitTrail = Math.random() < 0.3; // 30% of particles emit trails
+            
             this.particles.emit({
                 x: fw.x,
                 y: fw.y,
@@ -732,7 +736,8 @@ class FireworksEngine {
                 drag: 0.98,
                 rotation: Math.random() * Math.PI * 2,
                 rotationSpeed: (Math.random() - 0.5) * 0.1,
-                fireworkId: fw.id
+                fireworkId: fw.id,
+                emitTrail: shouldEmitTrail
             });
         }
         

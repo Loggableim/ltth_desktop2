@@ -47,9 +47,14 @@ class ParticleSystemSOA {
         
         // State flags
         this.active = new Uint8Array(maxParticles);
+        this.emitTrail = new Uint8Array(maxParticles); // Whether particle emits trail
         
         // Firework association (for tracking which firework owns which particles)
         this.fireworkId = new Uint32Array(maxParticles);
+        
+        // Trail emission tracking
+        this.trailTimer = new Float32Array(maxParticles); // Time since last trail emission
+        this.trailInterval = 0.05; // Emit trail every 50ms
     }
 
     /**
@@ -105,6 +110,49 @@ class ParticleSystemSOA {
     }
 
     /**
+     * Update trail emission and create trail particles
+     * Should be called after updatePositions
+     */
+    updateTrails(dt) {
+        const trailsToEmit = [];
+        
+        for (let i = 0; i < this.count; i++) {
+            if (!this.active[i] || !this.emitTrail[i]) continue;
+            
+            // Update trail timer
+            this.trailTimer[i] += dt;
+            
+            // Emit trail particle if interval reached
+            if (this.trailTimer[i] >= this.trailInterval) {
+                this.trailTimer[i] = 0;
+                
+                // Store trail data (emit after loop to avoid modifying array during iteration)
+                trailsToEmit.push({
+                    x: this.x[i],
+                    y: this.y[i],
+                    size: this.size[i] * 0.6,
+                    alpha: this.alpha[i] * 0.5,
+                    hue: this.hue[i],
+                    saturation: this.saturation[i],
+                    brightness: this.brightness[i] * 0.8,
+                    decay: 0.02, // Trails fade faster
+                    rotation: this.rotation[i],
+                    rotationSpeed: 0,
+                    gravity: 0,
+                    drag: 1.0, // Trails don't move
+                    fireworkId: this.fireworkId[i],
+                    emitTrail: false
+                });
+            }
+        }
+        
+        // Emit all collected trail particles
+        for (const trail of trailsToEmit) {
+            this.emit(trail);
+        }
+    }
+
+    /**
      * Emit a new particle
      * @param {Object} props - Particle properties
      * @returns {number} Index of the particle, or -1 if pool is full
@@ -139,6 +187,8 @@ class ParticleSystemSOA {
         this.drag[i] = props.drag !== undefined ? props.drag : 0.98;
         this.active[i] = 1;
         this.fireworkId[i] = props.fireworkId || 0;
+        this.emitTrail[i] = props.emitTrail ? 1 : 0;
+        this.trailTimer[i] = 0;
         
         return i;
     }
@@ -169,6 +219,8 @@ class ParticleSystemSOA {
                     this.gravity[writeIdx] = this.gravity[readIdx];
                     this.drag[writeIdx] = this.drag[readIdx];
                     this.fireworkId[writeIdx] = this.fireworkId[readIdx];
+                    this.emitTrail[writeIdx] = this.emitTrail[readIdx];
+                    this.trailTimer[writeIdx] = this.trailTimer[readIdx];
                     this.active[writeIdx] = 1;
                 }
                 writeIdx++;
