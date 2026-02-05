@@ -419,33 +419,74 @@
         case 'rain':
         case 'storm':
           {
-            // Motion blur via gradient along velocity vector
-            const gradient = ctx.createLinearGradient(
+            // Depth-based rendering
+            const depthFactor = 0.5 + this.z * 0.5; // z: 0-1 → depth: 0.5-1.0
+            const glowIntensity = this.type === 'storm' ? 0.3 : 0.15;
+            
+            // Outer glow layer
+            const glowGradient = ctx.createLinearGradient(
               this.x, this.y,
               this.x - this.speedX * 2, this.y - this.length
             );
-            const baseColor = this.color || (this.type === 'storm' ? 'rgba(107, 163, 214, ' + this.alpha + ')' : 'rgba(160, 196, 232, ' + this.alpha + ')');
-            const transparentColor = this.type === 'storm' ? 'rgba(107, 163, 214, 0)' : 'rgba(160, 196, 232, 0)';
+            const glowColor = this.type === 'storm' 
+              ? `rgba(107, 163, 214, ${this.alpha * glowIntensity})` 
+              : `rgba(160, 196, 232, ${this.alpha * glowIntensity})`;
+            glowGradient.addColorStop(0, glowColor);
+            glowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
             
-            gradient.addColorStop(0, baseColor);
-            gradient.addColorStop(1, transparentColor);
-            
-            ctx.strokeStyle = gradient;
-            ctx.lineWidth = this.width;
+            ctx.strokeStyle = glowGradient;
+            ctx.lineWidth = (this.width + 2) * depthFactor;
             ctx.lineCap = 'round';
             ctx.beginPath();
             ctx.moveTo(this.x, this.y);
             ctx.lineTo(this.x - this.speedX * 2, this.y - this.length);
             ctx.stroke();
             
-            // Draw splash particles
+            // Main raindrop with depth-based color
+            const mainGradient = ctx.createLinearGradient(
+              this.x, this.y,
+              this.x - this.speedX * 2, this.y - this.length
+            );
+            
+            const baseR = this.type === 'storm' ? 107 : 160;
+            const baseG = this.type === 'storm' ? 163 : 196;
+            const baseB = this.type === 'storm' ? 214 : 232;
+            
+            const depthR = Math.round(baseR * depthFactor);
+            const depthG = Math.round(baseG * depthFactor);
+            const depthB = Math.round(baseB * depthFactor);
+            
+            mainGradient.addColorStop(0, `rgba(${depthR}, ${depthG}, ${depthB}, ${this.alpha})`);
+            mainGradient.addColorStop(0.5, `rgba(${baseR}, ${baseG}, ${baseB}, ${this.alpha * 0.8})`);
+            mainGradient.addColorStop(1, `rgba(${baseR}, ${baseG}, ${baseB}, 0)`);
+            
+            ctx.strokeStyle = mainGradient;
+            ctx.lineWidth = this.width * depthFactor;
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.x - this.speedX * 2, this.y - this.length);
+            ctx.stroke();
+            
+            // Enhanced splash rendering
             if (this.type === 'rain' && this.splashParticles.length > 0) {
               this.splashParticles.forEach(splash => {
-                ctx.globalAlpha = splash.life * 0.6;
+                const splashAlpha = splash.life * 0.7;
+                
+                // Glow layer
+                ctx.globalAlpha = splashAlpha * 0.3;
+                ctx.fillStyle = 'rgba(200, 230, 255, 1)';
+                ctx.beginPath();
+                ctx.arc(splash.x, splash.y, splash.size + 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Main splash
+                ctx.globalAlpha = splashAlpha;
                 ctx.fillStyle = 'rgba(180, 210, 240, 1)';
                 ctx.beginPath();
                 ctx.arc(splash.x, splash.y, splash.size, 0, Math.PI * 2);
                 ctx.fill();
+                
+                ctx.globalAlpha = this.alpha;
               });
             }
           }
