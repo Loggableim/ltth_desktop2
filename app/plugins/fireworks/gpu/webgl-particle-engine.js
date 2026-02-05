@@ -36,7 +36,7 @@ class WebGLParticleEngine {
             this.gl = this.canvas.getContext('webgl2', {
                 antialias: false,        // Disable AA for performance
                 alpha: true,             // Enable transparency
-                premultipliedAlpha: false, // Standard alpha blending
+                premultipliedAlpha: true, // Premultiplied alpha for proper OBS transparency
                 desynchronized: true,    // Reduce input latency
                 powerPreference: 'high-performance' // Use discrete GPU if available
             });
@@ -150,7 +150,9 @@ class WebGLParticleEngine {
                     
                     // Output with brighter core for better visibility
                     vec3 finalColor = v_color.rgb * (1.0 + (1.0 - dist) * 0.5);
-                    outColor = vec4(finalColor, alpha);
+                    
+                    // Premultiply alpha for proper OBS transparency
+                    outColor = vec4(finalColor * alpha, alpha);
                 }
             `;
 
@@ -261,9 +263,11 @@ class WebGLParticleEngine {
             // Unbind VAO
             gl.bindVertexArray(null);
 
-            // Enable blending for transparency
+            // Enable blending for transparency with proper OBS support
             gl.enable(gl.BLEND);
-            gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // Additive blending for glow effect
+            // Use ONE, ONE_MINUS_SRC_ALPHA for premultiplied alpha with additive glow
+            // This preserves transparency for OBS while maintaining glow effects
+            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
             // Disable depth testing (2D rendering)
             gl.disable(gl.DEPTH_TEST);
