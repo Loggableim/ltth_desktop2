@@ -1532,7 +1532,12 @@ Keep the description focused and specific. This will be used to generate the act
     // Run cleanup once per day
     this.cacheCleanupInterval = setInterval(async () => {
       try {
-        await this.cacheManager.cleanupOldCache();
+        // Get active user IDs to skip them during cleanup
+        const activeUserIds = this.animationController 
+          ? Array.from(this.animationController.activeAnimations.keys()) 
+          : [];
+        
+        await this.cacheManager.cleanupOldCache(activeUserIds);
       } catch (error) {
         this.logger.error('TalkingHeads: Cache cleanup failed', error);
       }
@@ -1548,9 +1553,10 @@ Keep the description focused and specific. This will be used to generate the act
     try {
       this.logger.info('TalkingHeads: Destroying plugin...');
 
-      // Stop all animations
+      // Stop all animations and clear timeouts
       if (this.animationController) {
         this.animationController.stopAllAnimations();
+        this.animationController.clearAllTimeouts();
       }
 
       if (this.ttsBridgeHandlers && this.api.pluginLoader) {
