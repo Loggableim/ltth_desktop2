@@ -387,6 +387,11 @@ function switchTab(tabName) {
     if (tabName === 'voice-clones') {
         loadVoiceClones().catch(err => console.error('Failed to load voice clones:', err));
     }
+    
+    // Load Event Triggers config when switching to event-triggers tab
+    if (tabName === 'event-triggers') {
+        loadEventTTSConfig().catch(err => console.error('Failed to load Event Triggers config:', err));
+    }
 }
 
 // ============================================================================
@@ -2037,6 +2042,93 @@ function setupEventListeners() {
 /**
  * Load Event TTS configuration
  */
+/**
+ * Render specific gift rules list
+ */
+function renderSpecificGiftRules(rules) {
+    const container = document.getElementById('specificGiftRulesList');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    rules.forEach((rule, index) => {
+        const ruleHTML = `
+            <div class="gift-rule-item bg-gray-700/30 rounded p-3 mb-2">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" class="gift-rule-enabled w-4 h-4" ${rule.enabled ? 'checked' : ''}>
+                        <input type="text" class="gift-rule-name bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Gift Name (z.B. Rose)" value="${rule.giftName || ''}">
+                    </div>
+                    <button class="remove-gift-rule bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">Remove</button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="text" class="gift-rule-template bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Template" value="${rule.template || ''}">
+                    <select class="gift-rule-voice bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm">
+                        <option value="">Default Voice</option>
+                        ${getVoiceOptionsHTML(rule.voiceId)}
+                    </select>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', ruleHTML);
+    });
+    
+    // Add event listeners for remove buttons
+    container.querySelectorAll('.remove-gift-rule').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.closest('.gift-rule-item').remove();
+        });
+    });
+}
+
+/**
+ * Render periodic reminder messages list
+ */
+function renderPeriodicReminderMessages(messages) {
+    const container = document.getElementById('periodicReminderMessagesList');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    messages.forEach((message, index) => {
+        const messageHTML = `
+            <div class="reminder-message-item bg-gray-700/30 rounded p-3 mb-2 flex items-center space-x-2">
+                <input type="text" class="reminder-message-text flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm" placeholder="Message" value="${message || ''}">
+                <button class="remove-reminder-message bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-sm">Remove</button>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', messageHTML);
+    });
+    
+    // Add event listeners for remove buttons
+    container.querySelectorAll('.remove-reminder-message').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.closest('.reminder-message-item').remove();
+        });
+    });
+}
+
+/**
+ * Helper: Get voice options HTML for select dropdowns
+ */
+function getVoiceOptionsHTML(selectedVoiceId) {
+    let html = '';
+    for (const [engine, voiceList] of Object.entries(voices)) {
+        if (voiceList && voiceList.length > 0) {
+            voiceList.forEach(voice => {
+                const voiceId = voice.id || voice.voice_id || voice.name;
+                const voiceName = voice.name || voice.voice_name || voiceId;
+                const selected = voiceId === selectedVoiceId ? 'selected' : '';
+                html += `<option value="${voiceId}" ${selected}>${engine}: ${voiceName}</option>`;
+            });
+        }
+    }
+    return html;
+}
+
+/**
+ * Load Event TTS configuration
+ */
 async function loadEventTTSConfig() {
     try {
         const data = await fetchJSON('/api/tts/event-config');
@@ -2119,10 +2211,112 @@ async function loadEventTTSConfig() {
         
         console.log('Event TTS config loaded successfully');
         
+        // Load advanced features
+        const advanced = config.advanced || {};
+        
+        // Tiered Gift TTS
+        if (advanced.tieredGiftTTS) {
+            setValue('tieredGiftEnabled', advanced.tieredGiftTTS.enabled || false);
+            const tiers = advanced.tieredGiftTTS.tiers || {};
+            
+            if (tiers.tier1) {
+                setValue('tier1Enabled', tiers.tier1.enabled !== false);
+                setValue('tier1Template', tiers.tier1.template || 'Danke {username} für {coins} Coins!');
+                setValue('tier1Voice', tiers.tier1.voiceId || '');
+            }
+            if (tiers.tier2) {
+                setValue('tier2Enabled', tiers.tier2.enabled !== false);
+                setValue('tier2Template', tiers.tier2.template || 'Wow! {username} hat {coins} Coins geschenkt!');
+                setValue('tier2Voice', tiers.tier2.voiceId || '');
+            }
+            if (tiers.tier3) {
+                setValue('tier3Enabled', tiers.tier3.enabled !== false);
+                setValue('tier3Template', tiers.tier3.template || '🎉 Krass! {username} hat {coins} Coins geschenkt!');
+                setValue('tier3Voice', tiers.tier3.voiceId || '');
+            }
+            if (tiers.tier4) {
+                setValue('tier4Enabled', tiers.tier4.enabled !== false);
+                setValue('tier4Template', tiers.tier4.template || '🔥🔥🔥 MEGA GIFT von {username}! {coins} Coins!!!');
+                setValue('tier4Voice', tiers.tier4.voiceId || '');
+            }
+        }
+        
+        // Specific Gift Name Triggers
+        if (advanced.specificGiftTriggers) {
+            setValue('specificGiftEnabled', advanced.specificGiftTriggers.enabled || false);
+            renderSpecificGiftRules(advanced.specificGiftTriggers.rules || []);
+        }
+        
+        // Gift Combo Streak
+        if (advanced.giftComboStreak) {
+            setValue('comboStreakEnabled', advanced.giftComboStreak.enabled || false);
+            setValue('comboStreakThreshold', advanced.giftComboStreak.threshold || 3);
+            setValue('comboStreakTimeWindow', advanced.giftComboStreak.timeWindowSeconds || 10);
+            setValue('comboStreakTemplate', advanced.giftComboStreak.template || '🔥 {username} ist auf einer {streak}-Gift Combo Streak!');
+            setValue('comboStreakVoice', advanced.giftComboStreak.voiceId || '');
+        }
+        
+        // Top Gifter Announcement
+        if (advanced.topGifterAnnouncement) {
+            setValue('topGifterEnabled', advanced.topGifterAnnouncement.enabled || false);
+            setValue('topGifterTemplate', advanced.topGifterAnnouncement.template || '🏆 {username} ist jetzt der Top Supporter mit {coins} Coins!');
+            setValue('topGifterVoice', advanced.topGifterAnnouncement.voiceId || '');
+        }
+        
+        // Periodic Reminder
+        if (advanced.periodicReminder) {
+            setValue('periodicReminderEnabled', advanced.periodicReminder.enabled || false);
+            setValue('periodicReminderInterval', advanced.periodicReminder.intervalMinutes || 5);
+            setValue('periodicReminderVoice', advanced.periodicReminder.voiceId || '');
+            renderPeriodicReminderMessages(advanced.periodicReminder.messages || []);
+        }
+        
     } catch (error) {
         console.error('Failed to load Event TTS config:', error);
         showNotification(`Failed to load Event TTS config: ${error.message}`, 'error');
     }
+}
+
+/**
+ * Helper: Get specific gift rules from dynamic list
+ */
+function getSpecificGiftRules() {
+    const rules = [];
+    const container = document.getElementById('specificGiftRulesList');
+    if (!container) return rules;
+    
+    const ruleElements = container.querySelectorAll('.gift-rule-item');
+    ruleElements.forEach(el => {
+        const enabled = el.querySelector('.gift-rule-enabled')?.checked || false;
+        const giftName = el.querySelector('.gift-rule-name')?.value || '';
+        const template = el.querySelector('.gift-rule-template')?.value || '';
+        const voiceId = el.querySelector('.gift-rule-voice')?.value || null;
+        
+        if (giftName && template) {
+            rules.push({ enabled, giftName, template, voiceId });
+        }
+    });
+    
+    return rules;
+}
+
+/**
+ * Helper: Get periodic reminder messages from dynamic list
+ */
+function getPeriodicReminderMessages() {
+    const messages = [];
+    const container = document.getElementById('periodicReminderMessagesList');
+    if (!container) return messages;
+    
+    const messageElements = container.querySelectorAll('.reminder-message-item');
+    messageElements.forEach(el => {
+        const message = el.querySelector('.reminder-message-text')?.value || '';
+        if (message) {
+            messages.push(message);
+        }
+    });
+    
+    return messages;
 }
 
 /**
@@ -2175,6 +2369,60 @@ async function saveEventTTSConfig() {
                     enabled: getValue('eventTTSJoinEnabled'),
                     template: getValue('eventTTSJoinTemplate'),
                     cooldownSeconds: getValue('eventTTSJoinCooldown')
+                }
+            },
+            advanced: {
+                // Tiered Gift TTS
+                tieredGiftTTS: {
+                    enabled: getValue('tieredGiftEnabled'),
+                    tiers: {
+                        tier1: {
+                            enabled: getValue('tier1Enabled'),
+                            template: getValue('tier1Template'),
+                            voiceId: getValue('tier1Voice') || null
+                        },
+                        tier2: {
+                            enabled: getValue('tier2Enabled'),
+                            template: getValue('tier2Template'),
+                            voiceId: getValue('tier2Voice') || null
+                        },
+                        tier3: {
+                            enabled: getValue('tier3Enabled'),
+                            template: getValue('tier3Template'),
+                            voiceId: getValue('tier3Voice') || null
+                        },
+                        tier4: {
+                            enabled: getValue('tier4Enabled'),
+                            template: getValue('tier4Template'),
+                            voiceId: getValue('tier4Voice') || null
+                        }
+                    }
+                },
+                // Specific Gift Name Triggers
+                specificGiftTriggers: {
+                    enabled: getValue('specificGiftEnabled'),
+                    rules: getSpecificGiftRules()
+                },
+                // Gift Combo Streak
+                giftComboStreak: {
+                    enabled: getValue('comboStreakEnabled'),
+                    threshold: getValue('comboStreakThreshold'),
+                    timeWindowSeconds: getValue('comboStreakTimeWindow'),
+                    template: getValue('comboStreakTemplate'),
+                    voiceId: getValue('comboStreakVoice') || null
+                },
+                // Top Gifter Announcement
+                topGifterAnnouncement: {
+                    enabled: getValue('topGifterEnabled'),
+                    template: getValue('topGifterTemplate'),
+                    voiceId: getValue('topGifterVoice') || null
+                },
+                // Periodic Reminder
+                periodicReminder: {
+                    enabled: getValue('periodicReminderEnabled'),
+                    intervalMinutes: getValue('periodicReminderInterval'),
+                    messages: getPeriodicReminderMessages(),
+                    voiceId: getValue('periodicReminderVoice') || null
                 }
             }
         };
@@ -2249,7 +2497,27 @@ function setupEventTTSListeners() {
         testBtn.addEventListener('click', testEventTTS);
     }
     
-    // Note: Save is handled by main saveConfig button which we'll extend
+    // Save Event Triggers button
+    const saveEventTriggersBtn = document.getElementById('saveEventTriggersBtn');
+    if (saveEventTriggersBtn) {
+        saveEventTriggersBtn.addEventListener('click', saveEventTTSConfig);
+    }
+    
+    // Add Specific Gift Rule button
+    const addGiftRuleBtn = document.getElementById('addGiftRuleBtn');
+    if (addGiftRuleBtn) {
+        addGiftRuleBtn.addEventListener('click', () => {
+            renderSpecificGiftRules([...getSpecificGiftRules(), { enabled: true, giftName: '', template: '', voiceId: null }]);
+        });
+    }
+    
+    // Add Periodic Reminder Message button
+    const addReminderMessageBtn = document.getElementById('addReminderMessageBtn');
+    if (addReminderMessageBtn) {
+        addReminderMessageBtn.addEventListener('click', () => {
+            renderPeriodicReminderMessages([...getPeriodicReminderMessages(), '']);
+        });
+    }
 }
 
 // ============================================================================
