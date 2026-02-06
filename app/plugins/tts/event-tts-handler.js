@@ -319,7 +319,7 @@ class EventTTSHandler {
         '🔥 {username} ist auf einer {streak}-Gift Combo Streak!';
       
       const text = this._fillTemplate(template, {
-        username: username,
+        username,
         streak: streak.count
       });
 

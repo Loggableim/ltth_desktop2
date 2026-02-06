@@ -2109,7 +2109,7 @@ function renderSpecificGiftRules(rules) {
     
     container.innerHTML = '';
     
-    rules.forEach((rule, index) => {
+    rules.forEach(rule => {
         const ruleHTML = `
             <div class="gift-rule-item bg-gray-700/30 rounded p-3 mb-2">
                 <div class="flex items-center justify-between mb-2">
@@ -2148,7 +2148,7 @@ function renderPeriodicReminderMessages(messages) {
     
     container.innerHTML = '';
     
-    messages.forEach((message, index) => {
+    messages.forEach(message => {
         const messageHTML = `
             <div class="reminder-message-item bg-gray-700/30 rounded p-3 mb-2 flex items-center space-x-2">
                 <input type="text" class="reminder-message-text flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm" placeholder="Message" value="${message || ''}">
