@@ -1,6 +1,16 @@
 /**
  * Event TTS Handler
  * Verarbeitet TikTok Events und generiert TTS-Nachrichten
+ * 
+ * TODO: Future Features (Not in scope for current PR):
+ * - End-of-Stream Summary TTS: Auto-summary at stream end with followers, gifts, top supporter stats
+ * - Conditional Templates: Support {if coins > 100}Wow!{else}Thanks!{endif} logic in templates
+ * - Random Template Pool: Multiple templates per event, randomly selected for variety
+ * - Custom Variable Registry: Allow plugins to register custom variables (streamTitle, uptime, totalViewers)
+ * - Variable Formatters: Support {coins|number}, {username|upper}, {giftCount|ordinal} formatting
+ * - Per-Event Voice Selection: Different voice per event type (deep for gifts, cheerful for follows)
+ * - Per-Tier Voice Escalation: Higher coin tiers get progressively more dramatic voices/effects
+ * - Emotion Injection: Auto-inject Fish.audio emotion markers based on event type
  */
 class EventTTSHandler {
   constructor(ttsPlugin) {
@@ -8,6 +18,16 @@ class EventTTSHandler {
     this.api = ttsPlugin.api;
     this.logger = ttsPlugin.logger;
     this.cooldowns = new Map(); // key: `${userId}:${eventType}` -> timestamp
+    
+    // Gift combo streak tracking
+    this.giftStreaks = new Map(); // key: userId -> { count, lastGiftTime, timeoutId }
+    
+    // Session gifter tracking for top gifter announcements
+    this.sessionGifters = new Map(); // key: userId -> { username, totalCoins }
+    this.currentTopGifter = null; // { userId, username, coins }
+    
+    // Periodic reminder system
+    this.periodicReminderInterval = null;
   }
 
   init() {
@@ -18,6 +38,7 @@ class EventTTSHandler {
     }
     this.logger.info('Initializing Event TTS Handler...');
     this._registerEventHandlers();
+    this._startPeriodicReminders();
     this.logger.info('Event TTS Handler initialized');
   }
 
@@ -46,20 +67,67 @@ class EventTTSHandler {
 
   _handleGift(data) {
     const config = this.tts.config.eventTTS.events.gift;
+    const advancedConfig = this.tts.config.eventTTS.advanced || {};
     const coins = data.coins || data.diamondCount || 0;
+    const username = data.username || data.uniqueId || 'Someone';
+    const nickname = data.nickname || data.username || 'Someone';
+    const giftName = data.giftName || 'a gift';
+    const giftCount = data.repeatCount || data.count || 1;
     
+    // Check specific gift name triggers first (highest priority)
+    if (advancedConfig.specificGiftTriggers?.enabled && advancedConfig.specificGiftTriggers.rules?.length > 0) {
+      const matchingRule = advancedConfig.specificGiftTriggers.rules.find(rule => 
+        rule.enabled && rule.giftName.toLowerCase() === giftName.toLowerCase()
+      );
+      
+      if (matchingRule) {
+        const text = this._fillTemplate(matchingRule.template, {
+          username, nickname, giftName, giftCount, coins
+        });
+        this._queueEventTTS(text, data.userId, username, 'gift-specific', matchingRule.voiceId);
+        this._updateSessionGifter(data.userId, username, coins);
+        this._updateGiftStreak(data.userId, username);
+        return;
+      }
+    }
+    
+    // Check tiered gift TTS (second priority)
+    if (advancedConfig.tieredGiftTTS?.enabled) {
+      const tiers = advancedConfig.tieredGiftTTS.tiers || {};
+      let tier = null;
+      
+      if (coins >= 1000 && tiers.tier4?.enabled) {
+        tier = tiers.tier4;
+      } else if (coins >= 100 && tiers.tier3?.enabled) {
+        tier = tiers.tier3;
+      } else if (coins >= 10 && tiers.tier2?.enabled) {
+        tier = tiers.tier2;
+      } else if (coins >= 1 && tiers.tier1?.enabled) {
+        tier = tiers.tier1;
+      }
+      
+      if (tier) {
+        const text = this._fillTemplate(tier.template, {
+          username, nickname, giftName, giftCount, coins
+        });
+        this._queueEventTTS(text, data.userId, username, 'gift-tiered', tier.voiceId);
+        this._updateSessionGifter(data.userId, username, coins);
+        this._updateGiftStreak(data.userId, username);
+        return;
+      }
+    }
+    
+    // Default gift handling (backwards compatibility)
     if (coins < (config.minCoins || 0)) return;
     if (!this._checkCooldown(data.userId, 'gift', config.cooldownSeconds)) return;
 
     const text = this._fillTemplate(config.template, {
-      username: data.username || data.uniqueId || 'Someone',
-      nickname: data.nickname || data.username || 'Someone',
-      giftName: data.giftName || 'a gift',
-      giftCount: data.repeatCount || data.count || 1,
-      coins: coins
+      username, nickname, giftName, giftCount, coins
     });
 
-    this._queueEventTTS(text, data.userId, data.username, 'gift');
+    this._queueEventTTS(text, data.userId, username, 'gift');
+    this._updateSessionGifter(data.userId, username, coins);
+    this._updateGiftStreak(data.userId, username);
   }
 
   _handleFollow(data) {
@@ -149,7 +217,7 @@ class EventTTSHandler {
     return true;
   }
 
-  _queueEventTTS(text, userId, username, eventType) {
+  _queueEventTTS(text, userId, username, eventType, voiceOverride = null) {
     const config = this.tts.config.eventTTS;
 
     const ttsRequest = {
@@ -157,7 +225,7 @@ class EventTTSHandler {
       userId: userId || 'event-system',
       username: username || 'Event',
       source: `event:${eventType}`,
-      voiceId: config.voice || undefined,
+      voiceId: voiceOverride || config.voice || undefined,
       volume: config.volume || 80,
       priority: config.priorityOverChat ? 'high' : 'normal'
     };
@@ -169,8 +237,158 @@ class EventTTSHandler {
     this.logger.debug(`Event TTS queued: ${eventType} - ${text}`);
   }
 
+  /**
+   * Update session gifter tracking for top gifter announcements
+   */
+  _updateSessionGifter(userId, username, coins) {
+    const advancedConfig = this.tts.config.eventTTS.advanced || {};
+    if (!advancedConfig.topGifterAnnouncement?.enabled) return;
+
+    // Update or create gifter entry
+    if (!this.sessionGifters.has(userId)) {
+      this.sessionGifters.set(userId, { username, totalCoins: 0 });
+    }
+    
+    const gifter = this.sessionGifters.get(userId);
+    gifter.totalCoins += coins;
+    gifter.username = username; // Update in case username changed
+
+    // Check if this user is now the top gifter
+    let newTopGifter = null;
+    let maxCoins = 0;
+
+    for (const [uid, data] of this.sessionGifters.entries()) {
+      if (data.totalCoins > maxCoins) {
+        maxCoins = data.totalCoins;
+        newTopGifter = { userId: uid, username: data.username, coins: data.totalCoins };
+      }
+    }
+
+    // Announce if top gifter changed
+    if (newTopGifter && (!this.currentTopGifter || newTopGifter.userId !== this.currentTopGifter.userId)) {
+      const previousTopGifter = this.currentTopGifter ? this.currentTopGifter.username : 'None';
+      this.currentTopGifter = newTopGifter;
+
+      const template = advancedConfig.topGifterAnnouncement.template || 
+        '🏆 {username} ist jetzt der Top Supporter mit {coins} Coins!';
+      
+      const text = this._fillTemplate(template, {
+        username: newTopGifter.username,
+        coins: newTopGifter.coins,
+        previousTopGifter: previousTopGifter
+      });
+
+      this._queueEventTTS(text, newTopGifter.userId, newTopGifter.username, 'top-gifter', advancedConfig.topGifterAnnouncement.voiceId);
+    }
+  }
+
+  /**
+   * Update gift combo streak tracking
+   */
+  _updateGiftStreak(userId, username) {
+    const advancedConfig = this.tts.config.eventTTS.advanced || {};
+    if (!advancedConfig.giftComboStreak?.enabled) return;
+
+    const threshold = advancedConfig.giftComboStreak.threshold || 3;
+    const timeWindow = (advancedConfig.giftComboStreak.timeWindowSeconds || 10) * 1000;
+    const now = Date.now();
+
+    // Get or create streak data
+    let streak = this.giftStreaks.get(userId);
+    
+    if (!streak || (now - streak.lastGiftTime) > timeWindow) {
+      // Start new streak
+      streak = { count: 1, lastGiftTime: now, timeoutId: null };
+    } else {
+      // Continue streak
+      streak.count++;
+      streak.lastGiftTime = now;
+      
+      // Clear existing timeout
+      if (streak.timeoutId) {
+        clearTimeout(streak.timeoutId);
+      }
+    }
+
+    // Store updated streak
+    this.giftStreaks.set(userId, streak);
+
+    // Announce if threshold reached
+    if (streak.count === threshold) {
+      const template = advancedConfig.giftComboStreak.template || 
+        '🔥 {username} ist auf einer {streak}-Gift Combo Streak!';
+      
+      const text = this._fillTemplate(template, {
+        username: username,
+        streak: streak.count
+      });
+
+      this._queueEventTTS(text, userId, username, 'gift-streak', advancedConfig.giftComboStreak.voiceId);
+    }
+
+    // Set timeout to reset streak
+    streak.timeoutId = setTimeout(() => {
+      this.giftStreaks.delete(userId);
+    }, timeWindow);
+  }
+
+  /**
+   * Start periodic reminder system
+   */
+  _startPeriodicReminders() {
+    const advancedConfig = this.tts.config.eventTTS.advanced || {};
+    const periodicConfig = advancedConfig.periodicReminder;
+
+    // Clear existing interval
+    if (this.periodicReminderInterval) {
+      clearInterval(this.periodicReminderInterval);
+      this.periodicReminderInterval = null;
+    }
+
+    if (!periodicConfig?.enabled) return;
+
+    const intervalMinutes = periodicConfig.intervalMinutes || 5;
+    const messages = periodicConfig.messages || [];
+
+    if (messages.length === 0) {
+      this.logger.warn('Periodic reminder enabled but no messages configured');
+      return;
+    }
+
+    this.logger.info(`Starting periodic reminders: every ${intervalMinutes} minutes`);
+
+    this.periodicReminderInterval = setInterval(() => {
+      // Select random message from pool
+      const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+      
+      this._queueEventTTS(randomMessage, 'periodic-reminder', 'System', 'periodic-reminder', periodicConfig.voiceId);
+      
+      this.logger.debug(`Periodic reminder announced: ${randomMessage}`);
+    }, intervalMinutes * 60 * 1000);
+  }
+
   destroy() {
+    // Clear all cooldowns
     this.cooldowns.clear();
+    
+    // Clear gift streaks and their timeouts
+    for (const streak of this.giftStreaks.values()) {
+      if (streak.timeoutId) {
+        clearTimeout(streak.timeoutId);
+      }
+    }
+    this.giftStreaks.clear();
+    
+    // Clear session gifters
+    this.sessionGifters.clear();
+    this.currentTopGifter = null;
+    
+    // Clear periodic reminder interval
+    if (this.periodicReminderInterval) {
+      clearInterval(this.periodicReminderInterval);
+      this.periodicReminderInterval = null;
+    }
+    
     this.logger.info('Event TTS Handler destroyed');
   }
 }
