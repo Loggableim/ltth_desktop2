@@ -357,9 +357,22 @@ class EventTTSHandler {
 
     this.logger.info(`Starting periodic reminders: every ${intervalMinutes} minutes`);
 
+    // Track last message to avoid consecutive repeats
+    let lastMessageIndex = -1;
+
     this.periodicReminderInterval = setInterval(() => {
-      // Select random message from pool
-      const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+      // Select random message different from last one (if multiple messages available)
+      let randomIndex;
+      if (messages.length === 1) {
+        randomIndex = 0;
+      } else {
+        do {
+          randomIndex = Math.floor(Math.random() * messages.length);
+        } while (randomIndex === lastMessageIndex);
+        lastMessageIndex = randomIndex;
+      }
+      
+      const randomMessage = messages[randomIndex];
       
       this._queueEventTTS(randomMessage, 'periodic-reminder', 'System', 'periodic-reminder', periodicConfig.voiceId);
       

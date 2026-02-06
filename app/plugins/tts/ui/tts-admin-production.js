@@ -2043,6 +2043,64 @@ function setupEventListeners() {
  * Load Event TTS configuration
  */
 /**
+ * Add a single specific gift rule to the list (optimized - no full rebuild)
+ */
+function addSpecificGiftRule(rule) {
+    const container = document.getElementById('specificGiftRulesList');
+    if (!container) return;
+    
+    const ruleHTML = `
+        <div class="gift-rule-item bg-gray-700/30 rounded p-3 mb-2">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" class="gift-rule-enabled w-4 h-4" ${rule.enabled ? 'checked' : ''}>
+                    <input type="text" class="gift-rule-name bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Gift Name (e.g. Rose)" value="${rule.giftName || ''}">
+                </div>
+                <button class="remove-gift-rule bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">Remove</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <input type="text" class="gift-rule-template bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Template" value="${rule.template || ''}">
+                <select class="gift-rule-voice bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm">
+                    <option value="">Default Voice</option>
+                    ${getVoiceOptionsHTML(rule.voiceId)}
+                </select>
+            </div>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', ruleHTML);
+    
+    // Add event listener for the remove button
+    const lastItem = container.lastElementChild;
+    const removeBtn = lastItem.querySelector('.remove-gift-rule');
+    removeBtn.addEventListener('click', () => {
+        lastItem.remove();
+    });
+}
+
+/**
+ * Add a single periodic reminder message to the list (optimized - no full rebuild)
+ */
+function addPeriodicReminderMessage(message) {
+    const container = document.getElementById('periodicReminderMessagesList');
+    if (!container) return;
+    
+    const messageHTML = `
+        <div class="reminder-message-item bg-gray-700/30 rounded p-3 mb-2 flex items-center space-x-2">
+            <input type="text" class="reminder-message-text flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm" placeholder="Message" value="${message || ''}">
+            <button class="remove-reminder-message bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-sm">Remove</button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', messageHTML);
+    
+    // Add event listener for the remove button
+    const lastItem = container.lastElementChild;
+    const removeBtn = lastItem.querySelector('.remove-reminder-message');
+    removeBtn.addEventListener('click', () => {
+        lastItem.remove();
+    });
+}
+
+/**
  * Render specific gift rules list
  */
 function renderSpecificGiftRules(rules) {
@@ -2507,7 +2565,7 @@ function setupEventTTSListeners() {
     const addGiftRuleBtn = document.getElementById('addGiftRuleBtn');
     if (addGiftRuleBtn) {
         addGiftRuleBtn.addEventListener('click', () => {
-            renderSpecificGiftRules([...getSpecificGiftRules(), { enabled: true, giftName: '', template: '', voiceId: null }]);
+            addSpecificGiftRule({ enabled: true, giftName: '', template: '', voiceId: null });
         });
     }
     
@@ -2515,7 +2573,7 @@ function setupEventTTSListeners() {
     const addReminderMessageBtn = document.getElementById('addReminderMessageBtn');
     if (addReminderMessageBtn) {
         addReminderMessageBtn.addEventListener('click', () => {
-            renderPeriodicReminderMessages([...getPeriodicReminderMessages(), '']);
+            addPeriodicReminderMessage('');
         });
     }
 }
