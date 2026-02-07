@@ -27,7 +27,7 @@ var assets embed.FS
 // To enable: run build script with embedded files
 const (
 	// Launcher version
-	launcherVersion = "1.3.2"
+	launcherVersion = "1.4.0"
 	
 	// GitHub repository settings
 	githubOwner  = "Loggableim"
@@ -60,12 +60,16 @@ type GitHubReleaseAsset struct {
 }
 
 type StandaloneLauncher struct {
-	baseDir    string
-	progress   int
-	status     string
-	clients    map[chan string]bool
-	logger     *log.Logger
-	skipUpdate bool
+	baseDir           string
+	progress          int
+	status            string
+	clients           map[chan string]bool
+	logger            *log.Logger
+	skipUpdate        bool
+	installChoiceChan chan string
+	updateChoiceChan  chan bool
+	pendingRelease    *GitHubRelease
+	settings          *Settings
 }
 
 // VersionInfo stores version information
@@ -75,12 +79,32 @@ type VersionInfo struct {
 	LastChecked   string `json:"last_checked"`
 }
 
+// Settings stores launcher settings
+type Settings struct {
+	AutoUpdate bool `json:"auto_update"`
+}
+
+// Profile represents a TikTok profile
+type Profile struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	TikTokUsername string `json:"tiktok_username"`
+}
+
+// ProfilesConfig stores profile configuration
+type ProfilesConfig struct {
+	Active   string    `json:"active"`
+	Profiles []Profile `json:"profiles"`
+}
+
 func NewStandaloneLauncher() *StandaloneLauncher {
 	return &StandaloneLauncher{
-		status:   "Initialisiere Standalone Launcher...",
-		progress: 0,
-		clients:  make(map[chan string]bool),
-		logger:   log.New(os.Stdout, "[LTTH Standalone] ", log.LstdFlags),
+		status:            "Initialisiere Standalone Launcher...",
+		progress:          0,
+		clients:           make(map[chan string]bool),
+		logger:            log.New(os.Stdout, "[LTTH Standalone] ", log.LstdFlags),
+		installChoiceChan: make(chan string, 1),
+		updateChoiceChan:  make(chan bool, 1),
 	}
 }
 
@@ -168,6 +192,165 @@ func (sl *StandaloneLauncher) handleSSE(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
+}
+
+// handleInstallPrompt handles installation path choice from GUI
+func (sl *StandaloneLauncher) handleInstallPrompt(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	var req struct {
+		Choice string `json:"choice"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	
+	// Send choice to channel
+	select {
+	case sl.installChoiceChan <- req.Choice:
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	default:
+		http.Error(w, "Channel full", http.StatusInternalServerError)
+	}
+}
+
+// handleUpdatePrompt handles update confirmation from GUI
+func (sl *StandaloneLauncher) handleUpdatePrompt(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	var req struct {
+		Accept bool `json:"accept"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	
+	// Send choice to channel
+	select {
+	case sl.updateChoiceChan <- req.Accept:
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	default:
+		http.Error(w, "Channel full", http.StatusInternalServerError)
+	}
+}
+
+// handleGetRelease returns pending release information
+func (sl *StandaloneLauncher) handleGetRelease(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if sl.pendingRelease != nil {
+		json.NewEncoder(w).Encode(sl.pendingRelease)
+	} else {
+		json.NewEncoder(w).Encode(map[string]interface{}{"release": nil})
+	}
+}
+
+// handleSettings handles GET/POST settings
+func (sl *StandaloneLauncher) handleSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	if r.Method == http.MethodGet {
+		if sl.settings == nil {
+			settings, err := sl.loadSettings()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			sl.settings = settings
+		}
+		json.NewEncoder(w).Encode(sl.settings)
+		return
+	}
+	
+	if r.Method == http.MethodPost {
+		var newSettings Settings
+		if err := json.NewDecoder(r.Body).Decode(&newSettings); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		
+		if err := sl.saveSettings(&newSettings); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		sl.settings = &newSettings
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		return
+	}
+	
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// handleProfiles handles GET/POST profiles
+func (sl *StandaloneLauncher) handleProfiles(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	if r.Method == http.MethodGet {
+		profiles, err := sl.loadProfiles()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(profiles)
+		return
+	}
+	
+	if r.Method == http.MethodPost {
+		var req struct {
+			Active string `json:"active"`
+		}
+		
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		
+		profiles, err := sl.loadProfiles()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		profiles.Active = req.Active
+		
+		if err := sl.saveProfiles(profiles); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		return
+	}
+	
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// handleCheckUpdate checks for updates and returns the latest release info
+func (sl *StandaloneLauncher) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	release, updateAvailable, err := sl.checkForUpdates()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"updateAvailable": updateAvailable,
+		"release":         release,
+	})
 }
 
 // Get latest release from GitHub
@@ -916,8 +1099,8 @@ func (sl *StandaloneLauncher) getInstallDir() (string, error) {
 		return systemInstallDir, nil
 	}
 	
-	// First installation - prompt user for installation path
-	installDir, err := sl.promptInstallationPath(exeDir, systemInstallDir)
+	// First installation - wait for user choice via GUI
+	installDir, err := sl.waitForInstallationPath(exeDir, systemInstallDir)
 	if err != nil {
 		return "", err
 	}
@@ -931,42 +1114,33 @@ func (sl *StandaloneLauncher) getInstallDir() (string, error) {
 	return installDir, nil
 }
 
-// promptInstallationPath asks user to choose installation directory
-func (sl *StandaloneLauncher) promptInstallationPath(exeDir, systemDir string) (string, error) {
-	fmt.Println("\n================================================")
-	fmt.Println("  Erstinstallation - Installationspfad wählen")
-	fmt.Println("================================================")
-	fmt.Println()
-	fmt.Println("Wo möchten Sie LTTH installieren?")
-	fmt.Println()
-	fmt.Printf("[1] Portable Installation (im aktuellen Verzeichnis)\n")
-	fmt.Printf("    → %s\n", exeDir)
-	fmt.Println("    Hinweis: Alle Daten werden im Programmverzeichnis gespeichert")
-	fmt.Println()
-	fmt.Printf("[2] System-Installation (empfohlen)\n")
-	fmt.Printf("    → %s\n", systemDir)
-	fmt.Println("    Hinweis: Daten werden im Benutzerverzeichnis gespeichert")
-	fmt.Println()
-	fmt.Print("Ihre Wahl (1 oder 2): ")
+// waitForInstallationPath waits for user to choose installation directory via GUI
+func (sl *StandaloneLauncher) waitForInstallationPath(exeDir, systemDir string) (string, error) {
+	sl.logger.Println("Waiting for installation path choice from GUI...")
 	
-	var choice string
-	fmt.Scanln(&choice)
-	
-	switch choice {
-	case "1":
-		// Create portable.txt marker
-		portableMarker := filepath.Join(exeDir, "portable.txt")
-		if err := os.WriteFile(portableMarker, []byte("Portable installation marker"), 0644); err != nil {
-			return "", fmt.Errorf("Konnte portable.txt nicht erstellen: %v", err)
+	// Wait for choice from GUI
+	select {
+	case choice := <-sl.installChoiceChan:
+		switch choice {
+		case "portable":
+			// Create portable.txt marker
+			portableMarker := filepath.Join(exeDir, "portable.txt")
+			if err := os.WriteFile(portableMarker, []byte("Portable installation marker"), 0644); err != nil {
+				return "", fmt.Errorf("Konnte portable.txt nicht erstellen: %v", err)
+			}
+			sl.logger.Println("Portable mode selected")
+			return exeDir, nil
+		case "system":
+			sl.logger.Println("System installation selected")
+			return systemDir, nil
+		default:
+			// Default to system installation
+			sl.logger.Println("Invalid choice, defaulting to system installation")
+			return systemDir, nil
 		}
-		sl.logger.Println("Portable mode selected")
-		return exeDir, nil
-	case "2":
-		sl.logger.Println("System installation selected")
-		return systemDir, nil
-	default:
-		// Default to system installation
-		sl.logger.Println("Invalid choice, defaulting to system installation")
+	case <-time.After(5 * time.Minute):
+		// Timeout after 5 minutes - default to system installation
+		sl.logger.Println("Installation path choice timed out, defaulting to system installation")
 		return systemDir, nil
 	}
 }
@@ -1006,6 +1180,75 @@ func (sl *StandaloneLauncher) saveVersionInfo(version string) error {
 	
 	versionFile := filepath.Join(sl.baseDir, "version.json")
 	return os.WriteFile(versionFile, data, 0644)
+}
+
+// loadSettings loads launcher settings from launcher-settings.json
+func (sl *StandaloneLauncher) loadSettings() (*Settings, error) {
+	settingsFile := filepath.Join(sl.baseDir, "launcher-settings.json")
+	
+	data, err := os.ReadFile(settingsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return default settings
+			return &Settings{AutoUpdate: true}, nil
+		}
+		return nil, err
+	}
+	
+	var settings Settings
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return nil, err
+	}
+	
+	return &settings, nil
+}
+
+// saveSettings saves launcher settings to launcher-settings.json
+func (sl *StandaloneLauncher) saveSettings(settings *Settings) error {
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	
+	settingsFile := filepath.Join(sl.baseDir, "launcher-settings.json")
+	return os.WriteFile(settingsFile, data, 0644)
+}
+
+// loadProfiles loads profile configuration from profiles.json
+func (sl *StandaloneLauncher) loadProfiles() (*ProfilesConfig, error) {
+	profilesFile := filepath.Join(sl.baseDir, "profiles.json")
+	
+	data, err := os.ReadFile(profilesFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return default profile config
+			return &ProfilesConfig{
+				Active: "default",
+				Profiles: []Profile{
+					{ID: "default", Name: "Standard-Profil", TikTokUsername: ""},
+				},
+			}, nil
+		}
+		return nil, err
+	}
+	
+	var profiles ProfilesConfig
+	if err := json.Unmarshal(data, &profiles); err != nil {
+		return nil, err
+	}
+	
+	return &profiles, nil
+}
+
+// saveProfiles saves profile configuration to profiles.json
+func (sl *StandaloneLauncher) saveProfiles(profiles *ProfilesConfig) error {
+	data, err := json.MarshalIndent(profiles, "", "  ")
+	if err != nil {
+		return err
+	}
+	
+	profilesFile := filepath.Join(sl.baseDir, "profiles.json")
+	return os.WriteFile(profilesFile, data, 0644)
 }
 
 // compareVersions compares two semantic version strings
@@ -1087,60 +1330,36 @@ func (sl *StandaloneLauncher) checkForUpdates() (*GitHubRelease, bool, error) {
 	return release, updateAvailable, nil
 }
 
-// promptForUpdate asks user if they want to update
-func (sl *StandaloneLauncher) promptForUpdate(release *GitHubRelease) bool {
-	fmt.Println("\n================================================")
-	fmt.Println("  🎉 Neues Update verfügbar!")
-	fmt.Println("================================================")
-	fmt.Printf("\nNeue Version: %s\n", release.TagName)
-	fmt.Printf("Veröffentlicht: %s\n", release.PublishedAt)
-	fmt.Printf("Name: %s\n", release.Name)
-	fmt.Println("\nMöchten Sie jetzt aktualisieren?")
-	fmt.Println()
-	fmt.Println("[1] Ja, jetzt aktualisieren (empfohlen)")
-	fmt.Println("[2] Nein, überspringen")
-	fmt.Println()
-	fmt.Print("Ihre Wahl (1 oder 2): ")
+// waitForUpdateDecision waits for user to confirm update via GUI
+func (sl *StandaloneLauncher) waitForUpdateDecision() bool {
+	sl.logger.Println("Waiting for update decision from GUI...")
 	
-	var choice string
-	fmt.Scanln(&choice)
-	
-	if choice == "1" {
-		sl.logger.Println("User accepted update")
-		return true
+	// Wait for choice from GUI
+	select {
+	case accept := <-sl.updateChoiceChan:
+		if accept {
+			sl.logger.Println("User accepted update")
+			return true
+		}
+		sl.logger.Println("User skipped update")
+		return false
+	case <-time.After(5 * time.Minute):
+		// Timeout after 5 minutes - skip update
+		sl.logger.Println("Update decision timed out, skipping update")
+		return false
 	}
-	
-	sl.logger.Println("User skipped update")
-	return false
 }
 
 func (sl *StandaloneLauncher) run() error {
-	// Determine installation directory (portable or installer mode)
-	baseDir, err := sl.getInstallDir()
-	if err != nil {
-		return err
-	}
-	
-	sl.baseDir = baseDir
-	sl.logger.Printf("Installation directory: %s\n", sl.baseDir)
-	
-	// Check for updates
-	release, updateAvailable, err := sl.checkForUpdates()
-	if err != nil {
-		sl.logger.Printf("Warning: Could not check for updates: %v\n", err)
-		// Continue anyway - don't block installation
-	} else if updateAvailable && release != nil {
-		// Ask user if they want to update
-		if sl.promptForUpdate(release) {
-			sl.skipUpdate = false
-		} else {
-			sl.skipUpdate = true
-		}
-	}
-	
-	// Start HTTP server in background
+	// Start HTTP server FIRST (before any prompts)
 	http.HandleFunc("/", sl.serveSplash)
 	http.HandleFunc("/events", sl.handleSSE)
+	http.HandleFunc("/api/install-prompt", sl.handleInstallPrompt)
+	http.HandleFunc("/api/update-prompt", sl.handleUpdatePrompt)
+	http.HandleFunc("/api/release", sl.handleGetRelease)
+	http.HandleFunc("/api/settings", sl.handleSettings)
+	http.HandleFunc("/api/profiles", sl.handleProfiles)
+	http.HandleFunc("/api/check-update", sl.handleCheckUpdate)
 	
 	go func() {
 		sl.logger.Println("Starting web server on :8765")
@@ -1153,9 +1372,48 @@ func (sl *StandaloneLauncher) run() error {
 	time.Sleep(500 * time.Millisecond)
 	
 	// Open browser to splash screen
-	err = browser.OpenURL("http://localhost:8765")
+	err := browser.OpenURL("http://localhost:8765")
 	if err != nil {
 		sl.logger.Printf("Failed to open browser: %v\n", err)
+	}
+	
+	// Determine installation directory (this may wait for GUI input on first run)
+	baseDir, err := sl.getInstallDir()
+	if err != nil {
+		return err
+	}
+	
+	sl.baseDir = baseDir
+	sl.logger.Printf("Installation directory: %s\n", sl.baseDir)
+	
+	// Load settings
+	settings, err := sl.loadSettings()
+	if err != nil {
+		sl.logger.Printf("Warning: Could not load settings: %v\n", err)
+		settings = &Settings{AutoUpdate: true}
+	}
+	sl.settings = settings
+	
+	// Check for updates
+	release, updateAvailable, err := sl.checkForUpdates()
+	if err != nil {
+		sl.logger.Printf("Warning: Could not check for updates: %v\n", err)
+		// Continue anyway - don't block installation
+	} else if updateAvailable && release != nil {
+		sl.pendingRelease = release
+		
+		// Check auto-update setting
+		if sl.settings.AutoUpdate {
+			sl.logger.Println("Auto-update enabled, updating automatically...")
+			sl.skipUpdate = false
+		} else {
+			// Wait for user decision via GUI
+			if sl.waitForUpdateDecision() {
+				sl.skipUpdate = false
+			} else {
+				sl.skipUpdate = true
+			}
+		}
 	}
 	
 	// Download repository (only if not skipping update or first install)
@@ -1196,18 +1454,10 @@ func (sl *StandaloneLauncher) run() error {
 }
 
 func main() {
-	fmt.Println("================================================")
-	fmt.Println("  LTTH Standalone Launcher")
-	fmt.Println("  https://ltth.app")
-	fmt.Println("================================================")
-	fmt.Println()
-	
 	sl := NewStandaloneLauncher()
 	
 	if err := sl.run(); err != nil {
-		fmt.Fprintf(os.Stderr, "\n❌ FEHLER: %v\n", err)
-		fmt.Println("\nDrücke Enter zum Beenden...")
-		fmt.Scanln()
+		sl.logger.Printf("❌ FEHLER: %v\n", err)
 		os.Exit(1)
 	}
 }
