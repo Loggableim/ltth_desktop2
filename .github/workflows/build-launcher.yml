@@ -11,6 +11,10 @@ jobs:
     name: Build Launcher Binaries
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write  # Required for creating releases and uploading assets
+      actions: read    # Required for workflow access
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
