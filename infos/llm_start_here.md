@@ -30,7 +30,7 @@ Before making any changes, read these files in order:
 | **Name** | PupCid's Little TikTool Helper (LTTH) |
 | **Type** | Electron Desktop App + Node.js Backend |
 | **License** | CC-BY-NC-4.0 (Non-Commercial) |
-| **Version** | 1.3.0 |
+| **Version** | 1.3.2 |
 | **Developer** | Solo developer + Claude AI |
 | **Stack** | Node.js 18-23, Express, Socket.IO, SQLite, Electron 33+ |
 | **Architecture** | Plugin-based modular system |

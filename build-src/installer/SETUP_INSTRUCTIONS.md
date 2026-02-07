@@ -183,7 +183,7 @@ Once tested, you can distribute `LTTH-Setup-1.2.0.exe` to users!
 
 Edit `build-src/installer/ltth-installer.nsi` line 18:
 ```nsis
-!define PRODUCT_VERSION "1.3.0"  ; Change this
+!define PRODUCT_VERSION "1.3.2"  ; Change this
 ```
 
 Then rebuild.

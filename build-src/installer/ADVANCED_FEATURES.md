@@ -174,7 +174,7 @@ To add a new language:
    - Message: "Upgrade to version 1.2.0?"
    - Action: Upgrade with data preservation
 
-3. **Newer Version (1.3.0 → 1.2.0)**
+3. **Newer Version (1.3.2 → 1.2.0)**
    - Message: "Downgrade to version 1.2.0?"
    - Action: Downgrade with warning
 
