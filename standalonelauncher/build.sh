@@ -39,6 +39,22 @@ else
     echo ""
 fi
 
+# Before build, ensure .syso files exist
+if [ ! -f "rsrc_windows_amd64.syso" ]; then
+    echo "[PRE] Generating Windows resource files..."
+    # Install go-winres if not available
+    if ! command -v go-winres &> /dev/null; then
+        echo "WARNING: go-winres not installed. Installing..."
+        go install github.com/tc-hib/go-winres@latest
+    fi
+    # Generate .syso files
+    go-winres make || {
+        echo "ERROR: Failed to generate .syso files"
+        exit 1
+    }
+    echo ""
+fi
+
 # Get dependencies
 echo "[1/4] Downloading dependencies..."
 go mod download || {

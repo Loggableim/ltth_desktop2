@@ -34,32 +34,44 @@
         }
 
         .header {
-            text-align: center;
-            padding: 2rem 1rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px 20px;
             background: rgba(0, 0, 0, 0.3);
             border-bottom: 2px solid var(--accent-pink);
             box-shadow: var(--glow-pink);
         }
 
         .logo {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            margin: 0 auto 1rem;
-            box-shadow: var(--glow-pink);
-            animation: pulse 3s ease-in-out infinite;
+            max-height: 60px;
+            width: auto;
+            object-fit: contain;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            animation: none !important;
+            clip-path: none !important;
+            -webkit-clip-path: none !important;
+            margin: 0;
+            padding: 0;
         }
 
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+        .header-text {
+            flex: 1;
         }
 
         .title {
-            font-size: 2rem;
+            font-size: 1.3em;
             font-weight: bold;
-            margin-bottom: 0.5rem;
+            margin: 0;
             text-shadow: 0 0 10px var(--accent-pink);
+        }
+
+        .subtitle {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin: 2px 0 0 0;
         }
 
         .version {
@@ -440,8 +452,10 @@
 <body>
     <div class="header">
         <img class="logo" id="logo" src="" alt="LTTH Logo">
-        <div class="title">{{.Title}}</div>
-        <div class="version">Version {{.Version}}</div>
+        <div class="header-text">
+            <div class="title">{{.Title}}</div>
+            <div class="subtitle">Version {{.Version}} – PupCid's Little TikTool Helper</div>
+        </div>
     </div>
 
     <div class="tabs">
@@ -470,45 +484,66 @@
             <div class="grid">
                 <div class="card">
                     <div class="card-title">
-                        <span class="status-indicator status-pending" id="status-tiktok"></span>
-                        TikTok Live API
+                        <span class="status-indicator status-pending" id="status-eulerstream"></span>
+                        Eulerstream API
                     </div>
-                    <p>TikTok LIVE Connector für Echtzeit-Stream-Events</p>
+                    <p>TikTok LIVE Verbindung via WebSocket (HAUPT-API)<br><a href="https://www.eulerstream.com" target="_blank" style="color: var(--accent-pink);">www.eulerstream.com</a></p>
+                </div>
+                <div class="card">
+                    <div class="card-title">
+                        <span class="status-indicator status-pending" id="status-tts"></span>
+                        TikTok TTS API
+                    </div>
+                    <p>75+ TikTok-Stimmen für Sprachausgabe (SessionID-basiert)</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">
+                        <span class="status-indicator status-pending" id="status-obs"></span>
+                        OBS WebSocket v5
+                    </div>
+                    <p>Szenen, Sources, Filter steuern (Port 4455)</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">
+                        <span class="status-indicator status-pending" id="status-vrchat"></span>
+                        VRChat OSC
+                    </div>
+                    <p>Avatar-Parameter, Gesten, Aktionen (UDP Port 9000/9001)</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">
+                        <span class="status-indicator status-pending" id="status-myinstants"></span>
+                        MyInstants
+                    </div>
+                    <p>100.000+ Sounds, Suche, Trending (Scraping-basiert)</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">
+                        <span class="status-indicator status-pending" id="status-socketio"></span>
+                        Socket.IO
+                    </div>
+                    <p>Dashboard ↔ Server Echtzeit-Events</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">
+                        <span class="status-indicator status-pending" id="status-sqlite"></span>
+                        SQLite (better-sqlite3)
+                    </div>
+                    <p>WAL Mode, Einstellungen, Events (Lokale Datenbank)</p>
                 </div>
                 <div class="card">
                     <div class="card-title">
                         <span class="status-indicator status-pending" id="status-github"></span>
                         GitHub API
                     </div>
-                    <p>Automatische Updates und Release-Verwaltung</p>
+                    <p>Automatische Update-Prüfung und Release-Verwaltung</p>
                 </div>
                 <div class="card">
                     <div class="card-title">
                         <span class="status-indicator status-pending" id="status-nodejs"></span>
-                        Node.js Runtime
+                        Node.js v20 LTS
                     </div>
-                    <p>JavaScript Runtime Environment</p>
-                </div>
-                <div class="card">
-                    <div class="card-title">
-                        <span class="status-indicator status-pending" id="status-npm"></span>
-                        npm Package Manager
-                    </div>
-                    <p>Abhängigkeits-Verwaltung</p>
-                </div>
-                <div class="card">
-                    <div class="card-title">
-                        <span class="status-indicator status-pending" id="status-tikfinity"></span>
-                        TikFinity
-                    </div>
-                    <p>Erweiterte TikTok Streaming-Funktionen</p>
-                </div>
-                <div class="card">
-                    <div class="card-title">
-                        <span class="status-indicator status-pending" id="status-obs"></span>
-                        OBS WebSocket
-                    </div>
-                    <p>OBS Studio Integration & Steuerung</p>
+                    <p>Backend-Runtime, portable Installation</p>
                 </div>
             </div>
         </div>
