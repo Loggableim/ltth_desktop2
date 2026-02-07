@@ -1,10 +1,14 @@
 # Icon Embedding for Standalone Launcher
 
-This document explains how the LTTH launcher icon is embedded into Windows executables.
+This document explains how the LTTH launcher icon and splash screen logo are embedded into the standalone launcher.
 
 ## Overview
 
-The standalone launcher uses the **OPEN BETA** logo from `/images/OPEN BETA.jpg` as its application icon. This icon is automatically embedded into Windows executables during the build process.
+The standalone launcher uses:
+- **mini-icon.png** from `/images/logos_neu/icons/mini-icon.png` as the application icon (displayed in Windows Explorer, taskbar, etc.)
+- **OPEN BETA.jpg** from `/images/OPEN BETA.jpg` as the splash screen logo (displayed when the launcher starts)
+
+The icon is automatically embedded into Windows executables during the build process.
 
 ## How It Works
 
@@ -53,23 +57,42 @@ GOOS=windows GOARCH=amd64 go build -o launcher.exe -ldflags "-H windowsgui -s -w
 
 The `-H windowsgui` flag creates a GUI application (no console window).
 
-## Updating the Icon
+## Updating the Icon and Splash Logo
 
-To update the launcher icon:
+### Updating the Launcher Icon
 
-1. Replace the source image at `/images/OPEN BETA.jpg`
+To update the launcher icon (mini-icon.png):
+
+1. Replace the source image at `/images/logos_neu/icons/mini-icon.png`
 
 2. Regenerate icon files:
    ```bash
    cd standalonelauncher
    
    # Convert to ICO and PNG formats
-   convert "../images/OPEN BETA.jpg" -resize 1024x1024! icon.png
-   convert "../images/OPEN BETA.jpg" -resize 256x256! -define icon:auto-resize="256,128,64,48,32,16" icon.ico
+   convert "../images/logos_neu/icons/mini-icon.png" -resize 1024x1024! icon.png
+   convert "../images/logos_neu/icons/mini-icon.png" -resize 256x256! -define icon:auto-resize="256,128,64,48,32,16" icon.ico
    
    # Update winres icons
-   convert "../images/OPEN BETA.jpg" -resize 256x256! winres/icon.png
-   convert "../images/OPEN BETA.jpg" -resize 16x16! winres/icon16.png
+   convert "../images/logos_neu/icons/mini-icon.png" -resize 256x256! winres/icon.png
+   convert "../images/logos_neu/icons/mini-icon.png" -resize 16x16! winres/icon16.png
+   ```
+
+### Updating the Splash Screen Logo
+
+To update the splash screen logo (OPEN BETA.jpg):
+
+1. Replace the source image at `/images/OPEN BETA.jpg`
+
+2. Run the update script:
+   ```bash
+   cd standalonelauncher
+   python3 update_splash_logo.py "../images/OPEN BETA.jpg"
+   ```
+   
+   Or use the default path (../images/OPEN BETA.jpg):
+   ```bash
+   python3 update_splash_logo.py
    ```
 
 3. Regenerate Windows resource files:

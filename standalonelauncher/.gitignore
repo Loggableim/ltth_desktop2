@@ -3,6 +3,9 @@
 !launcher.exe
 !launcher-console.exe
 
+# Allow Linux launcher executable
+!launcher
+
 # Go build artifacts
 *.test
 *.out
