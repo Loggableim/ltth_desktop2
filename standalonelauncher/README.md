@@ -4,19 +4,24 @@ Der offizielle Standalone Launcher für **PupCid's Little TikTool Helper (LTTH)*
 
 ## 📦 Was ist der Standalone Launcher?
 
-Der Standalone Launcher ist eine **kleine, eigenständige Anwendung** (~6-8 MB), die automatisch:
-- ✅ Die neueste Version von LTTH von GitHub herunterlädt (per **Release-ZIP**)
-- ✅ Node.js v20 LTS installiert (falls nicht vorhanden oder zu alt)
-- ✅ Alle Abhängigkeiten installiert
-- ✅ Die Anwendung startet
+Der Standalone Launcher ist eine **wahrhaft eigenständige Anwendung** (23-24 MB), die:
+- ✅ **KEINE Downloads von GitHub** benötigt - alles ist eingebettet!
+- ✅ Alle Anwendungsdateien enthält (~16MB eingebettet)
+- ✅ Node.js v20 LTS installiert (falls nicht vorhanden)
+- ✅ Nur npm-Abhängigkeiten lädt (vom npm-Registry)
+- ✅ Die Anwendung sofort startet
 
 **Vorteile:**
-- 🎯 **Minimale Download-Größe** - Nur ~6-8 MB statt >100 MB
-- 🔄 **Immer aktuell** - Lädt automatisch die neueste Version
-- 🚀 **Einfache Verteilung** - Perfekt für ltth.app Downloads
+- 🎯 **Unter 25MB** - Optimiert für schnelle Downloads
+- 🚀 **Kein GitHub-Download** - Alles im Binary enthalten
+- ⚡ **Offline-fähig** - Nur npm-Pakete benötigen Internet
 - 💻 **Keine Installation nötig** - Einfach herunterladen und ausführen
-- ⚡ **Schneller Download** - Release-ZIP statt einzelne Dateien (kein Rate Limit!)
+- 🔒 **Keine Rate-Limits** - Funktioniert immer, ohne API-Beschränkungen
 - 🎨 **Modernes UI** - Splash Screen mit Theme-Support (Night/Day/High Contrast)
+
+**Größen:**
+- **Windows:** `launcher.exe` - 24 MB
+- **Linux:** `launcher` - 23 MB
 
 ## 🎯 Verwendung
 
@@ -70,82 +75,118 @@ USB-Stick/LTTH/
 
 ### Für Endnutzer
 
-1. **Download:** Lade `launcher.exe` (Windows) oder `launcher` (Linux) von [ltth.app](https://ltth.app) herunter
+1. **Download:** Lade `launcher.exe` (Windows, 24MB) oder `launcher` (Linux, 23MB) von [ltth.app](https://ltth.app) herunter
 2. **Ausführen:** Doppelklick auf die Datei (Windows) oder `./launcher` im Terminal (Linux)
-3. **Warten:** Der Launcher lädt automatisch alle Dateien herunter
+3. **Warten:** Der Launcher extrahiert eingebettete Dateien (~30-60 Sekunden)
 4. **Fertig:** Die Anwendung startet automatisch im Browser
 
 ### Was passiert beim ersten Start?
 
 1. **Splash Screen öffnet sich** im Browser mit Fortschrittsanzeige und Theme-Support
-2. **Download der Release-ZIP** von GitHub (~50-100 MB, 1 Request statt 200+)
-3. **Extraktion mit Filter** - Nur relevante Dateien werden entpackt
-4. **Node.js v20 LTS Prüfung** - Falls nicht vorhanden oder zu alt, wird portable Version installiert
-5. **npm install** führt automatisch `npm install` aus
-6. **LTTH startet** automatisch im Browser auf `http://localhost:3000`
+2. **Extraktion eingebetteter Dateien** - Alle App-Dateien werden entpackt (5% - 70%, ~30-60 Sek)
+3. **Kein GitHub-Download** - Alles ist bereits im Binary enthalten!
+4. **Node.js v20 LTS Prüfung** - Falls nicht vorhanden oder zu alt, wird portable Version installiert (70% - 79%)
+5. **npm install** lädt npm-Pakete vom npm-Registry herunter (80% - 90%)
+6. **LTTH startet** automatisch im Browser auf `http://localhost:3000` (95% - 100%)
+
+**Geschwindigkeit:** Erster Start ~2-3 Minuten (hauptsächlich npm install)
 
 ### Bei nachfolgenden Starts
 
-Der Launcher prüft auf Updates und lädt bei Bedarf die neue Release-ZIP herunter.
+Der Launcher startet sofort - Dateien sind bereits extrahiert. Nur npm install wird bei Bedarf ausgeführt.
 
 ## 🔧 Technische Details
 
-### Architektur v2.0
+### Architektur v3.0 - Embedded Mode
 
-Der Standalone Launcher verwendet eine **zweistufige Download-Strategie**:
+Der Standalone Launcher verwendet **eingebettete Dateien** statt GitHub-Downloads:
 
 ```
 ┌─────────────────────────────────────────┐
-│  1. Versuche Release-ZIP Download       │
-│     ├─ Hole Release-Info (1 API Call)   │
-│     ├─ Lade ZIP von CDN (kein Limit)    │
-│     └─ Entpacke mit Filter              │
+│  TRUE STANDALONE MODE (v3.0)            │
+│  ✅ Alles im Binary enthalten           │
 │                                          │
-│  2. Fallback: Tree/Blob Download        │
-│     ├─ Hole Commit SHA (1 API Call)     │
-│     ├─ Lade Tree (1 API Call)           │
-│     └─ Lade Dateien einzeln (⚠️ Limit)  │
+│  1. Extrahiere eingebettete Dateien     │
+│     ├─ Alle App-Dateien im Binary       │
+│     ├─ Kein GitHub API erforderlich     │
+│     └─ Funktioniert offline             │
+│                                          │
+│  2. Installiere Node.js (falls nötig)   │
+│     └─ Portable v20 LTS                 │
+│                                          │
+│  3. npm install                          │
+│     └─ Nur npm-Registry benötigt        │
+│                                          │
+│  Fallback: GitHub-Download (bei Fehler) │
 └─────────────────────────────────────────┘
 ```
 
-**Warum Release-ZIP?**
-- ✅ Nur 1 API Request statt 200+
-- ✅ Kein GitHub Rate Limit (CDN)
-- ✅ Schneller (ein großer Download)
-- ✅ 100% Erfolgsrate
-
-**Wann Fallback?**
-- ❌ Kein Release vorhanden
-- ⚠️ Kann bei vielen Dateien fehlschlagen (Rate Limit)
-
-### Download-Strategie (v2.0)
-
-**Primär: Release-ZIP Download**
-1. Holt Release-Info von GitHub API (1 Request)
-2. Lädt Release-ZIP von GitHub CDN herunter (kein API Limit!)
-3. Entpackt nur relevante Dateien (Whitelist/Blacklist-Filter)
-4. ✅ **Vorteile:** Schnell, zuverlässig, kein Rate Limit
-
-**Fallback: Tree/Blob Download**
-- Falls kein Release verfügbar ist
-- Lädt Dateien einzeln über Blob API
-- ⚠️ Kann bei vielen Dateien das API Limit erreichen
+**Warum Embedded Mode?**
+- ✅ Keine GitHub API Calls erforderlich
+- ✅ Keine Rate Limits
+- ✅ Funktioniert offline (außer npm install)
+- ✅ Schnellere Einrichtung (~30-60 Sek statt 2-5 Min)
+- ✅ Zuverlässiger - keine Netzwerkfehler bei App-Dateien
 
 ### Systemanforderungen
 
 - **Betriebssystem:** Windows 10/11 (64-bit), Linux, macOS
-- **Internet:** Für Download der Dateien erforderlich
-- **Festplatte:** ~500 MB freier Speicherplatz
+- **Internet:** Nur für npm-Pakete erforderlich (nicht für App-Dateien!)
+- **Festplatte:** ~300 MB freier Speicherplatz
 - **Port 8765:** Für Splash Screen (temporär)
 - **Port 3000:** Für LTTH Anwendung
 - **Node.js:** Version 20.x LTS oder höher (wird automatisch installiert)
 
-### Was wird heruntergeladen?
+### Was ist eingebettet?
 
-Der Launcher lädt nur die relevanten Dateien herunter:
+Der Launcher enthält bereits (~16MB eingebettet):
 
-✅ **Heruntergeladen:**
-- `app/` - Hauptanwendung
+✅ **Im Binary enthalten:**
+- `app/` - Hauptanwendung (Kern-Module, Routen, Public-Dateien)
+- `plugins/` - Kern-Plugins (siehe unten)
+- `package.json` - Dependencies-Definition
+
+❌ **NICHT eingebettet (um unter 25MB zu bleiben):**
+- node_modules/ (wird via npm install geladen)
+- Test-Dateien und Dokumentation
+- Große Logo-Dateien (>500KB)
+- Beta/Experimental Plugins
+- Schwere optionale Plugins (können nachinstalliert werden)
+
+### Enthaltene Plugins (✅ im Binary)
+
+**Kern-Features:**
+- ✅ **TTS** - Text-to-Speech Engine
+- ✅ **OSC Bridge** - VRChat Integration
+- ✅ **Weather Control** - Wetter-Effekte
+- ✅ **Viewer Leaderboard** - Zuschauer-Rangliste
+- ✅ **Goals** - Ziele und Milestones
+- ✅ **GCCE** - Gift-Effekte
+- ✅ **Soundboard** - Soundboard-Integration
+- ✅ **Talking Heads** - Sprechende Köpfe
+- ✅ **Advanced Timer** - Erweiterte Timer
+- ✅ **Config Import** - Konfig-Import/-Export
+- ✅ **Viewer Profiles** - Zuschauer-Profile
+- ✅ Und weitere Kern-Plugins...
+
+### Nicht enthaltene Plugins (❌ können via Plugin-Manager nachinstalliert werden)
+
+**Entfernt um unter 25MB zu bleiben:**
+- ❌ **Game Engine** - Spiel-Engine (2.1MB)
+- ❌ **Coin Battle** - Münzen-Spiel
+- ❌ **Quiz Show** - Quiz-Spiel
+- ❌ **Interactive Story** - Interaktive Geschichten
+- ❌ **Fireworks** - Feuerwerk-Effekte (1.8MB)
+- ❌ **OpenShock** - Hardware-Integration (1.2MB)
+- ❌ **Flame Overlay** - Flammen-Overlay
+- ❌ **AnimazingPal** - AnimazingPal-Integration
+- ❌ **Sidekick** - Sidekick-Integration
+- ❌ **WebGPU Emoji Rain** - GPU-Effekte
+- ❌ **Minecraft Connect** - Minecraft-Integration
+- ❌ **Thermal Printer** - Drucker-Integration
+- ❌ **Chatango, VDO.Ninja** - Nischen-Integrationen
+
+**Hinweis:** Alle entfernten Plugins können nach der Installation über den Plugin-Manager nachinstalliert werden!
 - `plugins/` - Plugin-System
 - `game-engine/` - Spiel-Engine
 - `package.json` - Dependencies
@@ -173,13 +214,11 @@ Desktop/
 %APPDATA%/PupCid/LTTH-Launcher/     (Windows)
 ~/.config/PupCid/LTTH-Launcher/     (Linux)
 ~/Library/Application Support/PupCid/LTTH-Launcher/  (macOS)
-  ├── app/                    # Hauptanwendung
-  ├── plugins/                # Plugins
-  ├── game-engine/            # Game Engine
+  ├── app/                    # Extrahierte Hauptanwendung
   ├── runtime/
   │   └── node/              # Portable Node.js (falls installiert)
   ├── package.json
-  └── package-lock.json
+  └── node_modules/          # npm-Pakete (nach npm install)
 ```
 
 #### Portable-Modus (mit portable.txt)
