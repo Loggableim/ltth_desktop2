@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -26,6 +27,9 @@ var assets embed.FS
 // This will embed the entire application in the binary (~35MB + 9MB = ~44MB total)
 // To enable: run build script with embedded files
 const (
+	// Launcher version - must match package.json version
+	launcherVersion = "1.3.2"
+	
 	// GitHub repository settings
 	githubOwner  = "Loggableim"
 	githubRepo   = "ltth_desktop2"
@@ -57,11 +61,12 @@ type GitHubReleaseAsset struct {
 }
 
 type StandaloneLauncher struct {
-	baseDir    string
-	progress   int
-	status     string
-	clients    map[chan string]bool
-	logger     *log.Logger
+	baseDir         string
+	customInstallDir string
+	progress        int
+	status          string
+	clients         map[chan string]bool
+	logger          *log.Logger
 }
 
 func NewStandaloneLauncher() *StandaloneLauncher {
@@ -116,7 +121,7 @@ func (sl *StandaloneLauncher) serveSplash(w http.ResponseWriter, r *http.Request
 		Version string
 	}{
 		Title:   "LTTH Standalone Launcher",
-		Version: "1.0.0",
+		Version: launcherVersion,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -889,7 +894,13 @@ func (sl *StandaloneLauncher) getInstallDir() (string, error) {
 		return exeDir, nil
 	}
 	
-	// Installer mode: use system directory
+	// Installer mode: Check if custom path was configured
+	if sl.customInstallDir != "" {
+		sl.logger.Printf("Using custom installation directory: %s\n", sl.customInstallDir)
+		return sl.customInstallDir, nil
+	}
+	
+	// Default: use system directory
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("Kann Konfigurationsverzeichnis nicht ermitteln: %v", err)
@@ -906,7 +917,232 @@ func (sl *StandaloneLauncher) getInstallDir() (string, error) {
 	return installDir, nil
 }
 
+// Config file structure
+type LauncherConfig struct {
+	InstalledVersion string `json:"installed_version"`
+	InstallPath      string `json:"install_path"`
+	FirstRun         bool   `json:"first_run"`
+	LastUpdateCheck  string `json:"last_update_check"`
+}
+
+// Load configuration
+func (sl *StandaloneLauncher) loadConfig() (*LauncherConfig, error) {
+	configPath := sl.getConfigPath()
+	
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// First run - return default config
+			return &LauncherConfig{
+				InstalledVersion: "",
+				InstallPath:      "",
+				FirstRun:         true,
+				LastUpdateCheck:  "",
+			}, nil
+		}
+		return nil, err
+	}
+	
+	var config LauncherConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+	
+	return &config, nil
+}
+
+// Save configuration
+func (sl *StandaloneLauncher) saveConfig(config *LauncherConfig) error {
+	configPath := sl.getConfigPath()
+	
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+	
+	// Ensure directory exists
+	configDir := filepath.Dir(configPath)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return err
+	}
+	
+	return os.WriteFile(configPath, data, 0644)
+}
+
+// Get config file path (in executable directory)
+func (sl *StandaloneLauncher) getConfigPath() string {
+	exePath, _ := os.Executable()
+	exeDir := filepath.Dir(exePath)
+	return filepath.Join(exeDir, "launcher-config.json")
+}
+
+// Prompt user for installation path on first run
+func (sl *StandaloneLauncher) promptForInstallPath() (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	
+	fmt.Println()
+	fmt.Println("================================================")
+	fmt.Println("  Erste Installation - Installationspfad wählen")
+	fmt.Println("================================================")
+	fmt.Println()
+	fmt.Println("Bitte wählen Sie, wo LTTH installiert werden soll:")
+	fmt.Println()
+	
+	// Get default paths
+	userConfigDir, _ := os.UserConfigDir()
+	defaultPath := filepath.Join(userConfigDir, "PupCid", "LTTH-Launcher")
+	
+	fmt.Println("1) Standard-Pfad (empfohlen)")
+	fmt.Printf("   %s\n", defaultPath)
+	fmt.Println()
+	fmt.Println("2) Benutzerdefinierten Pfad eingeben")
+	fmt.Println()
+	fmt.Print("Ihre Wahl (1 oder 2): ")
+	
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	switch choice {
+	case "1", "":
+		return defaultPath, nil
+		
+	case "2":
+		fmt.Println()
+		fmt.Print("Bitte geben Sie den gewünschten Installationspfad ein: ")
+		customPath, _ := reader.ReadString('\n')
+		customPath = strings.TrimSpace(customPath)
+		
+		if customPath == "" {
+			fmt.Println("Kein Pfad eingegeben, verwende Standard-Pfad.")
+			return defaultPath, nil
+		}
+		
+		// Expand home directory if present
+		if strings.HasPrefix(customPath, "~") {
+			homeDir, _ := os.UserHomeDir()
+			customPath = filepath.Join(homeDir, customPath[1:])
+		}
+		
+		// Make absolute
+		absPath, err := filepath.Abs(customPath)
+		if err != nil {
+			fmt.Printf("Ungültiger Pfad: %v\n", err)
+			return defaultPath, nil
+		}
+		
+		return absPath, nil
+		
+	default:
+		fmt.Println("Ungültige Eingabe, verwende Standard-Pfad.")
+		return defaultPath, nil
+	}
+}
+
+// Check for updates and prompt user
+func (sl *StandaloneLauncher) checkForUpdates(currentVersion string) (bool, *GitHubRelease, error) {
+	sl.logger.Printf("Checking for updates (current version: %s)...\n", currentVersion)
+	
+	// Get latest release
+	release, err := sl.getLatestRelease()
+	if err != nil {
+		sl.logger.Printf("Failed to check for updates: %v\n", err)
+		return false, nil, err
+	}
+	
+	if release == nil {
+		sl.logger.Println("No releases available")
+		return false, nil, nil
+	}
+	
+	// Compare versions
+	latestVersion := strings.TrimPrefix(release.TagName, "v")
+	
+	if latestVersion == currentVersion {
+		sl.logger.Printf("Already on latest version: %s\n", currentVersion)
+		return false, nil, nil
+	}
+	
+	sl.logger.Printf("New version available: %s (current: %s)\n", latestVersion, currentVersion)
+	return true, release, nil
+}
+
+// Prompt user to install update
+func (sl *StandaloneLauncher) promptForUpdate(release *GitHubRelease) bool {
+	reader := bufio.NewReader(os.Stdin)
+	
+	fmt.Println()
+	fmt.Println("================================================")
+	fmt.Println("  🎉 Neues Update verfügbar!")
+	fmt.Println("================================================")
+	fmt.Println()
+	fmt.Printf("Aktuelle Version: %s\n", launcherVersion)
+	fmt.Printf("Neue Version:     %s\n", strings.TrimPrefix(release.TagName, "v"))
+	fmt.Println()
+	fmt.Printf("Release: %s\n", release.Name)
+	if release.PublishedAt != "" {
+		publishTime, _ := time.Parse(time.RFC3339, release.PublishedAt)
+		fmt.Printf("Veröffentlicht: %s\n", publishTime.Format("02.01.2006"))
+	}
+	fmt.Println()
+	fmt.Print("Möchten Sie jetzt aktualisieren? (j/n): ")
+	
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(strings.ToLower(response))
+	
+	return response == "j" || response == "y" || response == "ja" || response == "yes"
+}
+
+// Check if app is already installed
+func (sl *StandaloneLauncher) isAppInstalled() bool {
+	appDir := filepath.Join(sl.baseDir, "app")
+	packageJSON := filepath.Join(appDir, "package.json")
+	
+	if _, err := os.Stat(packageJSON); err == nil {
+		return true
+	}
+	
+	return false
+}
+
 func (sl *StandaloneLauncher) run() error {
+	// Load configuration
+	config, err := sl.loadConfig()
+	if err != nil {
+		sl.logger.Printf("Failed to load config: %v\n", err)
+		// Continue anyway with default config
+		config = &LauncherConfig{
+			FirstRun: true,
+		}
+	}
+	
+	// First run: prompt for installation path
+	if config.FirstRun {
+		installPath, err := sl.promptForInstallPath()
+		if err != nil {
+			return fmt.Errorf("Pfadauswahl fehlgeschlagen: %v", err)
+		}
+		
+		sl.customInstallDir = installPath
+		config.InstallPath = installPath
+		config.FirstRun = false
+		
+		// Save config
+		if err := sl.saveConfig(config); err != nil {
+			sl.logger.Printf("Warning: Failed to save config: %v\n", err)
+		}
+		
+		fmt.Println()
+		fmt.Printf("✅ Installation erfolgt in: %s\n", installPath)
+		fmt.Println()
+		fmt.Println("Drücke Enter zum Fortfahren...")
+		bufio.NewReader(os.Stdin).ReadString('\n')
+	} else {
+		// Load saved install path
+		if config.InstallPath != "" {
+			sl.customInstallDir = config.InstallPath
+		}
+	}
+	
 	// Determine installation directory (portable or installer mode)
 	baseDir, err := sl.getInstallDir()
 	if err != nil {
@@ -915,6 +1151,33 @@ func (sl *StandaloneLauncher) run() error {
 	
 	sl.baseDir = baseDir
 	sl.logger.Printf("Installation directory: %s\n", sl.baseDir)
+	
+	// Check for updates if already installed
+	if sl.isAppInstalled() && config.InstalledVersion != "" {
+		hasUpdate, release, err := sl.checkForUpdates(config.InstalledVersion)
+		if err == nil && hasUpdate && release != nil {
+			if sl.promptForUpdate(release) {
+				fmt.Println()
+				fmt.Println("Update wird heruntergeladen...")
+				fmt.Println()
+				
+				// Continue to download - will overwrite existing files
+			} else {
+				fmt.Println()
+				fmt.Println("Update übersprungen. Starte aktuelle Version...")
+				fmt.Println()
+				
+				// Skip to starting the application
+				nodePath, err := sl.checkNodeJS()
+				if err != nil {
+					return err
+				}
+				
+				appDir := filepath.Join(sl.baseDir, "app")
+				return sl.startApplication(nodePath, appDir)
+			}
+		}
+	}
 	
 	// Start HTTP server in background
 	http.HandleFunc("/", sl.serveSplash)
@@ -954,6 +1217,13 @@ func (sl *StandaloneLauncher) run() error {
 	if err := sl.installDependencies(appDir); err != nil {
 		sl.sendError(err.Error())
 		return err
+	}
+	
+	// Update config with installed version
+	config.InstalledVersion = launcherVersion
+	config.LastUpdateCheck = time.Now().Format(time.RFC3339)
+	if err := sl.saveConfig(config); err != nil {
+		sl.logger.Printf("Warning: Failed to save config: %v\n", err)
 	}
 	
 	// Start application
