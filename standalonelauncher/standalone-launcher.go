@@ -25,11 +25,8 @@ var assets embed.FS
 // Embedded application files - uncomment to enable true standalone mode
 // This will embed the entire application in the binary (~35MB + 9MB = ~44MB total)
 // To enable: run build script with embedded files
-//go:embed embedded_app/*
-var embeddedApp embed.FS
-
 const (
-	// GitHub repository settings (used as fallback if embedded files not available)
+	// GitHub repository settings
 	githubOwner  = "Loggableim"
 	githubRepo   = "ltth_desktop2"
 	githubBranch = "main"
@@ -40,9 +37,6 @@ const (
 	nodeWinURL   = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-win-x64.zip"
 	nodeLinuxURL = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz"
 	nodeMacURL   = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-darwin-x64.tar.gz"
-	
-	// Feature flag for embedded app mode
-	useEmbeddedApp = true // Set to true to skip GitHub download and use embedded files
 )
 
 // GitHub Release API structures
@@ -542,105 +536,8 @@ func (sl *StandaloneLauncher) downloadFromBranch() error {
 }
 
 // Extract embedded application files (true standalone mode)
-func (sl *StandaloneLauncher) extractEmbeddedApp() error {
-	sl.updateProgress(5, "Extrahiere eingebettete Anwendungsdateien...")
-	
-	// Check if embedded files are available
-	entries, err := embeddedApp.ReadDir("embedded_app")
-	if err != nil {
-		return fmt.Errorf("embedded app files not available: %v", err)
-	}
-	
-	if len(entries) == 0 {
-		return fmt.Errorf("no embedded app files found")
-	}
-	
-	sl.logger.Printf("Found %d embedded entries\n", len(entries))
-	
-	// Extract all files recursively
-	extracted := 0
-	err = sl.extractEmbeddedDir("embedded_app", sl.baseDir, &extracted)
-	if err != nil {
-		return fmt.Errorf("failed to extract embedded files: %v", err)
-	}
-	
-	sl.logger.Printf("Extracted %d embedded files\n", extracted)
-	sl.updateProgress(70, "Eingebettete Dateien erfolgreich extrahiert!")
-	
-	return nil
-}
-
-// Extract embedded directory recursively
-func (sl *StandaloneLauncher) extractEmbeddedDir(srcDir, destDir string, counter *int) error {
-	entries, err := embeddedApp.ReadDir(srcDir)
-	if err != nil {
-		return err
-	}
-	
-	for _, entry := range entries {
-		srcPath := filepath.Join(srcDir, entry.Name())
-		// Remove "embedded_app/" prefix from destination path
-		relPath := strings.TrimPrefix(srcPath, "embedded_app/")
-		destPath := filepath.Join(destDir, relPath)
-		
-		// Update progress every 50 files (5% to 70%)
-		if *counter%50 == 0 {
-			progress := 5 + int(float64(*counter)/float64(len(entries))*65)
-			sl.updateProgress(progress, fmt.Sprintf("Extrahiere Dateien... %d", *counter))
-		}
-		
-		if entry.IsDir() {
-			// Create directory
-			if err := os.MkdirAll(destPath, 0755); err != nil {
-				sl.logger.Printf("Failed to create directory %s: %v\n", destPath, err)
-				continue
-			}
-			// Recursively extract subdirectory
-			if err := sl.extractEmbeddedDir(srcPath, destDir, counter); err != nil {
-				return err
-			}
-		} else {
-			// Extract file
-			fileData, err := embeddedApp.ReadFile(srcPath)
-			if err != nil {
-				sl.logger.Printf("Failed to read embedded file %s: %v\n", srcPath, err)
-				continue
-			}
-			
-			// Create parent directory if needed
-			if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-				sl.logger.Printf("Failed to create directory for %s: %v\n", destPath, err)
-				continue
-			}
-			
-			// Write file
-			if err := os.WriteFile(destPath, fileData, 0644); err != nil {
-				sl.logger.Printf("Failed to write file %s: %v\n", destPath, err)
-				continue
-			}
-			
-			*counter++
-		}
-	}
-	
-	return nil
-}
-
 // Download all files from GitHub
 func (sl *StandaloneLauncher) downloadRepository() error {
-	// If embedded app mode is enabled, extract embedded files instead of downloading
-	if useEmbeddedApp {
-		sl.logger.Println("Using embedded application files (standalone mode)...")
-		err := sl.extractEmbeddedApp()
-		if err == nil {
-			sl.logger.Println("Embedded app extraction successful!")
-			return nil
-		}
-		// If embedded extraction fails, fall back to download
-		sl.logger.Printf("⚠️ Embedded app extraction failed: %v\n", err)
-		sl.logger.Println("Falling back to GitHub download...")
-	}
-	
 	// Try release-based download first (best option)
 	sl.logger.Println("Trying release-based download...")
 	err := sl.downloadFromRelease()
