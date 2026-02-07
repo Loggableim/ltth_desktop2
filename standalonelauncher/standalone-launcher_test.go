@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -421,5 +422,105 @@ func TestSkipUpdateFlag(t *testing.T) {
 	
 	if !sl.skipUpdate {
 		t.Error("skipUpdate should be true after setting")
+	}
+}
+
+// Test JSON escaping in updateProgress
+func TestUpdateProgressJSONEscaping(t *testing.T) {
+	sl := NewStandaloneLauncher()
+	
+	// Create a test client channel
+	testClient := make(chan string, 10)
+	sl.clients[testClient] = true
+	defer delete(sl.clients, testClient)
+	
+	// Test with special characters that need JSON escaping
+	sl.updateProgress(50, "Test \"quotes\" and\\backslash and\nnewline")
+	
+	// Read the message from channel
+	msg := <-testClient
+	
+	// Verify it's valid JSON
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(msg), &parsed)
+	if err != nil {
+		t.Fatalf("Message is not valid JSON: %v\nMessage: %s", err, msg)
+	}
+	
+	// Verify content
+	if parsed["progress"].(float64) != 50 {
+		t.Errorf("Expected progress 50, got %v", parsed["progress"])
+	}
+	
+	if !strings.Contains(parsed["status"].(string), "quotes") {
+		t.Error("Status should contain the word 'quotes'")
+	}
+}
+
+// Test JSON escaping in sendError
+func TestSendErrorJSONEscaping(t *testing.T) {
+	sl := NewStandaloneLauncher()
+	
+	// Create a test client channel
+	testClient := make(chan string, 10)
+	sl.clients[testClient] = true
+	defer delete(sl.clients, testClient)
+	
+	// Test with special characters that need JSON escaping
+	sl.sendError(`Error: "file not found" at C:\path\to\file`)
+	
+	// Read the message from channel
+	msg := <-testClient
+	
+	// Verify it's valid JSON
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(msg), &parsed)
+	if err != nil {
+		t.Fatalf("Message is not valid JSON: %v\nMessage: %s", err, msg)
+	}
+	
+	// Verify content
+	if !strings.Contains(parsed["error"].(string), "file not found") {
+		t.Error("Error message should contain 'file not found'")
+	}
+	
+	if !strings.Contains(parsed["error"].(string), `C:\path\to\file`) {
+		t.Error("Error message should contain the path with backslashes")
+	}
+}
+
+// Test JSON escaping in sendInstallPrompt
+func TestSendInstallPromptJSONEscaping(t *testing.T) {
+	sl := NewStandaloneLauncher()
+	
+	// Create a test client channel
+	testClient := make(chan string, 10)
+	sl.clients[testClient] = true
+	defer delete(sl.clients, testClient)
+	
+	// Test with Windows paths containing backslashes
+	sl.sendInstallPrompt(`C:\Program Files\LTTH`, `C:\Users\Test"User\AppData`)
+	
+	// Read the message from channel
+	msg := <-testClient
+	
+	// Verify it's valid JSON
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(msg), &parsed)
+	if err != nil {
+		t.Fatalf("Message is not valid JSON: %v\nMessage: %s", err, msg)
+	}
+	
+	// Verify content
+	if parsed["type"].(string) != "install-prompt" {
+		t.Errorf("Expected type 'install-prompt', got %v", parsed["type"])
+	}
+	
+	if !strings.Contains(parsed["exeDir"].(string), "Program Files") {
+		t.Error("exeDir should contain 'Program Files'")
+	}
+	
+	if !strings.Contains(parsed["systemDir"].(string), `Test"User`) {
+		t.Error("systemDir should contain 'Test\"User' (with quote)")
 	}
 }

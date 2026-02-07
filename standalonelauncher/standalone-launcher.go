@@ -113,7 +113,9 @@ func (sl *StandaloneLauncher) updateProgress(value int, status string) {
 	sl.status = status
 	sl.logger.Printf("[%d%%] %s\n", value, status)
 	
-	msg := fmt.Sprintf(`{"progress": %d, "status": "%s"}`, value, status)
+	payload := map[string]interface{}{"progress": value, "status": status}
+	msgBytes, _ := json.Marshal(payload) // Safe to ignore: marshaling simple types never fails
+	msg := string(msgBytes)
 	for client := range sl.clients {
 		select {
 		case client <- msg:
@@ -123,7 +125,9 @@ func (sl *StandaloneLauncher) updateProgress(value int, status string) {
 }
 
 func (sl *StandaloneLauncher) sendError(errMsg string) {
-	msg := fmt.Sprintf(`{"error": "%s"}`, errMsg)
+	payload := map[string]interface{}{"error": errMsg}
+	msgBytes, _ := json.Marshal(payload) // Safe to ignore: marshaling simple types never fails
+	msg := string(msgBytes)
 	for client := range sl.clients {
 		select {
 		case client <- msg:
@@ -134,9 +138,13 @@ func (sl *StandaloneLauncher) sendError(errMsg string) {
 
 // sendInstallPrompt signals frontend to show install path dialog
 func (sl *StandaloneLauncher) sendInstallPrompt(exeDir, systemDir string) {
-	msg := fmt.Sprintf(`{"type": "install-prompt", "exeDir": "%s", "systemDir": "%s"}`, 
-		strings.ReplaceAll(exeDir, `\`, `\\`), 
-		strings.ReplaceAll(systemDir, `\\`, `\\`))
+	payload := map[string]interface{}{
+		"type":      "install-prompt",
+		"exeDir":    exeDir,
+		"systemDir": systemDir,
+	}
+	msgBytes, _ := json.Marshal(payload) // Safe to ignore: marshaling simple types never fails
+	msg := string(msgBytes)
 	for client := range sl.clients {
 		select {
 		case client <- msg:
@@ -554,6 +562,7 @@ func (sl *StandaloneLauncher) downloadZipWithProgress(url, destPath string) erro
 	downloaded := int64(0)
 	buffer := make([]byte, 32*1024) // 32KB buffer
 	lastUpdate := time.Now()
+	downloadStartTime := time.Now() // Track start time for speed calculation
 	
 	for {
 		n, err := resp.Body.Read(buffer)
@@ -566,19 +575,40 @@ func (sl *StandaloneLauncher) downloadZipWithProgress(url, destPath string) erro
 			
 			// Update progress every 200ms to avoid too many updates (15% to 60% of total progress)
 			if time.Since(lastUpdate) > 200*time.Millisecond {
+				elapsed := time.Since(downloadStartTime).Seconds()
+				speed := float64(downloaded) / elapsed / (1024 * 1024) // MB/s
+				
 				if totalSize > 0 {
 					downloadProgress := int(float64(downloaded) / float64(totalSize) * 45)
 					percentage := int(float64(downloaded) / float64(totalSize) * 100)
-					sl.updateProgress(15+downloadProgress, 
-						fmt.Sprintf("Lade Release-ZIP herunter... %.1f / %.1f MB (%d%%)",
+					remaining := totalSize - downloaded
+					
+					// Calculate ETA only if we have enough data (avoid division by zero)
+					var statusMsg string
+					if downloaded > 0 && elapsed > 0.5 { // Wait at least 0.5s for stable speed calculation
+						eta := int(float64(remaining) / (float64(downloaded) / elapsed))
+						statusMsg = fmt.Sprintf("Lade herunter... %.1f / %.1f MB (%d%%) – %.1f MB/s, ~%ds verbleibend",
 							float64(downloaded)/(1024*1024),
 							float64(totalSize)/(1024*1024),
-							percentage))
+							percentage,
+							speed,
+							eta)
+					} else {
+						// Early stage, no ETA yet
+						statusMsg = fmt.Sprintf("Lade herunter... %.1f / %.1f MB (%d%%) – %.1f MB/s",
+							float64(downloaded)/(1024*1024),
+							float64(totalSize)/(1024*1024),
+							percentage,
+							speed)
+					}
+					
+					sl.updateProgress(15+downloadProgress, statusMsg)
 				} else {
-					// Unknown size, just show downloaded amount
+					// Unknown size, just show downloaded amount and speed
 					sl.updateProgress(15, 
-						fmt.Sprintf("Lade Release-ZIP herunter... %.1f MB",
-							float64(downloaded)/(1024*1024)))
+						fmt.Sprintf("Lade herunter... %.1f MB – %.1f MB/s",
+							float64(downloaded)/(1024*1024),
+							speed))
 				}
 				lastUpdate = time.Now()
 			}
@@ -699,8 +729,8 @@ func (sl *StandaloneLauncher) downloadFromRelease() error {
 	}
 	
 	if release == nil {
-		// No release found - return nil to trigger fallback
-		return nil
+		// No release found - return error to trigger fallback
+		return fmt.Errorf("no release found")
 	}
 	
 	sl.updateProgress(10, "Bereite Download vor...")
