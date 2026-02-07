@@ -298,3 +298,128 @@ func TestGetInstallDirCreatesDirectory(t *testing.T) {
 	
 	t.Logf("Successfully created and cleaned up test directory: %s", testDir)
 }
+
+// Test compareVersions function
+func TestCompareVersions(t *testing.T) {
+	tests := []struct {
+		v1       string
+		v2       string
+		expected int
+	}{
+		{"1.3.2", "1.3.3", -1}, // v1 < v2
+		{"1.3.2", "1.3.2", 0},  // v1 == v2
+		{"1.3.3", "1.3.2", 1},  // v1 > v2
+		{"v1.3.2", "v1.3.3", -1}, // with v prefix
+		{"1.3", "1.3.2", -1},     // different length
+		{"2.0.0", "1.9.9", 1},    // major version difference
+		{"1.10.0", "1.9.0", 1},   // double digit minor
+	}
+
+	for _, tt := range tests {
+		result := compareVersions(tt.v1, tt.v2)
+		if result != tt.expected {
+			t.Errorf("compareVersions(%q, %q) = %d, expected %d", tt.v1, tt.v2, result, tt.expected)
+		}
+	}
+}
+
+// Test launcher version constant
+func TestLauncherVersion(t *testing.T) {
+	if launcherVersion == "" {
+		t.Error("launcherVersion should not be empty")
+	}
+	
+	// Verify it's a valid version format
+	if len(launcherVersion) < 5 {
+		t.Errorf("launcherVersion %q seems invalid", launcherVersion)
+	}
+	
+	// Verify it matches expected format (e.g., "1.3.2")
+	parts := strings.Split(launcherVersion, ".")
+	if len(parts) < 3 {
+		t.Errorf("launcherVersion %q should have at least 3 parts", launcherVersion)
+	}
+	
+	t.Logf("Launcher version: %s", launcherVersion)
+}
+
+// Test VersionInfo JSON serialization
+func TestVersionInfoSerialization(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "ltth-version-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+	
+	sl := NewStandaloneLauncher()
+	sl.baseDir = tempDir
+	
+	// Save version info
+	testVersion := "1.3.2"
+	if err := sl.saveVersionInfo(testVersion); err != nil {
+		t.Fatalf("Failed to save version info: %v", err)
+	}
+	
+	// Load version info
+	versionInfo, err := sl.loadVersionInfo()
+	if err != nil {
+		t.Fatalf("Failed to load version info: %v", err)
+	}
+	
+	if versionInfo == nil {
+		t.Fatal("Version info should not be nil")
+	}
+	
+	if versionInfo.Version != testVersion {
+		t.Errorf("Version = %q, expected %q", versionInfo.Version, testVersion)
+	}
+	
+	if versionInfo.InstalledDate == "" {
+		t.Error("InstalledDate should not be empty")
+	}
+	
+	if versionInfo.LastChecked == "" {
+		t.Error("LastChecked should not be empty")
+	}
+	
+	t.Logf("Version info: %+v", versionInfo)
+}
+
+// Test loadVersionInfo when file doesn't exist
+func TestLoadVersionInfoNoFile(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "ltth-version-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+	
+	sl := NewStandaloneLauncher()
+	sl.baseDir = tempDir
+	
+	// Load version info (file doesn't exist)
+	versionInfo, err := sl.loadVersionInfo()
+	if err != nil {
+		t.Fatalf("loadVersionInfo should not error when file doesn't exist: %v", err)
+	}
+	
+	if versionInfo != nil {
+		t.Error("Version info should be nil when file doesn't exist")
+	}
+}
+
+// Test skipUpdate flag
+func TestSkipUpdateFlag(t *testing.T) {
+	sl := NewStandaloneLauncher()
+	
+	if sl.skipUpdate {
+		t.Error("skipUpdate should be false initially")
+	}
+	
+	sl.skipUpdate = true
+	
+	if !sl.skipUpdate {
+		t.Error("skipUpdate should be true after setting")
+	}
+}
