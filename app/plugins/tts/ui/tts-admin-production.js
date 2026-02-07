@@ -2637,7 +2637,7 @@ async function testLikeEvent() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                text: 'TestUser liked!',
+                text: 'TestUser gefällt das!',
                 username: 'TestUser',
                 userId: 'test-event-tts',
                 source: 'event:like'
