@@ -1230,9 +1230,16 @@ func getInstallationPath() (string, error) {
 	if choice == "2" {
 		fmt.Println()
 		fmt.Print("Bitte gib den gewuenschten Installationspfad ein: ")
+		
+		// Read input (note: Scanln stops at spaces, so users should quote paths with spaces)
 		var customPath string
 		fmt.Scanln(&customPath)
 		customPath = strings.TrimSpace(customPath)
+		
+		// Handle quoted paths (remove quotes if present)
+		if len(customPath) >= 2 && customPath[0] == '"' && customPath[len(customPath)-1] == '"' {
+			customPath = customPath[1 : len(customPath)-1]
+		}
 		
 		if customPath == "" {
 			fmt.Println("⚠️  Kein Pfad angegeben, verwende Standard-Pfad.")
