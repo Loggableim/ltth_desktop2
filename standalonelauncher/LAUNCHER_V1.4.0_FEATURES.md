@@ -28,8 +28,10 @@ Interactive cards showing the status of integrated services:
 
 Each card displays:
 - Service name and icon
-- Connection/availability status (Green: OK, Orange: Pending, Red: Error)
+- Visual status indicator (placeholder - not yet connected to live data)
 - Brief description
+
+> **Note:** The status indicators are currently static placeholders. Real-time status checking will be added in a future update.
 
 #### Tab 3: Funktionen (Features)
 Overview of LTTH's core capabilities with feature cards:
