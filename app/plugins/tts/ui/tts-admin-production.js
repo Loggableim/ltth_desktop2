@@ -2219,6 +2219,7 @@ async function loadEventTTSConfig() {
         setText('eventTTSVolumeValue', config.volume || 80);
         setValue('eventTTSVoice', config.voice || '');
         setValue('eventTTSPriority', config.priorityOverChat || false);
+        setValue('eventTTSBypassDuplicateFilter', config.bypassDuplicateFilter || false);
         
         // Populate event-specific settings
         const events = config.events || {};
@@ -2395,6 +2396,7 @@ async function saveEventTTSConfig() {
             volume: getValue('eventTTSVolume'),
             voice: getValue('eventTTSVoice') || null,
             priorityOverChat: getValue('eventTTSPriority'),
+            bypassDuplicateFilter: getValue('eventTTSBypassDuplicateFilter'),
             events: {
                 gift: {
                     enabled: getValue('eventTTSGiftEnabled'),
@@ -2507,32 +2509,182 @@ async function saveEventTTSConfig() {
 }
 
 /**
- * Test Event TTS with a sample message
+ * Test Gift Event TTS
  */
-async function testEventTTS() {
+async function testGiftEvent() {
     try {
         const response = await fetch('/api/tts/speak', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                text: 'Dies ist ein Test für Event TTS!',
+                text: 'TestUser hat Rose geschenkt!',
                 username: 'TestUser',
                 userId: 'test-event-tts',
-                source: 'event:test'
+                source: 'event:gift'
             })
         });
         
         const data = await response.json();
         
         if (!data.success) {
-            throw new Error(data.error || 'Failed to test Event TTS');
+            throw new Error(data.error || 'Failed to test Gift Event TTS');
         }
         
-        showNotification('Event TTS test queued!', 'success');
+        showNotification('Gift Event TTS test queued!', 'success');
         
     } catch (error) {
-        console.error('Failed to test Event TTS:', error);
-        showNotification(`Failed to test Event TTS: ${error.message}`, 'error');
+        console.error('Failed to test Gift Event TTS:', error);
+        showNotification(`Failed to test Gift Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Follow Event TTS
+ */
+async function testFollowEvent() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'TestUser folgt dir jetzt!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:follow'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Follow Event TTS');
+        }
+        
+        showNotification('Follow Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Follow Event TTS:', error);
+        showNotification(`Failed to test Follow Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Share Event TTS
+ */
+async function testShareEvent() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'TestUser hat den Stream geteilt!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:share'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Share Event TTS');
+        }
+        
+        showNotification('Share Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Share Event TTS:', error);
+        showNotification(`Failed to test Share Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Subscribe Event TTS
+ */
+async function testSubscribeEvent() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'TestUser hat abonniert!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:subscribe'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Subscribe Event TTS');
+        }
+        
+        showNotification('Subscribe Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Subscribe Event TTS:', error);
+        showNotification(`Failed to test Subscribe Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Like Event TTS
+ */
+async function testLikeEvent() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'TestUser liked!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:like'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Like Event TTS');
+        }
+        
+        showNotification('Like Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Like Event TTS:', error);
+        showNotification(`Failed to test Like Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Join Event TTS
+ */
+async function testJoinEvent() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'TestUser ist beigetreten!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:join'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Join Event TTS');
+        }
+        
+        showNotification('Join Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Join Event TTS:', error);
+        showNotification(`Failed to test Join Event TTS: ${error.message}`, 'error');
     }
 }
 
@@ -2549,10 +2701,35 @@ function setupEventTTSListeners() {
         });
     }
     
-    // Test button
-    const testBtn = document.getElementById('testEventTTSBtn');
-    if (testBtn) {
-        testBtn.addEventListener('click', testEventTTS);
+    // Test buttons
+    const testGiftBtn = document.getElementById('testGiftBtn');
+    if (testGiftBtn) {
+        testGiftBtn.addEventListener('click', testGiftEvent);
+    }
+    
+    const testFollowBtn = document.getElementById('testFollowBtn');
+    if (testFollowBtn) {
+        testFollowBtn.addEventListener('click', testFollowEvent);
+    }
+    
+    const testShareBtn = document.getElementById('testShareBtn');
+    if (testShareBtn) {
+        testShareBtn.addEventListener('click', testShareEvent);
+    }
+    
+    const testSubscribeBtn = document.getElementById('testSubscribeBtn');
+    if (testSubscribeBtn) {
+        testSubscribeBtn.addEventListener('click', testSubscribeEvent);
+    }
+    
+    const testLikeBtn = document.getElementById('testLikeBtn');
+    if (testLikeBtn) {
+        testLikeBtn.addEventListener('click', testLikeEvent);
+    }
+    
+    const testJoinBtn = document.getElementById('testJoinBtn');
+    if (testJoinBtn) {
+        testJoinBtn.addEventListener('click', testJoinEvent);
     }
     
     // Save Event Triggers button

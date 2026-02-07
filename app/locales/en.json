@@ -588,6 +588,7 @@
       "tabs": {
         "config": "Configuration",
         "users": "User Management",
+        "event_triggers": "Event Triggers",
         "queue": "Queue & Playback",
         "stats": "Statistics",
         "debug": "Debug Logs"

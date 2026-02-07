@@ -495,10 +495,17 @@
                             </div>
 
                             <!-- Priority -->
-                            <div class="flex items-center space-x-2">
-                                <input type="checkbox" id="eventTTSPriority" class="w-4 h-4">
-                                <label for="eventTTSPriority" class="text-sm">Priorität über Chat-TTS</label>
-                                <p class="text-xs text-gray-400 mt-1">Events werden vor Chat-Nachrichten abgespielt</p>
+                            <div class="flex flex-col space-y-2">
+                                <div class="flex items-center space-x-2">
+                                    <input type="checkbox" id="eventTTSPriority" class="w-4 h-4">
+                                    <label for="eventTTSPriority" class="text-sm">Priorität über Chat-TTS</label>
+                                </div>
+                                <p class="text-xs text-gray-400">Events werden vor Chat-Nachrichten abgespielt</p>
+                                <div class="flex items-center space-x-2">
+                                    <input type="checkbox" id="eventTTSBypassDuplicateFilter" class="w-4 h-4">
+                                    <label for="eventTTSBypassDuplicateFilter" class="text-sm">Duplikatsfilter umgehen</label>
+                                </div>
+                                <p class="text-xs text-gray-400">Event TTS umgeht den Duplikatsfilter des TTS-Systems</p>
                             </div>
                         </div>
                     </div>
@@ -530,6 +537,11 @@
                                         <input type="number" id="eventTTSGiftCooldown" value="0" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
                                     </div>
                                 </div>
+                                <div class="mt-2">
+                                    <button id="testGiftBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -551,6 +563,11 @@
                                 <div>
                                     <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
                                     <input type="number" id="eventTTSFollowCooldown" value="5" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                </div>
+                                <div class="mt-2">
+                                    <button id="testFollowBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -574,6 +591,11 @@
                                     <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
                                     <input type="number" id="eventTTSShareCooldown" value="10" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
                                 </div>
+                                <div class="mt-2">
+                                    <button id="testShareBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -595,6 +617,11 @@
                                 <div>
                                     <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
                                     <input type="number" id="eventTTSSubscribeCooldown" value="0" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                </div>
+                                <div class="mt-2">
+                                    <button id="testSubscribeBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -624,6 +651,11 @@
                                         <input type="number" id="eventTTSLikeCooldown" value="30" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
                                     </div>
                                 </div>
+                                <div class="mt-2">
+                                    <button id="testLikeBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -646,20 +678,12 @@
                                     <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
                                     <input type="number" id="eventTTSJoinCooldown" value="60" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
                                 </div>
+                                <div class="mt-2">
+                                    <button id="testJoinBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Test Button -->
-                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h3 class="text-md font-semibold">🧪 Test Event TTS</h3>
-                                <p class="text-sm text-gray-400">Teste die Event TTS Konfiguration</p>
-                            </div>
-                            <button id="testEventTTSBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded transition">
-                                🔊 Test abspielen
-                            </button>
                         </div>
                     </div>
                 </div>

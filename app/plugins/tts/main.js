@@ -605,6 +605,7 @@ class TTSPlugin {
                 volume: 80,
                 voice: null,
                 priorityOverChat: false,
+                bypassDuplicateFilter: false,
                 
                 events: {
                     gift: {
@@ -2871,7 +2872,8 @@ class TTSPlugin {
                 teamLevel,
                 isSubscriber,
                 priority,
-                hasAssignedVoice: hasUserAssignedVoice === true
+                hasAssignedVoice: hasUserAssignedVoice === true,
+                bypassDuplicateFilter: source?.startsWith('event:') && this.config.eventTTS?.bypassDuplicateFilter === true
             });
 
             this._logDebug('SPEAK_STEP6', 'Enqueue result', {
