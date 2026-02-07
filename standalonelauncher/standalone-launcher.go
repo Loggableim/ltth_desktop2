@@ -114,7 +114,7 @@ func (sl *StandaloneLauncher) updateProgress(value int, status string) {
 	sl.logger.Printf("[%d%%] %s\n", value, status)
 	
 	payload := map[string]interface{}{"progress": value, "status": status}
-	msgBytes, _ := json.Marshal(payload)
+	msgBytes, _ := json.Marshal(payload) // Safe to ignore: marshaling simple types never fails
 	msg := string(msgBytes)
 	for client := range sl.clients {
 		select {
@@ -126,7 +126,7 @@ func (sl *StandaloneLauncher) updateProgress(value int, status string) {
 
 func (sl *StandaloneLauncher) sendError(errMsg string) {
 	payload := map[string]interface{}{"error": errMsg}
-	msgBytes, _ := json.Marshal(payload)
+	msgBytes, _ := json.Marshal(payload) // Safe to ignore: marshaling simple types never fails
 	msg := string(msgBytes)
 	for client := range sl.clients {
 		select {
@@ -143,7 +143,7 @@ func (sl *StandaloneLauncher) sendInstallPrompt(exeDir, systemDir string) {
 		"exeDir":    exeDir,
 		"systemDir": systemDir,
 	}
-	msgBytes, _ := json.Marshal(payload)
+	msgBytes, _ := json.Marshal(payload) // Safe to ignore: marshaling simple types never fails
 	msg := string(msgBytes)
 	for client := range sl.clients {
 		select {
@@ -582,15 +582,27 @@ func (sl *StandaloneLauncher) downloadZipWithProgress(url, destPath string) erro
 					downloadProgress := int(float64(downloaded) / float64(totalSize) * 45)
 					percentage := int(float64(downloaded) / float64(totalSize) * 100)
 					remaining := totalSize - downloaded
-					eta := int(float64(remaining) / (float64(downloaded) / elapsed))
 					
-					sl.updateProgress(15+downloadProgress, 
-						fmt.Sprintf("Lade herunter... %.1f / %.1f MB (%d%%) – %.1f MB/s, ~%ds verbleibend",
+					// Calculate ETA only if we have enough data (avoid division by zero)
+					var statusMsg string
+					if downloaded > 0 && elapsed > 0.5 { // Wait at least 0.5s for stable speed calculation
+						eta := int(float64(remaining) / (float64(downloaded) / elapsed))
+						statusMsg = fmt.Sprintf("Lade herunter... %.1f / %.1f MB (%d%%) – %.1f MB/s, ~%ds verbleibend",
 							float64(downloaded)/(1024*1024),
 							float64(totalSize)/(1024*1024),
 							percentage,
 							speed,
-							eta))
+							eta)
+					} else {
+						// Early stage, no ETA yet
+						statusMsg = fmt.Sprintf("Lade herunter... %.1f / %.1f MB (%d%%) – %.1f MB/s",
+							float64(downloaded)/(1024*1024),
+							float64(totalSize)/(1024*1024),
+							percentage,
+							speed)
+					}
+					
+					sl.updateProgress(15+downloadProgress, statusMsg)
 				} else {
 					// Unknown size, just show downloaded amount and speed
 					sl.updateProgress(15, 

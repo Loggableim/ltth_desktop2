@@ -435,8 +435,7 @@ func TestUpdateProgressJSONEscaping(t *testing.T) {
 	defer delete(sl.clients, testClient)
 	
 	// Test with special characters that need JSON escaping
-	sl.updateProgress(50, `Test "quotes" and\backslash and
-newline`)
+	sl.updateProgress(50, "Test \"quotes\" and\\backslash and\nnewline")
 	
 	// Read the message from channel
 	msg := <-testClient
