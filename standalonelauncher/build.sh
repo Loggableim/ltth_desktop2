@@ -15,6 +15,30 @@ if ! command -v go &> /dev/null; then
     exit 1
 fi
 
+# Check for embedded mode
+EMBEDDED_MODE=false
+if [ -d "embedded_app" ] && [ "$(ls -A embedded_app)" ]; then
+    EMBEDDED_MODE=true
+    EMBEDDED_SIZE=$(du -sh embedded_app | cut -f1)
+    EMBEDDED_SIZE_MB=$(du -sm embedded_app | cut -f1)
+    EMBEDDED_FILES=$(find embedded_app -type f | wc -l)
+    EXPECTED_SIZE=$((EMBEDDED_SIZE_MB + 7))
+    echo "🚀 EMBEDDED MODE DETECTED"
+    echo "   - Embedded files: $EMBEDDED_SIZE"
+    echo "   - File count: $EMBEDDED_FILES"
+    echo "   - Expected binary: ~${EXPECTED_SIZE}MB"
+    echo "   - NO GitHub download required!"
+    echo ""
+else
+    echo "📥 DOWNLOAD MODE"
+    echo "   - Binary will be ~9MB"
+    echo "   - Will download from GitHub at runtime"
+    echo ""
+    echo "   To enable EMBEDDED MODE (standalone, ~24MB):"
+    echo "   Run: ./prepare_embedded.sh"
+    echo ""
+fi
+
 # Get dependencies
 echo "[1/4] Downloading dependencies..."
 go mod download || {
@@ -51,9 +75,28 @@ echo ""
 echo "Built executables:"
 ls -lh launcher.exe launcher-console.exe launcher 2>/dev/null || echo "  (some files not found)"
 echo ""
-echo "Ready to distribute:"
-echo "  - launcher.exe (Windows GUI) - ~6-8 MB"
-echo "  - launcher (Linux) - ~6-8 MB"
-echo "  - launcher-console.exe (Windows Debug) - ~6-8 MB"
+
+if [ "$EMBEDDED_MODE" = true ]; then
+    # Get actual sizes
+    LINUX_SIZE=$(ls -lh launcher 2>/dev/null | awk '{print $5}')
+    WIN_SIZE=$(ls -lh launcher.exe 2>/dev/null | awk '{print $5}')
+    
+    echo "🚀 EMBEDDED MODE - True Standalone!"
+    echo "  - launcher.exe (Windows GUI) - $WIN_SIZE"
+    echo "  - launcher (Linux) - $LINUX_SIZE"
+    echo "  - launcher-console.exe (Windows Debug) - $WIN_SIZE"
+    echo ""
+    echo "✅ No GitHub download required"
+    echo "✅ Works offline (except npm dependencies)"
+    echo "✅ All application files embedded"
+else
+    echo "📥 DOWNLOAD MODE - Requires Internet"
+    echo "  - launcher.exe (Windows GUI) - ~9 MB"
+    echo "  - launcher (Linux) - ~8.6 MB"
+    echo "  - launcher-console.exe (Windows Debug) - ~9 MB"
+    echo ""
+    echo "⚠️  Requires GitHub download at first run"
+    echo "   To build standalone version, run: ./prepare_embedded.sh"
+fi
 echo ""
 

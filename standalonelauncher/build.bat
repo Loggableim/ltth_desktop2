@@ -17,6 +17,35 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
+REM Check for embedded mode
+if exist "embedded_app\" (
+    if exist "embedded_app\app\" (
+        echo EMBEDDED MODE DETECTED
+        echo    - Expected binary: ~23-24MB (optimized^)
+        echo    - NO GitHub download required!
+        echo.
+        set EMBEDDED_MODE=true
+    ) else (
+        echo DOWNLOAD MODE
+        echo    - Binary will be ~9MB
+        echo    - Will download from GitHub at runtime
+        echo.
+        echo    To enable EMBEDDED MODE (standalone, ~24MB^):
+        echo    Run: prepare_embedded.bat
+        echo.
+        set EMBEDDED_MODE=false
+    )
+) else (
+    echo DOWNLOAD MODE
+    echo    - Binary will be ~9MB
+    echo    - Will download from GitHub at runtime
+    echo.
+    echo    To enable EMBEDDED MODE (standalone^):
+    echo    Run: prepare_embedded.bat
+    echo.
+    set EMBEDDED_MODE=false
+)
+
 REM Get dependencies
 echo [1/4] Downloading dependencies...
 go mod download
@@ -72,10 +101,24 @@ for %%f in (launcher.exe launcher-console.exe launcher) do (
 )
 
 echo.
-echo Ready to distribute:
-echo   - launcher.exe (Windows GUI) - ~6-8 MB
-echo   - launcher (Linux) - ~6-8 MB
-echo   - launcher-console.exe (Windows Debug) - ~6-8 MB
+if "%EMBEDDED_MODE%"=="true" (
+    echo EMBEDDED MODE - True Standalone!
+    echo   - launcher.exe (Windows GUI^) - ~24 MB
+    echo   - launcher (Linux^) - ~23 MB
+    echo   - launcher-console.exe (Windows Debug^) - ~24 MB
+    echo.
+    echo   No GitHub download required
+    echo   Works offline (except npm dependencies^)
+    echo   Core plugins embedded, optional plugins installable
+) else (
+    echo DOWNLOAD MODE - Requires Internet
+    echo   - launcher.exe (Windows GUI^) - ~9 MB
+    echo   - launcher (Linux^) - ~8.6 MB
+    echo   - launcher-console.exe (Windows Debug^) - ~9 MB
+    echo.
+    echo   Requires GitHub download at first run
+    echo   To build standalone version, run: prepare_embedded.bat
+)
 echo.
 pause
 

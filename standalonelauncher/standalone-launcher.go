@@ -22,6 +22,9 @@ import (
 //go:embed assets/*
 var assets embed.FS
 
+// Embedded application files - uncomment to enable true standalone mode
+// This will embed the entire application in the binary (~35MB + 9MB = ~44MB total)
+// To enable: run build script with embedded files
 const (
 	// GitHub repository settings
 	githubOwner  = "Loggableim"
@@ -183,12 +186,34 @@ func (sl *StandaloneLauncher) getLatestRelease() (*GitHubRelease, error) {
 	}
 	
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+		// Read body for error details
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyStr := string(bodyBytes)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, bodyStr)
+	}
+	
+	// Read body first to provide better error messages
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+	
+	// Check if body is empty or invalid
+	if len(bodyBytes) == 0 {
+		return nil, fmt.Errorf("GitHub API returned empty response")
 	}
 	
 	var release GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, err
+	if err := json.Unmarshal(bodyBytes, &release); err != nil {
+		// Provide helpful error message with body preview
+		bodyPreview := string(bodyBytes)
+		if len(bodyPreview) > 100 {
+			bodyPreview = bodyPreview[:100] + "..."
+		}
+		return nil, fmt.Errorf("failed to parse JSON response: %v (body: %s)", err, bodyPreview)
 	}
 	
 	sl.logger.Printf("Latest release: %s (%s)\n", release.Name, release.TagName)
@@ -510,6 +535,7 @@ func (sl *StandaloneLauncher) downloadFromBranch() error {
 	return nil
 }
 
+// Extract embedded application files (true standalone mode)
 // Download all files from GitHub
 func (sl *StandaloneLauncher) downloadRepository() error {
 	// Try release-based download first (best option)
