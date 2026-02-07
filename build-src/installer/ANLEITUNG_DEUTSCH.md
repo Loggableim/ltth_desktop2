@@ -132,7 +132,7 @@ Wenn Benutzer den Installer ausführen:
 
 Bearbeite `ltth-installer.nsi` Zeile 18:
 ```nsis
-!define PRODUCT_VERSION "1.3.0"  ; Hier ändern
+!define PRODUCT_VERSION "1.3.2"  ; Hier ändern
 ```
 
 ### Grafiken ersetzen

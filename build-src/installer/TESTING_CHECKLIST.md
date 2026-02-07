@@ -127,7 +127,7 @@
 - [ ] Backup path saved to registry
 
 ### Downgrade Scenario
-- [ ] Install newer version (e.g., 1.3.0)
+- [ ] Install newer version (e.g., 1.3.2)
 - [ ] Run version 1.2.0 installer
 - [ ] Warning about downgrade shown
 - [ ] User can choose to continue or abort
