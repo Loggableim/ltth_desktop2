@@ -605,6 +605,7 @@ class TTSPlugin {
                 volume: 80,
                 voice: null,
                 priorityOverChat: false,
+                bypassDuplicateFilter: false,
                 
                 events: {
                     gift: {
@@ -638,6 +639,72 @@ class TTSPlugin {
                         enabled: false,
                         template: '{username} ist beigetreten!',
                         cooldownSeconds: 60
+                    }
+                },
+                
+                // Advanced Event TTS Features
+                advanced: {
+                    // Tiered Gift TTS - Different voice/message per coin tier
+                    tieredGiftTTS: {
+                        enabled: false,
+                        tiers: {
+                            tier1: { // 1-9 coins
+                                enabled: true,
+                                template: 'Danke {username} für {coins} Coins!',
+                                voiceId: null
+                            },
+                            tier2: { // 10-99 coins
+                                enabled: true,
+                                template: 'Wow! {username} hat {coins} Coins geschenkt!',
+                                voiceId: null
+                            },
+                            tier3: { // 100-999 coins
+                                enabled: true,
+                                template: '🎉 Krass! {username} hat {coins} Coins geschenkt!',
+                                voiceId: null
+                            },
+                            tier4: { // 1000+ coins
+                                enabled: true,
+                                template: '🔥🔥🔥 MEGA GIFT von {username}! {coins} Coins!!!',
+                                voiceId: null
+                            }
+                        }
+                    },
+                    
+                    // Specific Gift Name Trigger - Fire TTS only for specific gifts
+                    specificGiftTriggers: {
+                        enabled: false,
+                        rules: [
+                            // Example: { enabled: true, giftName: 'Rose', template: '{username} hat eine Rose geschenkt!', voiceId: null }
+                        ]
+                    },
+                    
+                    // Gift Combo Streak - User sends gifts X times within Y seconds
+                    giftComboStreak: {
+                        enabled: false,
+                        threshold: 3, // Number of gifts to trigger announcement
+                        timeWindowSeconds: 10, // Time window for combo
+                        template: '🔥 {username} ist auf einer {streak}-Gift Combo Streak!',
+                        voiceId: null
+                    },
+                    
+                    // Top Gifter Announcement - When user becomes #1 gifter of session
+                    topGifterAnnouncement: {
+                        enabled: false,
+                        template: '🏆 {username} ist jetzt der Top Supporter mit {coins} Coins!',
+                        voiceId: null
+                    },
+                    
+                    // Periodic Reminder TTS - Auto-announce every X minutes
+                    periodicReminder: {
+                        enabled: false,
+                        intervalMinutes: 5,
+                        messages: [
+                            'Vergiss nicht zu folgen und den Stream zu teilen!',
+                            'Danke fürs Zuschauen! 💜',
+                            'Schreib gerne in den Chat!'
+                        ],
+                        voiceId: null
                     }
                 }
             }
@@ -2805,7 +2872,8 @@ class TTSPlugin {
                 teamLevel,
                 isSubscriber,
                 priority,
-                hasAssignedVoice: hasUserAssignedVoice === true
+                hasAssignedVoice: hasUserAssignedVoice === true,
+                bypassDuplicateFilter: source?.startsWith('event:') && this.config.eventTTS?.bypassDuplicateFilter === true
             });
 
             this._logDebug('SPEAK_STEP6', 'Enqueue result', {

@@ -387,6 +387,11 @@ function switchTab(tabName) {
     if (tabName === 'voice-clones') {
         loadVoiceClones().catch(err => console.error('Failed to load voice clones:', err));
     }
+    
+    // Load Event Triggers config when switching to event-triggers tab
+    if (tabName === 'event-triggers') {
+        loadEventTTSConfig().catch(err => console.error('Failed to load Event Triggers config:', err));
+    }
 }
 
 // ============================================================================
@@ -2037,6 +2042,151 @@ function setupEventListeners() {
 /**
  * Load Event TTS configuration
  */
+/**
+ * Add a single specific gift rule to the list (optimized - no full rebuild)
+ */
+function addSpecificGiftRule(rule) {
+    const container = document.getElementById('specificGiftRulesList');
+    if (!container) return;
+    
+    const ruleHTML = `
+        <div class="gift-rule-item bg-gray-700/30 rounded p-3 mb-2">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" class="gift-rule-enabled w-4 h-4" ${rule.enabled ? 'checked' : ''}>
+                    <input type="text" class="gift-rule-name bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Gift Name (e.g. Rose)" value="${rule.giftName || ''}">
+                </div>
+                <button class="remove-gift-rule bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">Remove</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <input type="text" class="gift-rule-template bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Template" value="${rule.template || ''}">
+                <select class="gift-rule-voice bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm">
+                    <option value="">Default Voice</option>
+                    ${getVoiceOptionsHTML(rule.voiceId)}
+                </select>
+            </div>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', ruleHTML);
+    
+    // Add event listener for the remove button
+    const lastItem = container.lastElementChild;
+    const removeBtn = lastItem.querySelector('.remove-gift-rule');
+    removeBtn.addEventListener('click', () => {
+        lastItem.remove();
+    });
+}
+
+/**
+ * Add a single periodic reminder message to the list (optimized - no full rebuild)
+ */
+function addPeriodicReminderMessage(message) {
+    const container = document.getElementById('periodicReminderMessagesList');
+    if (!container) return;
+    
+    const messageHTML = `
+        <div class="reminder-message-item bg-gray-700/30 rounded p-3 mb-2 flex items-center space-x-2">
+            <input type="text" class="reminder-message-text flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm" placeholder="Message" value="${message || ''}">
+            <button class="remove-reminder-message bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-sm">Remove</button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', messageHTML);
+    
+    // Add event listener for the remove button
+    const lastItem = container.lastElementChild;
+    const removeBtn = lastItem.querySelector('.remove-reminder-message');
+    removeBtn.addEventListener('click', () => {
+        lastItem.remove();
+    });
+}
+
+/**
+ * Render specific gift rules list
+ */
+function renderSpecificGiftRules(rules) {
+    const container = document.getElementById('specificGiftRulesList');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    rules.forEach(rule => {
+        const ruleHTML = `
+            <div class="gift-rule-item bg-gray-700/30 rounded p-3 mb-2">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" class="gift-rule-enabled w-4 h-4" ${rule.enabled ? 'checked' : ''}>
+                        <input type="text" class="gift-rule-name bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Gift Name (z.B. Rose)" value="${rule.giftName || ''}">
+                    </div>
+                    <button class="remove-gift-rule bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">Remove</button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="text" class="gift-rule-template bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Template" value="${rule.template || ''}">
+                    <select class="gift-rule-voice bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm">
+                        <option value="">Default Voice</option>
+                        ${getVoiceOptionsHTML(rule.voiceId)}
+                    </select>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', ruleHTML);
+    });
+    
+    // Add event listeners for remove buttons
+    container.querySelectorAll('.remove-gift-rule').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.closest('.gift-rule-item').remove();
+        });
+    });
+}
+
+/**
+ * Render periodic reminder messages list
+ */
+function renderPeriodicReminderMessages(messages) {
+    const container = document.getElementById('periodicReminderMessagesList');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    messages.forEach(message => {
+        const messageHTML = `
+            <div class="reminder-message-item bg-gray-700/30 rounded p-3 mb-2 flex items-center space-x-2">
+                <input type="text" class="reminder-message-text flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm" placeholder="Message" value="${message || ''}">
+                <button class="remove-reminder-message bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-sm">Remove</button>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', messageHTML);
+    });
+    
+    // Add event listeners for remove buttons
+    container.querySelectorAll('.remove-reminder-message').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.closest('.reminder-message-item').remove();
+        });
+    });
+}
+
+/**
+ * Helper: Get voice options HTML for select dropdowns
+ */
+function getVoiceOptionsHTML(selectedVoiceId) {
+    let html = '';
+    for (const [engine, voiceList] of Object.entries(voices)) {
+        if (voiceList && voiceList.length > 0) {
+            voiceList.forEach(voice => {
+                const voiceId = voice.id || voice.voice_id || voice.name;
+                const voiceName = voice.name || voice.voice_name || voiceId;
+                const selected = voiceId === selectedVoiceId ? 'selected' : '';
+                html += `<option value="${voiceId}" ${selected}>${engine}: ${voiceName}</option>`;
+            });
+        }
+    }
+    return html;
+}
+
+/**
+ * Load Event TTS configuration
+ */
 async function loadEventTTSConfig() {
     try {
         const data = await fetchJSON('/api/tts/event-config');
@@ -2069,6 +2219,7 @@ async function loadEventTTSConfig() {
         setText('eventTTSVolumeValue', config.volume || 80);
         setValue('eventTTSVoice', config.voice || '');
         setValue('eventTTSPriority', config.priorityOverChat || false);
+        setValue('eventTTSBypassDuplicateFilter', config.bypassDuplicateFilter || false);
         
         // Populate event-specific settings
         const events = config.events || {};
@@ -2119,10 +2270,112 @@ async function loadEventTTSConfig() {
         
         console.log('Event TTS config loaded successfully');
         
+        // Load advanced features
+        const advanced = config.advanced || {};
+        
+        // Tiered Gift TTS
+        if (advanced.tieredGiftTTS) {
+            setValue('tieredGiftEnabled', advanced.tieredGiftTTS.enabled || false);
+            const tiers = advanced.tieredGiftTTS.tiers || {};
+            
+            if (tiers.tier1) {
+                setValue('tier1Enabled', tiers.tier1.enabled !== false);
+                setValue('tier1Template', tiers.tier1.template || 'Danke {username} für {coins} Coins!');
+                setValue('tier1Voice', tiers.tier1.voiceId || '');
+            }
+            if (tiers.tier2) {
+                setValue('tier2Enabled', tiers.tier2.enabled !== false);
+                setValue('tier2Template', tiers.tier2.template || 'Wow! {username} hat {coins} Coins geschenkt!');
+                setValue('tier2Voice', tiers.tier2.voiceId || '');
+            }
+            if (tiers.tier3) {
+                setValue('tier3Enabled', tiers.tier3.enabled !== false);
+                setValue('tier3Template', tiers.tier3.template || '🎉 Krass! {username} hat {coins} Coins geschenkt!');
+                setValue('tier3Voice', tiers.tier3.voiceId || '');
+            }
+            if (tiers.tier4) {
+                setValue('tier4Enabled', tiers.tier4.enabled !== false);
+                setValue('tier4Template', tiers.tier4.template || '🔥🔥🔥 MEGA GIFT von {username}! {coins} Coins!!!');
+                setValue('tier4Voice', tiers.tier4.voiceId || '');
+            }
+        }
+        
+        // Specific Gift Name Triggers
+        if (advanced.specificGiftTriggers) {
+            setValue('specificGiftEnabled', advanced.specificGiftTriggers.enabled || false);
+            renderSpecificGiftRules(advanced.specificGiftTriggers.rules || []);
+        }
+        
+        // Gift Combo Streak
+        if (advanced.giftComboStreak) {
+            setValue('comboStreakEnabled', advanced.giftComboStreak.enabled || false);
+            setValue('comboStreakThreshold', advanced.giftComboStreak.threshold || 3);
+            setValue('comboStreakTimeWindow', advanced.giftComboStreak.timeWindowSeconds || 10);
+            setValue('comboStreakTemplate', advanced.giftComboStreak.template || '🔥 {username} ist auf einer {streak}-Gift Combo Streak!');
+            setValue('comboStreakVoice', advanced.giftComboStreak.voiceId || '');
+        }
+        
+        // Top Gifter Announcement
+        if (advanced.topGifterAnnouncement) {
+            setValue('topGifterEnabled', advanced.topGifterAnnouncement.enabled || false);
+            setValue('topGifterTemplate', advanced.topGifterAnnouncement.template || '🏆 {username} ist jetzt der Top Supporter mit {coins} Coins!');
+            setValue('topGifterVoice', advanced.topGifterAnnouncement.voiceId || '');
+        }
+        
+        // Periodic Reminder
+        if (advanced.periodicReminder) {
+            setValue('periodicReminderEnabled', advanced.periodicReminder.enabled || false);
+            setValue('periodicReminderInterval', advanced.periodicReminder.intervalMinutes || 5);
+            setValue('periodicReminderVoice', advanced.periodicReminder.voiceId || '');
+            renderPeriodicReminderMessages(advanced.periodicReminder.messages || []);
+        }
+        
     } catch (error) {
         console.error('Failed to load Event TTS config:', error);
         showNotification(`Failed to load Event TTS config: ${error.message}`, 'error');
     }
+}
+
+/**
+ * Helper: Get specific gift rules from dynamic list
+ */
+function getSpecificGiftRules() {
+    const rules = [];
+    const container = document.getElementById('specificGiftRulesList');
+    if (!container) return rules;
+    
+    const ruleElements = container.querySelectorAll('.gift-rule-item');
+    ruleElements.forEach(el => {
+        const enabled = el.querySelector('.gift-rule-enabled')?.checked || false;
+        const giftName = el.querySelector('.gift-rule-name')?.value || '';
+        const template = el.querySelector('.gift-rule-template')?.value || '';
+        const voiceId = el.querySelector('.gift-rule-voice')?.value || null;
+        
+        if (giftName && template) {
+            rules.push({ enabled, giftName, template, voiceId });
+        }
+    });
+    
+    return rules;
+}
+
+/**
+ * Helper: Get periodic reminder messages from dynamic list
+ */
+function getPeriodicReminderMessages() {
+    const messages = [];
+    const container = document.getElementById('periodicReminderMessagesList');
+    if (!container) return messages;
+    
+    const messageElements = container.querySelectorAll('.reminder-message-item');
+    messageElements.forEach(el => {
+        const message = el.querySelector('.reminder-message-text')?.value || '';
+        if (message) {
+            messages.push(message);
+        }
+    });
+    
+    return messages;
 }
 
 /**
@@ -2143,6 +2396,7 @@ async function saveEventTTSConfig() {
             volume: getValue('eventTTSVolume'),
             voice: getValue('eventTTSVoice') || null,
             priorityOverChat: getValue('eventTTSPriority'),
+            bypassDuplicateFilter: getValue('eventTTSBypassDuplicateFilter'),
             events: {
                 gift: {
                     enabled: getValue('eventTTSGiftEnabled'),
@@ -2176,6 +2430,60 @@ async function saveEventTTSConfig() {
                     template: getValue('eventTTSJoinTemplate'),
                     cooldownSeconds: getValue('eventTTSJoinCooldown')
                 }
+            },
+            advanced: {
+                // Tiered Gift TTS
+                tieredGiftTTS: {
+                    enabled: getValue('tieredGiftEnabled'),
+                    tiers: {
+                        tier1: {
+                            enabled: getValue('tier1Enabled'),
+                            template: getValue('tier1Template'),
+                            voiceId: getValue('tier1Voice') || null
+                        },
+                        tier2: {
+                            enabled: getValue('tier2Enabled'),
+                            template: getValue('tier2Template'),
+                            voiceId: getValue('tier2Voice') || null
+                        },
+                        tier3: {
+                            enabled: getValue('tier3Enabled'),
+                            template: getValue('tier3Template'),
+                            voiceId: getValue('tier3Voice') || null
+                        },
+                        tier4: {
+                            enabled: getValue('tier4Enabled'),
+                            template: getValue('tier4Template'),
+                            voiceId: getValue('tier4Voice') || null
+                        }
+                    }
+                },
+                // Specific Gift Name Triggers
+                specificGiftTriggers: {
+                    enabled: getValue('specificGiftEnabled'),
+                    rules: getSpecificGiftRules()
+                },
+                // Gift Combo Streak
+                giftComboStreak: {
+                    enabled: getValue('comboStreakEnabled'),
+                    threshold: getValue('comboStreakThreshold'),
+                    timeWindowSeconds: getValue('comboStreakTimeWindow'),
+                    template: getValue('comboStreakTemplate'),
+                    voiceId: getValue('comboStreakVoice') || null
+                },
+                // Top Gifter Announcement
+                topGifterAnnouncement: {
+                    enabled: getValue('topGifterEnabled'),
+                    template: getValue('topGifterTemplate'),
+                    voiceId: getValue('topGifterVoice') || null
+                },
+                // Periodic Reminder
+                periodicReminder: {
+                    enabled: getValue('periodicReminderEnabled'),
+                    intervalMinutes: getValue('periodicReminderInterval'),
+                    messages: getPeriodicReminderMessages(),
+                    voiceId: getValue('periodicReminderVoice') || null
+                }
             }
         };
         
@@ -2201,32 +2509,182 @@ async function saveEventTTSConfig() {
 }
 
 /**
- * Test Event TTS with a sample message
+ * Test Gift Event TTS
  */
-async function testEventTTS() {
+async function testGiftEvent() {
     try {
         const response = await fetch('/api/tts/speak', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                text: 'Dies ist ein Test für Event TTS!',
+                text: 'TestUser hat Rose geschenkt!',
                 username: 'TestUser',
                 userId: 'test-event-tts',
-                source: 'event:test'
+                source: 'event:gift'
             })
         });
         
         const data = await response.json();
         
         if (!data.success) {
-            throw new Error(data.error || 'Failed to test Event TTS');
+            throw new Error(data.error || 'Failed to test Gift Event TTS');
         }
         
-        showNotification('Event TTS test queued!', 'success');
+        showNotification('Gift Event TTS test queued!', 'success');
         
     } catch (error) {
-        console.error('Failed to test Event TTS:', error);
-        showNotification(`Failed to test Event TTS: ${error.message}`, 'error');
+        console.error('Failed to test Gift Event TTS:', error);
+        showNotification(`Failed to test Gift Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Follow Event TTS
+ */
+async function testFollowEvent() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'TestUser folgt dir jetzt!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:follow'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Follow Event TTS');
+        }
+        
+        showNotification('Follow Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Follow Event TTS:', error);
+        showNotification(`Failed to test Follow Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Share Event TTS
+ */
+async function testShareEvent() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'TestUser hat den Stream geteilt!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:share'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Share Event TTS');
+        }
+        
+        showNotification('Share Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Share Event TTS:', error);
+        showNotification(`Failed to test Share Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Subscribe Event TTS
+ */
+async function testSubscribeEvent() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'TestUser hat abonniert!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:subscribe'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Subscribe Event TTS');
+        }
+        
+        showNotification('Subscribe Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Subscribe Event TTS:', error);
+        showNotification(`Failed to test Subscribe Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Like Event TTS
+ */
+async function testLikeEvent() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'TestUser gefällt das!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:like'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Like Event TTS');
+        }
+        
+        showNotification('Like Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Like Event TTS:', error);
+        showNotification(`Failed to test Like Event TTS: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Test Join Event TTS
+ */
+async function testJoinEvent() {
+    try {
+        const response = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'TestUser ist beigetreten!',
+                username: 'TestUser',
+                userId: 'test-event-tts',
+                source: 'event:join'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to test Join Event TTS');
+        }
+        
+        showNotification('Join Event TTS test queued!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to test Join Event TTS:', error);
+        showNotification(`Failed to test Join Event TTS: ${error.message}`, 'error');
     }
 }
 
@@ -2243,13 +2701,58 @@ function setupEventTTSListeners() {
         });
     }
     
-    // Test button
-    const testBtn = document.getElementById('testEventTTSBtn');
-    if (testBtn) {
-        testBtn.addEventListener('click', testEventTTS);
+    // Test buttons
+    const testGiftBtn = document.getElementById('testGiftBtn');
+    if (testGiftBtn) {
+        testGiftBtn.addEventListener('click', testGiftEvent);
     }
     
-    // Note: Save is handled by main saveConfig button which we'll extend
+    const testFollowBtn = document.getElementById('testFollowBtn');
+    if (testFollowBtn) {
+        testFollowBtn.addEventListener('click', testFollowEvent);
+    }
+    
+    const testShareBtn = document.getElementById('testShareBtn');
+    if (testShareBtn) {
+        testShareBtn.addEventListener('click', testShareEvent);
+    }
+    
+    const testSubscribeBtn = document.getElementById('testSubscribeBtn');
+    if (testSubscribeBtn) {
+        testSubscribeBtn.addEventListener('click', testSubscribeEvent);
+    }
+    
+    const testLikeBtn = document.getElementById('testLikeBtn');
+    if (testLikeBtn) {
+        testLikeBtn.addEventListener('click', testLikeEvent);
+    }
+    
+    const testJoinBtn = document.getElementById('testJoinBtn');
+    if (testJoinBtn) {
+        testJoinBtn.addEventListener('click', testJoinEvent);
+    }
+    
+    // Save Event Triggers button
+    const saveEventTriggersBtn = document.getElementById('saveEventTriggersBtn');
+    if (saveEventTriggersBtn) {
+        saveEventTriggersBtn.addEventListener('click', saveEventTTSConfig);
+    }
+    
+    // Add Specific Gift Rule button
+    const addGiftRuleBtn = document.getElementById('addGiftRuleBtn');
+    if (addGiftRuleBtn) {
+        addGiftRuleBtn.addEventListener('click', () => {
+            addSpecificGiftRule({ enabled: true, giftName: '', template: '', voiceId: null });
+        });
+    }
+    
+    // Add Periodic Reminder Message button
+    const addReminderMessageBtn = document.getElementById('addReminderMessageBtn');
+    if (addReminderMessageBtn) {
+        addReminderMessageBtn.addEventListener('click', () => {
+            addPeriodicReminderMessage('');
+        });
+    }
 }
 
 // ============================================================================

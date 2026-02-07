@@ -588,6 +588,7 @@
       "tabs": {
         "config": "Konfiguration",
         "users": "Benutzerverwaltung",
+        "event_triggers": "Event-Auslöser",
         "queue": "Warteschlange & Wiedergabe",
         "voice_clones": "Stimme klonen",
         "stats": "Statistiken",

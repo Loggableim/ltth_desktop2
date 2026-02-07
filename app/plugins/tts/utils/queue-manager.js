@@ -116,13 +116,13 @@ class QueueManager {
 
     /**
      * Add item to queue
-     * @param {object} item - Queue item { userId, username, text, voice, engine, audioData, priority, ... }
+     * @param {object} item - Queue item { userId, username, text, voice, engine, audioData, priority, bypassDuplicateFilter, ... }
      * @returns {object} { success: boolean, reason: string, position: number }
      */
     enqueue(item) {
         try {
-            // Check for duplicate content
-            if (this._isDuplicate(item)) {
+            // Check for duplicate content (skip if bypass flag is set)
+            if (!item.bypassDuplicateFilter && this._isDuplicate(item)) {
                 this.stats.totalDuplicatesBlocked++;
                 return {
                     success: false,

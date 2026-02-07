@@ -63,6 +63,7 @@
             <nav class="flex space-x-4">
                 <button data-tab="config" id="tab-config" class="tab-button px-4 py-2 font-medium border-b-2 border-blue-500 text-blue-400" data-i18n="tts.admin_panel.tabs.config">Configuration</button>
                 <button data-tab="users" id="tab-users" class="tab-button px-4 py-2 font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-300" data-i18n="tts.admin_panel.tabs.users">User Management</button>
+                <button data-tab="event-triggers" id="tab-event-triggers" class="tab-button px-4 py-2 font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-300" data-i18n="tts.admin_panel.tabs.event_triggers">🎉 Event Triggers</button>
                 <button data-tab="queue" id="tab-queue" class="tab-button px-4 py-2 font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-300" data-i18n="tts.admin_panel.tabs.queue">Queue & Playback</button>
                 <button data-tab="stats" id="tab-stats" class="tab-button px-4 py-2 font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-300" data-i18n="tts.admin_panel.tabs.stats">Statistics</button>
                 <button data-tab="debug" id="tab-debug" class="tab-button px-4 py-2 font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-300" data-i18n="tts.admin_panel.tabs.debug">🐛 Debug Logs</button>
@@ -447,8 +448,17 @@
 
             </div>
 
-            <!-- Event TTS Settings -->
-            <div class="bg-gray-800 rounded-lg p-6 shadow-xl col-span-full">
+            <div class="mt-6">
+                <button id="saveConfigBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition">
+                    💾 Save Configuration
+                </button>
+            </div>
+        </div>
+
+        <!-- Event Triggers Tab -->
+        <div id="content-event-triggers" class="tab-content hidden">
+            <!-- Basic Event TTS Settings -->
+            <div class="bg-gray-800 rounded-lg p-6 shadow-xl mb-6">
                 <h2 class="text-2xl font-bold mb-4">🎉 Event TTS - Automatische Event-Ansagen</h2>
                 <p class="text-gray-400 text-sm mb-4">TikTok Events automatisch vorlesen lassen (Gifts, Follows, Shares, etc.)</p>
 
@@ -485,10 +495,17 @@
                             </div>
 
                             <!-- Priority -->
-                            <div class="flex items-center space-x-2">
-                                <input type="checkbox" id="eventTTSPriority" class="w-4 h-4">
-                                <label for="eventTTSPriority" class="text-sm">Priorität über Chat-TTS</label>
-                                <p class="text-xs text-gray-400 mt-1">Events werden vor Chat-Nachrichten abgespielt</p>
+                            <div class="flex flex-col space-y-2">
+                                <div class="flex items-center space-x-2">
+                                    <input type="checkbox" id="eventTTSPriority" class="w-4 h-4">
+                                    <label for="eventTTSPriority" class="text-sm">Priorität über Chat-TTS</label>
+                                </div>
+                                <p class="text-xs text-gray-400">Events werden vor Chat-Nachrichten abgespielt</p>
+                                <div class="flex items-center space-x-2">
+                                    <input type="checkbox" id="eventTTSBypassDuplicateFilter" class="w-4 h-4">
+                                    <label for="eventTTSBypassDuplicateFilter" class="text-sm">Duplikatsfilter umgehen</label>
+                                </div>
+                                <p class="text-xs text-gray-400">Event TTS umgeht den Duplikatsfilter des TTS-Systems</p>
                             </div>
                         </div>
                     </div>
@@ -520,6 +537,11 @@
                                         <input type="number" id="eventTTSGiftCooldown" value="0" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
                                     </div>
                                 </div>
+                                <div class="mt-2">
+                                    <button id="testGiftBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -541,6 +563,11 @@
                                 <div>
                                     <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
                                     <input type="number" id="eventTTSFollowCooldown" value="5" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                </div>
+                                <div class="mt-2">
+                                    <button id="testFollowBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -564,6 +591,11 @@
                                     <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
                                     <input type="number" id="eventTTSShareCooldown" value="10" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
                                 </div>
+                                <div class="mt-2">
+                                    <button id="testShareBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -585,6 +617,11 @@
                                 <div>
                                     <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
                                     <input type="number" id="eventTTSSubscribeCooldown" value="0" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                </div>
+                                <div class="mt-2">
+                                    <button id="testSubscribeBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -614,6 +651,11 @@
                                         <input type="number" id="eventTTSLikeCooldown" value="30" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
                                     </div>
                                 </div>
+                                <div class="mt-2">
+                                    <button id="testLikeBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -636,28 +678,277 @@
                                     <label class="block text-xs font-medium mb-1">Cooldown (s)</label>
                                     <input type="number" id="eventTTSJoinCooldown" value="60" min="0" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
                                 </div>
+                                <div class="mt-2">
+                                    <button id="testJoinBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded transition">
+                                        🧪 Test
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Test Button -->
-                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h3 class="text-md font-semibold">🧪 Test Event TTS</h3>
-                                <p class="text-sm text-gray-400">Teste die Event TTS Konfiguration</p>
-                            </div>
-                            <button id="testEventTTSBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded transition">
-                                🔊 Test abspielen
-                            </button>
                         </div>
                     </div>
                 </div>
             </div>
 
+            <!-- Advanced Features Section -->
+            <div class="bg-gray-800 rounded-lg p-6 shadow-xl mb-6">
+                <h2 class="text-2xl font-bold mb-4">⚡ Advanced Event Triggers</h2>
+                <p class="text-gray-400 text-sm mb-4">Erweiterte Trigger-Funktionen für spezielle Event-Szenarien</p>
+
+                <div class="space-y-6">
+                    <!-- Tiered Gift TTS -->
+                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-semibold">🎯 Tiered Gift TTS</h3>
+                                <p class="text-sm text-gray-400">Unterschiedliche TTS-Nachrichten je nach Gift-Wert (4 Stufen)</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="tieredGiftEnabled" class="sr-only peer">
+                                <div class="w-14 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <!-- Tier 1 -->
+                            <div class="bg-gray-800/50 rounded p-3 border border-gray-600">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-sm font-semibold text-green-400">Tier 1 (1-9 coins)</h4>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="tier1Enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+                                <div class="space-y-2">
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Template</label>
+                                        <input type="text" id="tier1Template" value="{username} sendet {giftName}!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Voice (optional)</label>
+                                        <select id="tier1Voice" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                            <option value="">Standard Voice</option>
+                                            <!-- Populated dynamically -->
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tier 2 -->
+                            <div class="bg-gray-800/50 rounded p-3 border border-gray-600">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-sm font-semibold text-blue-400">Tier 2 (10-99 coins)</h4>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="tier2Enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+                                <div class="space-y-2">
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Template</label>
+                                        <input type="text" id="tier2Template" value="{username} schenkt {giftName}! Vielen Dank!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Voice (optional)</label>
+                                        <select id="tier2Voice" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                            <option value="">Standard Voice</option>
+                                            <!-- Populated dynamically -->
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tier 3 -->
+                            <div class="bg-gray-800/50 rounded p-3 border border-gray-600">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-sm font-semibold text-purple-400">Tier 3 (100-999 coins)</h4>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="tier3Enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+                                <div class="space-y-2">
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Template</label>
+                                        <input type="text" id="tier3Template" value="Wow! {username} schenkt {giftName}! Das ist großzügig!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Voice (optional)</label>
+                                        <select id="tier3Voice" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                            <option value="">Standard Voice</option>
+                                            <!-- Populated dynamically -->
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tier 4 -->
+                            <div class="bg-gray-800/50 rounded p-3 border border-gray-600">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-sm font-semibold text-yellow-400">Tier 4 (1000+ coins)</h4>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="tier4Enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+                                <div class="space-y-2">
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Template</label>
+                                        <input type="text" id="tier4Template" value="UNGLAUBLICH! {username} schenkt {giftName} für {coins} Coins! WAHNSINN!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1">Voice (optional)</label>
+                                        <select id="tier4Voice" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm">
+                                            <option value="">Standard Voice</option>
+                                            <!-- Populated dynamically -->
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-3">Variablen: {username}, {nickname}, {giftName}, {giftCount}, {coins}</p>
+                    </div>
+
+                    <!-- Specific Gift Name Triggers -->
+                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-semibold">🎁 Specific Gift Name Triggers</h3>
+                                <p class="text-sm text-gray-400">Spezielle TTS-Nachrichten für bestimmte Gift-Namen</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="specificGiftEnabled" class="sr-only peer">
+                                <div class="w-14 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div id="specificGiftRulesList" class="space-y-3 mb-3">
+                            <!-- Dynamic gift rules will be added here -->
+                        </div>
+
+                        <button id="addGiftRuleBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded text-sm transition">
+                            ➕ Add Gift Rule
+                        </button>
+                        <p class="text-xs text-gray-400 mt-3">Variablen: {username}, {nickname}, {giftName}, {giftCount}, {coins}</p>
+                    </div>
+
+                    <!-- Gift Combo Streak -->
+                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-semibold">🔥 Gift Combo Streak</h3>
+                                <p class="text-sm text-gray-400">TTS bei mehreren Gifts vom selben User in kurzer Zeit</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="comboStreakEnabled" class="sr-only peer">
+                                <div class="w-14 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Threshold (Gifts)</label>
+                                <input type="number" id="comboStreakThreshold" value="3" min="2" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                                <p class="text-xs text-gray-400 mt-1">Anzahl Gifts für Combo</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Time Window (Sekunden)</label>
+                                <input type="number" id="comboStreakTimeWindow" value="30" min="5" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                                <p class="text-xs text-gray-400 mt-1">Zeitfenster für Combo</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Voice (optional)</label>
+                                <select id="comboStreakVoice" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                                    <option value="">Standard Voice</option>
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <label class="block text-sm font-medium mb-2">Template</label>
+                            <input type="text" id="comboStreakTemplate" value="{username} ist auf einer Combo-Streak! {comboCount} Gifts in Folge!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                            <p class="text-xs text-gray-400 mt-1">Variablen: {username}, {nickname}, {comboCount}, {totalCoins}</p>
+                        </div>
+                    </div>
+
+                    <!-- Top Gifter Announcement -->
+                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-semibold">🏆 Top Gifter Announcement</h3>
+                                <p class="text-sm text-gray-400">Ansage des Top-Gifters (manuell über Button)</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="topGifterEnabled" class="sr-only peer">
+                                <div class="w-14 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Template</label>
+                                <input type="text" id="topGifterTemplate" value="Unser Top Gifter ist {username} mit {totalCoins} Coins! Danke für die Unterstützung!" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                                <p class="text-xs text-gray-400 mt-1">Variablen: {username}, {nickname}, {totalCoins}, {giftCount}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Voice (optional)</label>
+                                <select id="topGifterVoice" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                                    <option value="">Standard Voice</option>
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button id="announceTopGifterBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded transition">
+                                📢 Announce Top Gifter
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Periodic Reminder -->
+                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-semibold">⏰ Periodic Reminder</h3>
+                                <p class="text-sm text-gray-400">Automatische TTS-Nachrichten in festgelegten Intervallen</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="periodicReminderEnabled" class="sr-only peer">
+                                <div class="w-14 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Interval (Minuten)</label>
+                                <input type="number" id="periodicReminderInterval" value="15" min="1" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                                <p class="text-xs text-gray-400 mt-1">Zeit zwischen Nachrichten</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Voice (optional)</label>
+                                <select id="periodicReminderVoice" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                                    <option value="">Standard Voice</option>
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="block text-sm font-medium mb-2">Messages (rotated)</label>
+                            <div id="periodicReminderMessagesList" class="space-y-2 mb-2">
+                                <!-- Dynamic message list will be added here -->
+                            </div>
+                            <button id="addPeriodicReminderMessageBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded text-sm transition">
+                                ➕ Add Message
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-400">Nachrichten werden in der Reihenfolge durchrotiert</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="mt-6">
-                <button id="saveConfigBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition">
-                    💾 Save Configuration
+                <button id="saveEventTriggersBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition">
+                    💾 Save Event Triggers
                 </button>
             </div>
         </div>
