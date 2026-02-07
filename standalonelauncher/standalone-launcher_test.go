@@ -399,11 +399,12 @@ func TestCheckForUpdatesVersionComparison(t *testing.T) {
 		currentVersion string
 		releaseTag     string
 		shouldUpdate   bool
+		description    string
 	}{
-		{"1.3.2", "v1.3.2", false},  // Same version
-		{"1.3.2", "v1.3.3", true},   // Newer version available
-		{"1.3.2", "v1.4.0", true},   // Major version update
-		{"1.3.2", "v1.3.1", true},   // Different version (simple comparison)
+		{"1.3.2", "v1.3.2", false, "Same version - no update"},
+		{"1.3.2", "v1.3.3", true, "Newer version available"},
+		{"1.3.2", "v1.4.0", true, "Major version update"},
+		{"1.3.2", "v1.3.1", true, "Different version (simple string comparison)"},
 	}
 	
 	for _, tc := range testCases {
@@ -412,11 +413,13 @@ func TestCheckForUpdatesVersionComparison(t *testing.T) {
 		latestVersion := strings.TrimPrefix(releaseTag, "v")
 		
 		// Simple version comparison: hasUpdate if versions differ
+		// Note: This is intentionally simple string comparison, not semantic versioning
+		// Users can decline updates if they don't want to change versions
 		hasUpdate := latestVersion != currentVersion
 		
 		if hasUpdate != tc.shouldUpdate {
-			t.Errorf("Version comparison: current=%s, latest=%s, expected shouldUpdate=%v, got %v",
-				currentVersion, latestVersion, tc.shouldUpdate, hasUpdate)
+			t.Errorf("%s: current=%s, latest=%s, expected shouldUpdate=%v, got %v",
+				tc.description, currentVersion, latestVersion, tc.shouldUpdate, hasUpdate)
 		}
 	}
 	

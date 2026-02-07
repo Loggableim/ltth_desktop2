@@ -971,7 +971,11 @@ func (sl *StandaloneLauncher) saveConfig(config *LauncherConfig) error {
 
 // Get config file path (in executable directory)
 func (sl *StandaloneLauncher) getConfigPath() string {
-	exePath, _ := os.Executable()
+	exePath, err := os.Executable()
+	if err != nil {
+		sl.logger.Printf("Warning: Could not get executable path: %v, using current directory\n", err)
+		return "launcher-config.json"
+	}
 	exeDir := filepath.Dir(exePath)
 	return filepath.Join(exeDir, "launcher-config.json")
 }
@@ -1019,7 +1023,12 @@ func (sl *StandaloneLauncher) promptForInstallPath() (string, error) {
 		
 		// Expand home directory if present
 		if strings.HasPrefix(customPath, "~") {
-			homeDir, _ := os.UserHomeDir()
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				sl.logger.Printf("Warning: Could not get home directory: %v\n", err)
+				fmt.Println("Warnung: Home-Verzeichnis konnte nicht ermittelt werden, verwende Standard-Pfad.")
+				return defaultPath, nil
+			}
 			customPath = filepath.Join(homeDir, customPath[1:])
 		}
 		
@@ -1080,8 +1089,12 @@ func (sl *StandaloneLauncher) promptForUpdate(release *GitHubRelease) bool {
 	fmt.Println()
 	fmt.Printf("Release: %s\n", release.Name)
 	if release.PublishedAt != "" {
-		publishTime, _ := time.Parse(time.RFC3339, release.PublishedAt)
-		fmt.Printf("Veröffentlicht: %s\n", publishTime.Format("02.01.2006"))
+		publishTime, err := time.Parse(time.RFC3339, release.PublishedAt)
+		if err != nil {
+			sl.logger.Printf("Warning: Could not parse publish time: %v\n", err)
+		} else {
+			fmt.Printf("Veröffentlicht: %s\n", publishTime.Format("02.01.2006"))
+		}
 	}
 	fmt.Println()
 	fmt.Print("Möchten Sie jetzt aktualisieren? (j/n): ")
