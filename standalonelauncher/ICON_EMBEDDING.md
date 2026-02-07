@@ -84,35 +84,15 @@ To update the splash screen logo (OPEN BETA.jpg):
 
 1. Replace the source image at `/images/OPEN BETA.jpg`
 
-2. Regenerate the embedded logo in splash.html:
+2. Run the update script:
    ```bash
    cd standalonelauncher
+   python3 update_splash_logo.py "../images/OPEN BETA.jpg"
+   ```
    
-   # Convert to base64 and update splash.html
-   python3 << 'EOF'
-   import re
-   
-   # Read the base64 logo
-   import base64
-   with open('../images/OPEN BETA.jpg', 'rb') as f:
-       logo_base64 = base64.b64encode(f.read()).decode('utf-8')
-   
-   # Read the splash.html
-   with open('assets/splash.html', 'r') as f:
-       html_content = f.read()
-   
-   # Replace the base64 data in the src attribute
-   pattern = r'src="data:image/[^;]+;base64,[^"]*"'
-   replacement = f'src="data:image/jpeg;base64,{logo_base64}"'
-   
-   updated_html = re.sub(pattern, replacement, html_content, count=1)
-   
-   # Write the updated content
-   with open('assets/splash.html', 'w') as f:
-       f.write(updated_html)
-   
-   print("Successfully updated splash.html with new logo")
-   EOF
+   Or use the default path (../images/OPEN BETA.jpg):
+   ```bash
+   python3 update_splash_logo.py
    ```
 
 3. Regenerate Windows resource files:
