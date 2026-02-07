@@ -1199,8 +1199,78 @@ func downloadUpdate(commitSHA string) error {
 // End of Auto-Update Functions
 // ============================================
 
+// getInstallationPath prompts the user for the installation directory
+// Returns the chosen directory path
+func getInstallationPath() (string, error) {
+	fmt.Println()
+	fmt.Println("===============================================")
+	fmt.Println("  Installationspfad waehlen")
+	fmt.Println("===============================================")
+	fmt.Println()
+	
+	// Get default path (executable directory)
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("Kann Programmverzeichnis nicht ermitteln: %v", err)
+	}
+	defaultPath := filepath.Dir(exePath)
+	
+	fmt.Printf("Standard-Installationspfad: %s\n", defaultPath)
+	fmt.Println()
+	fmt.Println("Optionen:")
+	fmt.Println("  [1] Standard-Pfad verwenden (empfohlen)")
+	fmt.Println("  [2] Eigenen Pfad angeben")
+	fmt.Println()
+	fmt.Print("Bitte waehle eine Option (1/2): ")
+	
+	var choice string
+	fmt.Scanln(&choice)
+	choice = strings.TrimSpace(choice)
+	
+	if choice == "2" {
+		fmt.Println()
+		fmt.Print("Bitte gib den gewuenschten Installationspfad ein: ")
+		var customPath string
+		fmt.Scanln(&customPath)
+		customPath = strings.TrimSpace(customPath)
+		
+		if customPath == "" {
+			fmt.Println("⚠️  Kein Pfad angegeben, verwende Standard-Pfad.")
+			return defaultPath, nil
+		}
+		
+		// Create directory if it doesn't exist
+		if err := os.MkdirAll(customPath, 0755); err != nil {
+			return "", fmt.Errorf("Kann Verzeichnis nicht erstellen: %v", err)
+		}
+		
+		fmt.Printf("✓ Verwende Installationspfad: %s\n", customPath)
+		return customPath, nil
+	}
+	
+	// Default: use standard path
+	fmt.Printf("✓ Verwende Standard-Pfad: %s\n", defaultPath)
+	return defaultPath, nil
+}
+
 func main() {
 	printHeader()
+	
+	// === Ask for Installation Path ===
+	installPath, err := getInstallationPath()
+	if err != nil {
+		fmt.Printf("❌ Fehler: %v\n", err)
+		pause()
+		os.Exit(1)
+	}
+	fmt.Println()
+	
+	// Change to installation directory
+	if err := os.Chdir(installPath); err != nil {
+		fmt.Printf("❌ Fehler: Kann nicht zum Installationspfad wechseln: %v\n", err)
+		pause()
+		os.Exit(1)
+	}
 	
 	// === Auto-Update Check ===
 	fmt.Println("Pruefe auf Updates...")
@@ -1314,20 +1384,12 @@ func main() {
 	fmt.Println("Node.js Version:")
 	fmt.Println(getNodeVersion(nodePath))
 	
-	// Get executable directory and app directory
-	exePath, err := os.Executable()
-	if err != nil {
-		fmt.Printf("Fehler: Kann Programmverzeichnis nicht ermitteln: %v\n", err)
-		pause()
-		os.Exit(1)
-	}
-	
-	exeDir := filepath.Dir(exePath)
-	appDir := filepath.Join(exeDir, "app")
+	// Use installation path for app directory
+	appDir := filepath.Join(installPath, "app")
 	
 	// Check if app directory exists
 	if _, err := os.Stat(appDir); os.IsNotExist(err) {
-		fmt.Printf("Fehler: app Verzeichnis nicht gefunden in %s\n", exeDir)
+		fmt.Printf("Fehler: app Verzeichnis nicht gefunden in %s\n", installPath)
 		pause()
 		os.Exit(1)
 	}
