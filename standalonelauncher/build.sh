@@ -20,11 +20,13 @@ EMBEDDED_MODE=false
 if [ -d "embedded_app" ] && [ "$(ls -A embedded_app)" ]; then
     EMBEDDED_MODE=true
     EMBEDDED_SIZE=$(du -sh embedded_app | cut -f1)
+    EMBEDDED_SIZE_MB=$(du -sm embedded_app | cut -f1)
     EMBEDDED_FILES=$(find embedded_app -type f | wc -l)
+    EXPECTED_SIZE=$((EMBEDDED_SIZE_MB + 7))
     echo "🚀 EMBEDDED MODE DETECTED"
-    echo "   - Size: $EMBEDDED_SIZE"
-    echo "   - Files: $EMBEDDED_FILES"
-    echo "   - Binary will be ~42MB (includes all app files)"
+    echo "   - Embedded files: $EMBEDDED_SIZE"
+    echo "   - File count: $EMBEDDED_FILES"
+    echo "   - Expected binary: ~${EXPECTED_SIZE}MB"
     echo "   - NO GitHub download required!"
     echo ""
 else
@@ -32,7 +34,7 @@ else
     echo "   - Binary will be ~9MB"
     echo "   - Will download from GitHub at runtime"
     echo ""
-    echo "   To enable EMBEDDED MODE (standalone):"
+    echo "   To enable EMBEDDED MODE (standalone, ~24MB):"
     echo "   Run: ./prepare_embedded.sh"
     echo ""
 fi
@@ -75,10 +77,14 @@ ls -lh launcher.exe launcher-console.exe launcher 2>/dev/null || echo "  (some f
 echo ""
 
 if [ "$EMBEDDED_MODE" = true ]; then
+    # Get actual sizes
+    LINUX_SIZE=$(ls -lh launcher 2>/dev/null | awk '{print $5}')
+    WIN_SIZE=$(ls -lh launcher.exe 2>/dev/null | awk '{print $5}')
+    
     echo "🚀 EMBEDDED MODE - True Standalone!"
-    echo "  - launcher.exe (Windows GUI) - ~42 MB"
-    echo "  - launcher (Linux) - ~39 MB"
-    echo "  - launcher-console.exe (Windows Debug) - ~42 MB"
+    echo "  - launcher.exe (Windows GUI) - $WIN_SIZE"
+    echo "  - launcher (Linux) - $LINUX_SIZE"
+    echo "  - launcher-console.exe (Windows Debug) - $WIN_SIZE"
     echo ""
     echo "✅ No GitHub download required"
     echo "✅ Works offline (except npm dependencies)"

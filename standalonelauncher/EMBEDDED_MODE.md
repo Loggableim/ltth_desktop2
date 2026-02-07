@@ -10,12 +10,13 @@ The standalone launcher now supports two modes:
 - Requires internet connection for initial setup
 - Faster to distribute
 
-### 2. Embedded Mode (True Standalone - 42MB)
-- Large binary size (~42MB)
+### 2. Embedded Mode (True Standalone - 23-24MB) ⭐ **OPTIMIZED**
+- Optimized binary size (~23-24MB)
 - All application files embedded in the executable
 - **NO internet connection needed** for application files (only for npm dependencies)
 - **NO GitHub download** - everything is self-contained
 - True portable solution
+- **Under 25MB** - Optimized by removing heavy optional plugins
 
 ## When to Use Embedded Mode
 
@@ -43,9 +44,10 @@ prepare_embedded.bat
 ```
 
 This will:
-- Copy `app/`, `plugins/`, `package.json` to `embedded_app/` directory
-- Remove unnecessary files (tests, docs)
-- Create ~33MB of embedded files
+- Copy `app/` and `package.json` to `embedded_app/` directory
+- Remove unnecessary files (tests, docs, large media)
+- Remove heavy optional plugins (games, fireworks, etc)
+- Create ~16MB of optimized embedded files
 
 ### Step 2: Build Launcher
 
@@ -60,9 +62,9 @@ build.bat
 ```
 
 The resulting executables will include all embedded files:
-- `launcher.exe` (Windows GUI) - ~42MB
-- `launcher-console.exe` (Windows Debug) - ~42MB
-- `launcher` (Linux) - ~39MB
+- `launcher.exe` (Windows GUI) - ~24MB
+- `launcher-console.exe` (Windows Debug) - ~24MB
+- `launcher` (Linux) - ~23MB
 
 ## How It Works
 
@@ -185,27 +187,28 @@ var embeddedApp embed.FS
 
 ## Comparison
 
-| Feature | Download Mode | Embedded Mode |
-|---------|---------------|---------------|
-| **Binary Size** | ~9MB | ~42MB |
+| Feature | Download Mode | Embedded Mode (Optimized) |
+|---------|---------------|---------------------------|
+| **Binary Size** | ~9MB | ~23-24MB |
 | **Internet Required** | Yes (setup) | Only for npm |
 | **GitHub Download** | Yes | No |
 | **Setup Time** | 2-5 min | 30-60 sec |
 | **Rate Limits** | Possible | No |
-| **Offline Usage** | No | Yes |
+| **Offline Usage** | No | Yes (except npm) |
 | **Auto Updates** | Possible | No |
+| **Plugins Included** | All (after download) | Core only |
 
 ## Best Practices
 
 1. **For Public Distribution:**
-   - Offer both versions
-   - Let users choose based on their needs
-   - Label clearly: "Small (9MB)" vs "Standalone (42MB)"
+   - Use optimized embedded mode (23-24MB)
+   - Everything works offline except npm install
+   - No GitHub rate limits or network issues
 
 2. **For Enterprise:**
    - Use embedded mode for offline installations
-   - Reduces network dependencies
-   - Better for airgapped environments
+   - Reduces network dependencies  
+   - Better for restricted environments
 
 3. **For Development:**
    - Use download mode for faster iteration

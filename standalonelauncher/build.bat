@@ -21,7 +21,7 @@ REM Check for embedded mode
 if exist "embedded_app\" (
     if exist "embedded_app\app\" (
         echo EMBEDDED MODE DETECTED
-        echo    - Binary will be ~42MB (includes all app files^)
+        echo    - Expected binary: ~23-24MB (optimized^)
         echo    - NO GitHub download required!
         echo.
         set EMBEDDED_MODE=true
@@ -30,7 +30,7 @@ if exist "embedded_app\" (
         echo    - Binary will be ~9MB
         echo    - Will download from GitHub at runtime
         echo.
-        echo    To enable EMBEDDED MODE (standalone^):
+        echo    To enable EMBEDDED MODE (standalone, ~24MB^):
         echo    Run: prepare_embedded.bat
         echo.
         set EMBEDDED_MODE=false
@@ -103,13 +103,13 @@ for %%f in (launcher.exe launcher-console.exe launcher) do (
 echo.
 if "%EMBEDDED_MODE%"=="true" (
     echo EMBEDDED MODE - True Standalone!
-    echo   - launcher.exe (Windows GUI^) - ~42 MB
-    echo   - launcher (Linux^) - ~39 MB
-    echo   - launcher-console.exe (Windows Debug^) - ~42 MB
+    echo   - launcher.exe (Windows GUI^) - ~24 MB
+    echo   - launcher (Linux^) - ~23 MB
+    echo   - launcher-console.exe (Windows Debug^) - ~24 MB
     echo.
     echo   No GitHub download required
     echo   Works offline (except npm dependencies^)
-    echo   All application files embedded
+    echo   Core plugins embedded, optional plugins installable
 ) else (
     echo DOWNLOAD MODE - Requires Internet
     echo   - launcher.exe (Windows GUI^) - ~9 MB
