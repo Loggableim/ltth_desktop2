@@ -27,12 +27,16 @@ jobs:
       - name: Install go-winres
         run: go install github.com/tc-hib/go-winres@latest
       
-      - name: Generate Windows resource files
+      - name: Generate Windows Resources (.syso)
         working-directory: ./standalonelauncher
         run: |
-          cd winres
           go-winres make
-          cd ..
+          # Verify .syso was created
+          if [ ! -f "rsrc_windows_amd64.syso" ]; then
+            echo "ERROR: .syso file was not generated!"
+            exit 1
+          fi
+          echo "✅ rsrc_windows_amd64.syso generated successfully"
       
       - name: Build Windows GUI (launcher.exe)
         working-directory: ./standalonelauncher

@@ -46,6 +46,18 @@ if exist "embedded_app\" (
     set EMBEDDED_MODE=false
 )
 
+REM Before build, ensure .syso files exist
+if not exist "rsrc_windows_amd64.syso" (
+    echo [PRE] Generating Windows resource files...
+    go-winres make
+    if %ERRORLEVEL% NEQ 0 (
+        echo WARNING: go-winres make failed. Installing go-winres...
+        go install github.com/tc-hib/go-winres@latest
+        go-winres make
+    )
+    echo.
+)
+
 REM Get dependencies
 echo [1/4] Downloading dependencies...
 go mod download
