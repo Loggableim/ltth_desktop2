@@ -1,0 +1,81 @@
+name: Build Standalone Launcher
+
+on:
+  push:
+    tags:
+      - 'launcher-v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Launcher Binaries
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Required for creating releases and uploading assets
+      actions: read    # Required for workflow access
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '~1.21'
+      
+      - name: Install go-winres
+        run: go install github.com/tc-hib/go-winres@latest
+      
+      - name: Generate Windows resource files
+        working-directory: ./standalonelauncher
+        run: |
+          cd winres
+          go-winres make
+          cd ..
+      
+      - name: Build Windows GUI (launcher.exe)
+        working-directory: ./standalonelauncher
+        run: |
+          GOOS=windows GOARCH=amd64 go build -ldflags="-H windowsgui -s -w" -o launcher.exe standalone-launcher.go
+      
+      - name: Build Windows Console (launcher-console.exe)
+        working-directory: ./standalonelauncher
+        run: |
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o launcher-console.exe standalone-launcher.go
+      
+      - name: Build Linux (launcher)
+        working-directory: ./standalonelauncher
+        run: |
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o launcher standalone-launcher.go
+      
+      - name: Upload launcher.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-windows-gui
+          path: standalonelauncher/launcher.exe
+      
+      - name: Upload launcher-console.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-windows-console
+          path: standalonelauncher/launcher-console.exe
+      
+      - name: Upload launcher (Linux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-linux
+          path: standalonelauncher/launcher
+      
+      - name: Create Release (if tag)
+        if: startsWith(github.ref, 'refs/tags/launcher-v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            standalonelauncher/launcher.exe
+            standalonelauncher/launcher-console.exe
+            standalonelauncher/launcher
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
