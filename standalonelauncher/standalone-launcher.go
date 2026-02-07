@@ -26,6 +26,9 @@ var assets embed.FS
 // This will embed the entire application in the binary (~35MB + 9MB = ~44MB total)
 // To enable: run build script with embedded files
 const (
+	// Launcher version
+	launcherVersion = "1.3.2"
+	
 	// GitHub repository settings
 	githubOwner  = "Loggableim"
 	githubRepo   = "ltth_desktop2"
@@ -62,6 +65,14 @@ type StandaloneLauncher struct {
 	status     string
 	clients    map[chan string]bool
 	logger     *log.Logger
+	skipUpdate bool
+}
+
+// VersionInfo stores version information
+type VersionInfo struct {
+	Version       string `json:"version"`
+	InstalledDate string `json:"installed_date"`
+	LastChecked   string `json:"last_checked"`
 }
 
 func NewStandaloneLauncher() *StandaloneLauncher {
@@ -116,7 +127,7 @@ func (sl *StandaloneLauncher) serveSplash(w http.ResponseWriter, r *http.Request
 		Version string
 	}{
 		Title:   "LTTH Standalone Launcher",
-		Version: "1.0.0",
+		Version: launcherVersion,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -889,21 +900,218 @@ func (sl *StandaloneLauncher) getInstallDir() (string, error) {
 		return exeDir, nil
 	}
 	
-	// Installer mode: use system directory
+	// Check if we have an existing installation (version.json exists)
+	// in the system directory
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("Kann Konfigurationsverzeichnis nicht ermitteln: %v", err)
 	}
 	
-	installDir := filepath.Join(userConfigDir, "PupCid", "LTTH-Launcher")
+	systemInstallDir := filepath.Join(userConfigDir, "PupCid", "LTTH-Launcher")
+	versionFile := filepath.Join(systemInstallDir, "version.json")
+	
+	// If version.json exists in system dir, use that directory
+	if _, err := os.Stat(versionFile); err == nil {
+		sl.logger.Printf("Existing installation found in system directory\n")
+		return systemInstallDir, nil
+	}
+	
+	// First installation - prompt user for installation path
+	installDir, err := sl.promptInstallationPath(exeDir, systemInstallDir)
+	if err != nil {
+		return "", err
+	}
 	
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(installDir, 0755); err != nil {
 		return "", fmt.Errorf("Kann Installationsverzeichnis nicht erstellen: %v", err)
 	}
 	
-	sl.logger.Printf("Installer mode: using system directory\n")
+	sl.logger.Printf("Using installation directory: %s\n", installDir)
 	return installDir, nil
+}
+
+// promptInstallationPath asks user to choose installation directory
+func (sl *StandaloneLauncher) promptInstallationPath(exeDir, systemDir string) (string, error) {
+	fmt.Println("\n================================================")
+	fmt.Println("  Erstinstallation - Installationspfad wählen")
+	fmt.Println("================================================")
+	fmt.Println()
+	fmt.Println("Wo möchten Sie LTTH installieren?")
+	fmt.Println()
+	fmt.Printf("[1] Portable Installation (im aktuellen Verzeichnis)\n")
+	fmt.Printf("    → %s\n", exeDir)
+	fmt.Println("    Hinweis: Alle Daten werden im Programmverzeichnis gespeichert")
+	fmt.Println()
+	fmt.Printf("[2] System-Installation (empfohlen)\n")
+	fmt.Printf("    → %s\n", systemDir)
+	fmt.Println("    Hinweis: Daten werden im Benutzerverzeichnis gespeichert")
+	fmt.Println()
+	fmt.Print("Ihre Wahl (1 oder 2): ")
+	
+	var choice string
+	fmt.Scanln(&choice)
+	
+	switch choice {
+	case "1":
+		// Create portable.txt marker
+		portableMarker := filepath.Join(exeDir, "portable.txt")
+		if err := os.WriteFile(portableMarker, []byte("Portable installation marker"), 0644); err != nil {
+			return "", fmt.Errorf("Konnte portable.txt nicht erstellen: %v", err)
+		}
+		sl.logger.Println("Portable mode selected")
+		return exeDir, nil
+	case "2":
+		sl.logger.Println("System installation selected")
+		return systemDir, nil
+	default:
+		// Default to system installation
+		sl.logger.Println("Invalid choice, defaulting to system installation")
+		return systemDir, nil
+	}
+}
+
+// loadVersionInfo loads version information from version.json
+func (sl *StandaloneLauncher) loadVersionInfo() (*VersionInfo, error) {
+	versionFile := filepath.Join(sl.baseDir, "version.json")
+	
+	data, err := os.ReadFile(versionFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // No version file - first installation
+		}
+		return nil, err
+	}
+	
+	var versionInfo VersionInfo
+	if err := json.Unmarshal(data, &versionInfo); err != nil {
+		return nil, err
+	}
+	
+	return &versionInfo, nil
+}
+
+// saveVersionInfo saves version information to version.json
+func (sl *StandaloneLauncher) saveVersionInfo(version string) error {
+	versionInfo := VersionInfo{
+		Version:       version,
+		InstalledDate: time.Now().Format(time.RFC3339),
+		LastChecked:   time.Now().Format(time.RFC3339),
+	}
+	
+	data, err := json.MarshalIndent(versionInfo, "", "  ")
+	if err != nil {
+		return err
+	}
+	
+	versionFile := filepath.Join(sl.baseDir, "version.json")
+	return os.WriteFile(versionFile, data, 0644)
+}
+
+// compareVersions compares two semantic version strings
+// Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+func compareVersions(v1, v2 string) int {
+	// Remove 'v' prefix if present
+	v1 = strings.TrimPrefix(v1, "v")
+	v2 = strings.TrimPrefix(v2, "v")
+	
+	parts1 := strings.Split(v1, ".")
+	parts2 := strings.Split(v2, ".")
+	
+	maxLen := len(parts1)
+	if len(parts2) > maxLen {
+		maxLen = len(parts2)
+	}
+	
+	for i := 0; i < maxLen; i++ {
+		var n1, n2 int
+		
+		if i < len(parts1) {
+			fmt.Sscanf(parts1[i], "%d", &n1)
+		}
+		if i < len(parts2) {
+			fmt.Sscanf(parts2[i], "%d", &n2)
+		}
+		
+		if n1 < n2 {
+			return -1
+		}
+		if n1 > n2 {
+			return 1
+		}
+	}
+	
+	return 0
+}
+
+// checkForUpdates checks if a newer version is available
+func (sl *StandaloneLauncher) checkForUpdates() (*GitHubRelease, bool, error) {
+	sl.logger.Println("Checking for updates...")
+	
+	// Load installed version
+	versionInfo, err := sl.loadVersionInfo()
+	if err != nil {
+		sl.logger.Printf("Error loading version info: %v\n", err)
+	}
+	
+	installedVersion := ""
+	if versionInfo != nil {
+		installedVersion = versionInfo.Version
+	}
+	
+	// Get latest release from GitHub
+	release, err := sl.getLatestRelease()
+	if err != nil {
+		return nil, false, fmt.Errorf("Konnte Update-Info nicht abrufen: %v", err)
+	}
+	
+	if release == nil {
+		// No release available
+		sl.logger.Println("No GitHub release available")
+		return nil, false, nil
+	}
+	
+	releaseVersion := strings.TrimPrefix(release.TagName, "v")
+	sl.logger.Printf("Current launcher version: %s\n", launcherVersion)
+	sl.logger.Printf("Installed app version: %s\n", installedVersion)
+	sl.logger.Printf("Latest release version: %s\n", releaseVersion)
+	
+	// Check if update is available (compare with installed version if exists, otherwise with launcher version)
+	compareWith := installedVersion
+	if compareWith == "" {
+		compareWith = launcherVersion
+	}
+	
+	updateAvailable := compareVersions(compareWith, releaseVersion) < 0
+	
+	return release, updateAvailable, nil
+}
+
+// promptForUpdate asks user if they want to update
+func (sl *StandaloneLauncher) promptForUpdate(release *GitHubRelease) bool {
+	fmt.Println("\n================================================")
+	fmt.Println("  🎉 Neues Update verfügbar!")
+	fmt.Println("================================================")
+	fmt.Printf("\nNeue Version: %s\n", release.TagName)
+	fmt.Printf("Veröffentlicht: %s\n", release.PublishedAt)
+	fmt.Printf("Name: %s\n", release.Name)
+	fmt.Println("\nMöchten Sie jetzt aktualisieren?")
+	fmt.Println()
+	fmt.Println("[1] Ja, jetzt aktualisieren (empfohlen)")
+	fmt.Println("[2] Nein, überspringen")
+	fmt.Println()
+	fmt.Print("Ihre Wahl (1 oder 2): ")
+	
+	var choice string
+	fmt.Scanln(&choice)
+	
+	if choice == "1" {
+		sl.logger.Println("User accepted update")
+		return true
+	}
+	
+	sl.logger.Println("User skipped update")
+	return false
 }
 
 func (sl *StandaloneLauncher) run() error {
@@ -915,6 +1123,20 @@ func (sl *StandaloneLauncher) run() error {
 	
 	sl.baseDir = baseDir
 	sl.logger.Printf("Installation directory: %s\n", sl.baseDir)
+	
+	// Check for updates
+	release, updateAvailable, err := sl.checkForUpdates()
+	if err != nil {
+		sl.logger.Printf("Warning: Could not check for updates: %v\n", err)
+		// Continue anyway - don't block installation
+	} else if updateAvailable && release != nil {
+		// Ask user if they want to update
+		if sl.promptForUpdate(release) {
+			sl.skipUpdate = false
+		} else {
+			sl.skipUpdate = true
+		}
+	}
 	
 	// Start HTTP server in background
 	http.HandleFunc("/", sl.serveSplash)
@@ -936,10 +1158,19 @@ func (sl *StandaloneLauncher) run() error {
 		sl.logger.Printf("Failed to open browser: %v\n", err)
 	}
 	
-	// Download repository
-	if err := sl.downloadRepository(); err != nil {
-		sl.sendError(err.Error())
-		return err
+	// Download repository (only if not skipping update or first install)
+	if !sl.skipUpdate {
+		if err := sl.downloadRepository(); err != nil {
+			sl.sendError(err.Error())
+			return err
+		}
+		
+		// Save version info after successful download
+		if err := sl.saveVersionInfo(launcherVersion); err != nil {
+			sl.logger.Printf("Warning: Could not save version info: %v\n", err)
+		}
+	} else {
+		sl.updateProgress(70, "Überspringe Download, verwende vorhandene Installation...")
 	}
 	
 	// Check Node.js
@@ -949,11 +1180,15 @@ func (sl *StandaloneLauncher) run() error {
 		return err
 	}
 	
-	// Install dependencies
+	// Install dependencies (only if we downloaded new files or first install)
 	appDir := filepath.Join(sl.baseDir, "app")
-	if err := sl.installDependencies(appDir); err != nil {
-		sl.sendError(err.Error())
-		return err
+	if !sl.skipUpdate {
+		if err := sl.installDependencies(appDir); err != nil {
+			sl.sendError(err.Error())
+			return err
+		}
+	} else {
+		sl.updateProgress(90, "Überspringe Abhängigkeiten-Installation...")
 	}
 	
 	// Start application

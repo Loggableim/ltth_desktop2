@@ -4,30 +4,75 @@ Der offizielle Standalone Launcher für **PupCid's Little TikTool Helper (LTTH)*
 
 ## 📦 Was ist der Standalone Launcher?
 
-Der Standalone Launcher ist eine **wahrhaft eigenständige Anwendung** (23-24 MB), die:
-- ✅ **KEINE Downloads von GitHub** benötigt - alles ist eingebettet!
-- ✅ Alle Anwendungsdateien enthält (~16MB eingebettet)
-- ✅ Node.js v20 LTS installiert (falls nicht vorhanden)
-- ✅ Nur npm-Abhängigkeiten lädt (vom npm-Registry)
-- ✅ Die Anwendung sofort startet
+Der Standalone Launcher ist eine **eigenständige Anwendung** (9-24 MB), die LTTH automatisch installiert und startet.
 
-**Vorteile:**
-- 🎯 **Unter 25MB** - Optimiert für schnelle Downloads
-- 🚀 **Kein GitHub-Download** - Alles im Binary enthalten
-- ⚡ **Offline-fähig** - Nur npm-Pakete benötigen Internet
-- 💻 **Keine Installation nötig** - Einfach herunterladen und ausführen
-- 🔒 **Keine Rate-Limits** - Funktioniert immer, ohne API-Beschränkungen
-- 🎨 **Modernes UI** - Splash Screen mit Theme-Support (Night/Day/High Contrast)
+**Version 1.3.2 - Neue Features:**
+- ✅ **Erstinstallations-Assistent** - Wähle deinen Installationspfad (Portable oder System)
+- ✅ **Automatische Update-Erkennung** - Werde über neue Versionen informiert
+- ✅ **Smart Installation** - Überspringt Downloads wenn keine Updates verfügbar
+- ✅ **Versions-Tracking** - Verfolgt installierte Version und Update-History
+- ✅ **Icon-Embedding** - Professionelles LTTH-Icon in der .exe
+
+**Funktionen:**
+- 📥 Downloads die neueste LTTH-Version von GitHub
+- 💻 Installiert Node.js v20 LTS (falls nicht vorhanden)
+- 📦 Installiert npm-Abhängigkeiten automatisch
+- 🚀 Startet die Anwendung sofort nach Installation
 
 **Größen:**
-- **Windows:** `launcher.exe` - 24 MB
-- **Linux:** `launcher` - 23 MB
+- **Windows (Download-Modus):** `launcher.exe` - 9 MB
+- **Windows (Embedded-Modus):** `launcher.exe` - 24 MB
+- **Linux (Download-Modus):** `launcher` - 8.6 MB
+- **Linux (Embedded-Modus):** `launcher` - 23 MB
 
 ## 🎯 Verwendung
 
 ### Installation & Betriebsmodi
 
-Der Launcher arbeitet in **zwei Modi**:
+Der Launcher arbeitet in **zwei Modi** und bietet ab Version 1.3.2 einen **interaktiven Installations-Assistenten** beim ersten Start:
+
+#### 🆕 Erstinstallation (Neu in v1.3.2)
+
+Beim ersten Start wirst du gefragt, wo LTTH installiert werden soll:
+
+```
+================================================
+  Erstinstallation - Installationspfad wählen
+================================================
+
+Wo möchten Sie LTTH installieren?
+
+[1] Portable Installation (im aktuellen Verzeichnis)
+    → C:\Users\You\Desktop\LTTH
+    Hinweis: Alle Daten werden im Programmverzeichnis gespeichert
+
+[2] System-Installation (empfohlen)
+    → C:\Users\You\AppData\Roaming\PupCid\LTTH-Launcher
+    Hinweis: Daten werden im Benutzerverzeichnis gespeichert
+
+Ihre Wahl (1 oder 2):
+```
+
+#### 🔄 Update-Benachrichtigung (Neu in v1.3.2)
+
+Wenn eine neue Version verfügbar ist, wirst du informiert:
+
+```
+================================================
+  🎉 Neues Update verfügbar!
+================================================
+
+Neue Version: v1.3.3
+Veröffentlicht: 2026-02-07T10:30:00Z
+Name: LTTH v1.3.3 - Bug Fixes and Improvements
+
+Möchten Sie jetzt aktualisieren?
+
+[1] Ja, jetzt aktualisieren (empfohlen)
+[2] Nein, überspringen
+
+Ihre Wahl (1 oder 2):
+```
 
 #### 🏠 Standard-Modus (Installer)
 **Dies ist der empfohlene Modus für normale Nutzer.**
@@ -82,18 +127,28 @@ USB-Stick/LTTH/
 
 ### Was passiert beim ersten Start?
 
-1. **Splash Screen öffnet sich** im Browser mit Fortschrittsanzeige und Theme-Support
-2. **Extraktion eingebetteter Dateien** - Alle App-Dateien werden entpackt (5% - 70%, ~30-60 Sek)
-3. **Kein GitHub-Download** - Alles ist bereits im Binary enthalten!
-4. **Node.js v20 LTS Prüfung** - Falls nicht vorhanden oder zu alt, wird portable Version installiert (70% - 79%)
-5. **npm install** lädt npm-Pakete vom npm-Registry herunter (80% - 90%)
-6. **LTTH startet** automatisch im Browser auf `http://localhost:3000` (95% - 100%)
+**Version 1.3.2+ mit interaktivem Setup:**
+
+1. **Installations-Assistent** - Wähle zwischen Portable und System-Installation
+2. **Update-Check** - Prüft auf verfügbare Updates von GitHub
+3. **Splash Screen öffnet sich** im Browser mit Fortschrittsanzeige
+4. **Download** - Lädt LTTH von GitHub (5% - 60%, ~1-2 Min bei Release)
+5. **Extraktion** - Entpackt alle Dateien (60% - 70%)
+6. **Node.js v20 LTS Prüfung** - Falls nicht vorhanden oder zu alt, wird portable Version installiert (70% - 79%)
+7. **npm install** lädt npm-Pakete vom npm-Registry herunter (80% - 90%)
+8. **LTTH startet** automatisch im Browser auf `http://localhost:3000` (95% - 100%)
 
 **Geschwindigkeit:** Erster Start ~2-3 Minuten (hauptsächlich npm install)
 
 ### Bei nachfolgenden Starts
 
-Der Launcher startet sofort - Dateien sind bereits extrahiert. Nur npm install wird bei Bedarf ausgeführt.
+**Smart Update System (v1.3.2+):**
+- Prüft automatisch auf Updates
+- Fragt vor dem Download ob Update gewünscht ist
+- Überspringt Download wenn kein Update verfügbar
+- Startet sofort mit vorhandener Installation
+
+Der Launcher verfolgt die installierte Version in `version.json` und lädt nur bei Bedarf neue Dateien herunter.
 
 ## 🔧 Technische Details
 
@@ -201,6 +256,23 @@ Der Launcher enthält bereits (~16MB eingebettet):
 
 ### Dateistruktur nach Installation
 
+#### Version Tracking (Neu in v1.3.2)
+
+Der Launcher erstellt eine `version.json` Datei zur Verfolgung der Installation:
+
+```json
+{
+  "version": "1.3.2",
+  "installed_date": "2026-02-07T14:30:00Z",
+  "last_checked": "2026-02-07T15:45:00Z"
+}
+```
+
+Diese Datei wird verwendet um:
+- Vorhandene Installationen zu erkennen
+- Update-Verfügbarkeit zu prüfen
+- Installations-Historie zu tracken
+
 #### Standard-Modus (Installer)
 
 **Sichtbar für den Nutzer:**
@@ -214,7 +286,9 @@ Desktop/
 %APPDATA%/PupCid/LTTH-Launcher/     (Windows)
 ~/.config/PupCid/LTTH-Launcher/     (Linux)
 ~/Library/Application Support/PupCid/LTTH-Launcher/  (macOS)
+  ├── version.json            # Version tracking (Neu in v1.3.2)
   ├── app/                    # Extrahierte Hauptanwendung
+  ├── plugins/                # Plugin-System
   ├── runtime/
   │   └── node/              # Portable Node.js (falls installiert)
   ├── package.json
@@ -227,6 +301,7 @@ Desktop/
 USB-Stick/LTTH/
   ├── launcher.exe
   ├── portable.txt           # Aktiviert Portable-Modus
+  ├── version.json           # Version tracking (Neu in v1.3.2)
   ├── app/                   # Installation im selben Ordner
   ├── plugins/
   ├── game-engine/
@@ -292,16 +367,24 @@ GOOS=linux GOARCH=amd64 go build -o launcher -ldflags "-s -w" standalone-launche
 ### Code-Struktur
 
 ```go
-// Hauptkomponenten
+// Hauptkomponenten (v1.3.2)
 type StandaloneLauncher struct {
-    baseDir  string              // Installationsverzeichnis
-    progress int                 // Fortschritt (0-100)
-    status   string              // Status-Text
-    clients  map[chan string]bool // SSE Clients
-    logger   *log.Logger         // Logger
+    baseDir    string              // Installationsverzeichnis
+    progress   int                 // Fortschritt (0-100)
+    status     string              // Status-Text
+    clients    map[chan string]bool // SSE Clients
+    logger     *log.Logger         // Logger
+    skipUpdate bool                // Skip update flag (Neu in v1.3.2)
 }
 
-// Release API Strukturen (v2.0)
+// Version Tracking (Neu in v1.3.2)
+type VersionInfo struct {
+    Version       string // Installierte Version
+    InstalledDate string // Installations-Datum
+    LastChecked   string // Letzter Update-Check
+}
+
+// Release API Strukturen
 type GitHubRelease struct {
     TagName     string
     Name        string
@@ -311,14 +394,21 @@ type GitHubRelease struct {
     PublishedAt string
 }
 
-// Hauptfunktionen (v2.0)
+// Hauptfunktionen (v1.3.2)
+- getInstallDir()              // Installationsverzeichnis bestimmen (mit Prompt)
+- promptInstallationPath()     // Installations-Assistent (Neu in v1.3.2)
+- checkForUpdates()            // Update-Erkennung (Neu in v1.3.2)
+- promptForUpdate()            // Update-Dialog (Neu in v1.3.2)
+- compareVersions()            // Versions-Vergleich (Neu in v1.3.2)
+- loadVersionInfo()            // Lade version.json (Neu in v1.3.2)
+- saveVersionInfo()            // Speichere version.json (Neu in v1.3.2)
 - downloadFromRelease()        // Release-ZIP Download (primär)
 - getLatestRelease()           // Holt Release-Info von GitHub
 - downloadZipWithProgress()    // Lädt ZIP mit Fortschrittsanzeige
 - extractReleaseZip()          // Entpackt ZIP mit Pfad-Filterung
 - isRelevantPath()             // Prüft Whitelist/Blacklist
 - checkNodeJSVersion()         // Prüft Node.js Version (min. v20)
-- downloadRepository()         // Fallback auf Tree/Blob
+- downloadRepository()         // Fallback auf Branch-Download
 - checkNodeJS()                // Prüft/Installiert Node.js
 - installDependencies()        // Führt npm install aus
 - startApplication()           // Startet LTTH
