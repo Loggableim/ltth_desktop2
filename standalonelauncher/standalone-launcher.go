@@ -132,6 +132,34 @@ func (sl *StandaloneLauncher) sendError(errMsg string) {
 	}
 }
 
+// sendInstallPrompt signals frontend to show install path dialog
+func (sl *StandaloneLauncher) sendInstallPrompt(exeDir, systemDir string) {
+	msg := fmt.Sprintf(`{"type": "install-prompt", "exeDir": "%s", "systemDir": "%s"}`, 
+		strings.ReplaceAll(exeDir, `\`, `\\`), 
+		strings.ReplaceAll(systemDir, `\\`, `\\`))
+	for client := range sl.clients {
+		select {
+		case client <- msg:
+		default:
+		}
+	}
+}
+
+// sendUpdatePrompt signals frontend to show update dialog
+func (sl *StandaloneLauncher) sendUpdatePrompt() {
+	if sl.pendingRelease == nil {
+		return
+	}
+	releaseJSON, _ := json.Marshal(sl.pendingRelease)
+	msg := fmt.Sprintf(`{"type": "update-prompt", "release": %s}`, string(releaseJSON))
+	for client := range sl.clients {
+		select {
+		case client <- msg:
+		default:
+		}
+	}
+}
+
 // Serve the splash screen
 func (sl *StandaloneLauncher) serveSplash(w http.ResponseWriter, r *http.Request) {
 	tmplContent, err := assets.ReadFile("assets/splash.html")
@@ -1118,6 +1146,9 @@ func (sl *StandaloneLauncher) getInstallDir() (string, error) {
 func (sl *StandaloneLauncher) waitForInstallationPath(exeDir, systemDir string) (string, error) {
 	sl.logger.Println("Waiting for installation path choice from GUI...")
 	
+	// Signal frontend to show install dialog
+	sl.sendInstallPrompt(exeDir, systemDir)
+	
 	// Wait for choice from GUI
 	select {
 	case choice := <-sl.installChoiceChan:
@@ -1333,6 +1364,9 @@ func (sl *StandaloneLauncher) checkForUpdates() (*GitHubRelease, bool, error) {
 // waitForUpdateDecision waits for user to confirm update via GUI
 func (sl *StandaloneLauncher) waitForUpdateDecision() bool {
 	sl.logger.Println("Waiting for update decision from GUI...")
+	
+	// Signal frontend to show update dialog
+	sl.sendUpdatePrompt()
 	
 	// Wait for choice from GUI
 	select {

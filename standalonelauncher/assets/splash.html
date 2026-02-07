@@ -358,6 +358,15 @@
             font-size: 0.95rem;
         }
 
+        .option-desc code {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: var(--accent-blue);
+        }
+
         select, input[type="checkbox"] {
             padding: 0.75rem;
             background: var(--bg-darker);
@@ -725,14 +734,27 @@
 
             // Show dialogs based on event type
             if (data.type === 'install-prompt') {
-                showInstallDialog();
+                showInstallDialog(data.exeDir, data.systemDir);
             } else if (data.type === 'update-prompt') {
                 showUpdateDialog(data.release);
             }
         }
 
         // Install dialog functions
-        function showInstallDialog() {
+        function showInstallDialog(exeDir, systemDir) {
+            // Update path descriptions if provided
+            if (exeDir) {
+                const portableCard = document.querySelector('[data-choice="portable"] .option-desc');
+                if (portableCard) {
+                    portableCard.innerHTML = `Installation im aktuellen Verzeichnis: <code>${exeDir}</code><br>Ideal für USB-Sticks oder lokale Nutzung ohne Admin-Rechte.`;
+                }
+            }
+            if (systemDir) {
+                const systemCard = document.querySelector('[data-choice="system"] .option-desc');
+                if (systemCard) {
+                    systemCard.innerHTML = `Installation im System-Verzeichnis: <code>${systemDir}</code><br>Empfohlen für reguläre Nutzung mit automatischen Updates.`;
+                }
+            }
             document.getElementById('installDialog').classList.add('active');
         }
 
