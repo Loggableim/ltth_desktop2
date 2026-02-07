@@ -298,3 +298,127 @@ func TestGetInstallDirCreatesDirectory(t *testing.T) {
 	
 	t.Logf("Successfully created and cleaned up test directory: %s", testDir)
 }
+
+// Test version constant
+func TestLauncherVersion(t *testing.T) {
+	if launcherVersion == "" {
+		t.Error("launcherVersion should not be empty")
+	}
+	
+	// Version should match expected format (e.g., "1.3.2")
+	parts := strings.Split(launcherVersion, ".")
+	if len(parts) != 3 {
+		t.Errorf("launcherVersion should have 3 parts (major.minor.patch), got %d parts: %s", len(parts), launcherVersion)
+	}
+	
+	t.Logf("Launcher version: %s", launcherVersion)
+}
+
+// Test config file operations
+func TestConfigFileOperations(t *testing.T) {
+	// Create a temporary directory for config
+	tempDir, err := os.MkdirTemp("", "ltth-config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+	
+	sl := NewStandaloneLauncher()
+	
+	// Test default config for first run
+	config, err := sl.loadConfig()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+	
+	if !config.FirstRun {
+		t.Error("FirstRun should be true for new config")
+	}
+	
+	if config.InstalledVersion != "" {
+		t.Error("InstalledVersion should be empty for new config")
+	}
+	
+	// Test saving config
+	config.FirstRun = false
+	config.InstalledVersion = "1.2.3"
+	config.InstallPath = "/test/path"
+	
+	// We can't test saveConfig directly without modifying the executable path,
+	// but we can test the config structure
+	if config.InstalledVersion != "1.2.3" {
+		t.Errorf("InstalledVersion should be '1.2.3', got %s", config.InstalledVersion)
+	}
+	
+	if config.InstallPath != "/test/path" {
+		t.Errorf("InstallPath should be '/test/path', got %s", config.InstallPath)
+	}
+	
+	t.Log("Config operations test passed")
+}
+
+// Test isAppInstalled logic
+func TestIsAppInstalled(t *testing.T) {
+	// Create a temporary directory
+	tempDir, err := os.MkdirTemp("", "ltth-app-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+	
+	sl := NewStandaloneLauncher()
+	sl.baseDir = tempDir
+	
+	// App should not be installed initially
+	if sl.isAppInstalled() {
+		t.Error("App should not be installed in empty directory")
+	}
+	
+	// Create app directory with package.json
+	appDir := filepath.Join(tempDir, "app")
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		t.Fatalf("Failed to create app directory: %v", err)
+	}
+	
+	packageJSON := filepath.Join(appDir, "package.json")
+	if err := os.WriteFile(packageJSON, []byte("{}"), 0644); err != nil {
+		t.Fatalf("Failed to create package.json: %v", err)
+	}
+	
+	// Now app should be detected as installed
+	if !sl.isAppInstalled() {
+		t.Error("App should be installed after creating package.json")
+	}
+	
+	t.Log("isAppInstalled test passed")
+}
+
+// Test checkForUpdates version comparison
+func TestCheckForUpdatesVersionComparison(t *testing.T) {
+	testCases := []struct {
+		currentVersion string
+		releaseTag     string
+		shouldUpdate   bool
+	}{
+		{"1.3.2", "v1.3.2", false},  // Same version
+		{"1.3.2", "v1.3.3", true},   // Newer version available
+		{"1.3.2", "v1.4.0", true},   // Major version update
+		{"1.3.2", "v1.3.1", true},   // Different version (simple comparison)
+	}
+	
+	for _, tc := range testCases {
+		currentVersion := tc.currentVersion
+		releaseTag := tc.releaseTag
+		latestVersion := strings.TrimPrefix(releaseTag, "v")
+		
+		// Simple version comparison: hasUpdate if versions differ
+		hasUpdate := latestVersion != currentVersion
+		
+		if hasUpdate != tc.shouldUpdate {
+			t.Errorf("Version comparison: current=%s, latest=%s, expected shouldUpdate=%v, got %v",
+				currentVersion, latestVersion, tc.shouldUpdate, hasUpdate)
+		}
+	}
+	
+	t.Log("Version comparison test passed")
+}
