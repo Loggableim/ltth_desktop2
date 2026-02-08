@@ -458,6 +458,102 @@
             color: var(--text-primary);
         }
 
+        /* Preflight check results and dependency errors */
+        #statusDetails {
+            margin-top: 1.5rem;
+        }
+
+        .preflight-results, .dependency-error {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .dependency-error {
+            border-left-color: var(--accent-pink);
+        }
+
+        .preflight-results.failed, .dependency-error {
+            background: rgba(233, 69, 96, 0.15);
+        }
+
+        .preflight-title, .error-title {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+
+        .error-title {
+            color: var(--accent-pink);
+        }
+
+        .error-detail {
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+            line-height: 1.5;
+        }
+
+        .check-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+        }
+
+        .check-status {
+            font-size: 1.2rem;
+            margin-right: 0.75rem;
+            min-width: 24px;
+        }
+
+        .check-info {
+            flex: 1;
+        }
+
+        .check-name {
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        .check-version {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-left: 0.5rem;
+        }
+
+        .check-hint {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 0.25rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+
+        .hint-list {
+            list-style: none;
+            padding: 0;
+            margin: 0.5rem 0 0 0;
+        }
+
+        .hint-list li {
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .hint-list li:before {
+            content: "💡 ";
+            margin-right: 0.5rem;
+        }
+
         @media (max-width: 768px) {
             .title {
                 font-size: 1.5rem;
@@ -507,6 +603,7 @@
                     <div class="spinner" id="statusSpinner"></div>
                     <span id="statusMessage">Initialisiere...</span>
                 </div>
+                <div id="statusDetails"></div>
             </div>
         </div>
 
@@ -814,7 +911,68 @@
                 showInstallDialog(data.exeDir, data.systemDir);
             } else if (data.type === 'update-prompt') {
                 showUpdateDialog(data.release);
+            } else if (data.type === 'preflight-results') {
+                showPreflightResults(data.results, data.allPassed);
+            } else if (data.type === 'dependency-error') {
+                showDependencyError(data.title, data.detail, data.hints);
             }
+        }
+
+        // Show preflight check results
+        function showPreflightResults(results, allPassed) {
+            const statusDetails = document.getElementById('statusDetails');
+            
+            let html = '<div class="preflight-results' + (allPassed ? '' : ' failed') + '">';
+            html += '<div class="preflight-title">';
+            html += allPassed ? '✅ System-Checks abgeschlossen' : '⚠️ System-Checks: Fehlende Abhängigkeiten';
+            html += '</div>';
+            
+            results.forEach(check => {
+                let status = check.found ? '✅' : (check.required ? '❌' : '⚠️');
+                html += '<div class="check-item">';
+                html += '<div class="check-status">' + status + '</div>';
+                html += '<div class="check-info">';
+                html += '<div class="check-name">' + escapeHtml(check.name);
+                if (check.version) {
+                    html += '<span class="check-version">(' + escapeHtml(check.version) + ')</span>';
+                }
+                html += '</div>';
+                if (!check.found && check.install_hint) {
+                    html += '<div class="check-hint">' + escapeHtml(check.install_hint) + '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+            });
+            
+            html += '</div>';
+            statusDetails.innerHTML = html;
+        }
+
+        // Show dependency error
+        function showDependencyError(title, detail, hints) {
+            const statusDetails = document.getElementById('statusDetails');
+            
+            let html = '<div class="dependency-error">';
+            html += '<div class="error-title">' + escapeHtml(title) + '</div>';
+            html += '<div class="error-detail">' + escapeHtml(detail) + '</div>';
+            
+            if (hints && hints.length > 0) {
+                html += '<ul class="hint-list">';
+                hints.forEach(hint => {
+                    html += '<li>' + escapeHtml(hint) + '</li>';
+                });
+                html += '</ul>';
+            }
+            
+            html += '</div>';
+            statusDetails.innerHTML = html;
+        }
+
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            return text.replace(/[&<>"']/g, function(m) {
+                return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+            });
         }
 
         // Install dialog functions

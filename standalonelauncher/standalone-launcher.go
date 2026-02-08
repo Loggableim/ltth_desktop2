@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -102,6 +103,17 @@ type ProfilesConfig struct {
 	Profiles []Profile `json:"profiles"`
 }
 
+// PreflightCheckResult represents a single preflight check result
+type PreflightCheckResult struct {
+	Name        string `json:"name"`
+	Found       bool   `json:"found"`
+	Version     string `json:"version,omitempty"`
+	Required    bool   `json:"required"`
+	InstallHint string `json:"install_hint,omitempty"`
+	AutoFixable bool   `json:"auto_fixable"`
+	DownloadURL string `json:"download_url,omitempty"`
+}
+
 func NewStandaloneLauncher() *StandaloneLauncher {
 	return &StandaloneLauncher{
 		status:            "Initialisiere Standalone Launcher...",
@@ -149,6 +161,29 @@ func (sl *StandaloneLauncher) sendInstallPrompt(exeDir, systemDir string) {
 		"systemDir": systemDir,
 	}
 	msgBytes, _ := json.Marshal(payload) // Safe to ignore: marshaling simple types never fails
+	msg := string(msgBytes)
+	for client := range sl.clients {
+		select {
+		case client <- msg:
+		default:
+		}
+	}
+}
+
+// sendDependencyError sends structured dependency error to frontend via SSE
+func (sl *StandaloneLauncher) sendDependencyError(title, detail string, hints []string) {
+	sl.logger.Printf("❌ %s: %s\n", title, detail)
+	for _, hint := range hints {
+		sl.logger.Printf("   💡 %s\n", hint)
+	}
+	
+	payload := map[string]interface{}{
+		"type":   "dependency-error",
+		"title":  title,
+		"detail": detail,
+		"hints":  hints,
+	}
+	msgBytes, _ := json.Marshal(payload)
 	msg := string(msgBytes)
 	for client := range sl.clients {
 		select {
@@ -1071,9 +1106,280 @@ func (sl *StandaloneLauncher) extractZip(zipPath, destDir string) error {
 	return nil
 }
 
+// findNpmPath finds npm binary path relative to Node.js or in system PATH
+func (sl *StandaloneLauncher) findNpmPath(nodePath string) string {
+	// Try portable npm first (relative to Node.js binary)
+	if runtime.GOOS == "windows" {
+		portableNpm := filepath.Join(filepath.Dir(nodePath), "npm.cmd")
+		if _, err := os.Stat(portableNpm); err == nil {
+			return portableNpm
+		}
+	} else {
+		portableNpm := filepath.Join(filepath.Dir(nodePath), "npm")
+		if _, err := os.Stat(portableNpm); err == nil {
+			return portableNpm
+		}
+	}
+	
+	// Fallback to system npm
+	return "npm"
+}
+
+// analyzeNpmError analyzes npm stderr and returns actionable hints
+func (sl *StandaloneLauncher) analyzeNpmError(stderr string) []string {
+	hints := []string{}
+	stderrLower := strings.ToLower(stderr)
+	
+	// Check for specific error patterns
+	if strings.Contains(stderrLower, "node-gyp") || strings.Contains(stderrLower, "gyp err") {
+		hints = append(hints, "node-gyp Fehler erkannt: Build-Tools fehlen")
+		if runtime.GOOS == "windows" {
+			hints = append(hints, "Windows: Installiere Python 3 und Visual C++ Build Tools")
+			hints = append(hints, "  → winget install Python.Python.3.12")
+			hints = append(hints, "  → winget install Microsoft.VisualStudio.2022.BuildTools --override \"--add Microsoft.VisualStudio.Workload.VCTools\"")
+		} else {
+			hints = append(hints, "Linux/Mac: Installiere build-essential/Xcode Command Line Tools")
+		}
+	}
+	
+	if strings.Contains(stderrLower, "python") && (strings.Contains(stderrLower, "not found") || strings.Contains(stderrLower, "kann nicht gefunden werden")) {
+		hints = append(hints, "Python nicht gefunden")
+		if runtime.GOOS == "windows" {
+			hints = append(hints, "  → winget install Python.Python.3.12")
+		} else {
+			hints = append(hints, "  → sudo apt install python3 (Ubuntu/Debian)")
+			hints = append(hints, "  → brew install python3 (macOS)")
+		}
+	}
+	
+	if strings.Contains(stderrLower, "msbuild") || strings.Contains(stderrLower, "cl.exe") {
+		hints = append(hints, "Visual C++ Compiler nicht gefunden")
+		hints = append(hints, "  → winget install Microsoft.VisualStudio.2022.BuildTools --override \"--add Microsoft.VisualStudio.Workload.VCTools\"")
+	}
+	
+	if strings.Contains(stderrLower, "eacces") || strings.Contains(stderrLower, "eperm") {
+		hints = append(hints, "Fehlende Berechtigungen: Als Administrator/root starten")
+	}
+	
+	if strings.Contains(stderrLower, "enoent") && strings.Contains(stderrLower, "npm") {
+		hints = append(hints, "npm nicht gefunden: Node.js neu installieren")
+	}
+	
+	if strings.Contains(stderrLower, "etimedout") || strings.Contains(stderrLower, "econnreset") {
+		hints = append(hints, "Netzwerkfehler: Internet-Verbindung und Firewall prüfen")
+		hints = append(hints, "  → Proxy-Einstellungen: npm config set proxy http://proxy:port")
+	}
+	
+	// Fallback if no specific error detected
+	if len(hints) == 0 {
+		hints = append(hints, "Versuche manuelle Installation:")
+		hints = append(hints, "  1. Öffne Terminal/Eingabeaufforderung")
+		hints = append(hints, "  2. Navigiere zum app-Verzeichnis")
+		hints = append(hints, "  3. Führe aus: npm install --omit=dev --no-optional --no-audit --no-fund")
+		hints = append(hints, "  4. Bei Fehlern: npm install --verbose für Details")
+	}
+	
+	return hints
+}
+
+// runPreflightChecks performs system dependency checks before npm install
+func (sl *StandaloneLauncher) runPreflightChecks(nodePath string) ([]PreflightCheckResult, bool) {
+	sl.logger.Println("Running pre-flight system checks...")
+	sl.updateProgress(72, "🔍 Prüfe System-Abhängigkeiten...")
+	
+	results := []PreflightCheckResult{}
+	allPassed := true
+	
+	// 1. Check Node.js version
+	nodeOk, nodeVer, err := sl.checkNodeJSVersion(nodePath)
+	nodeResult := PreflightCheckResult{
+		Name:        "Node.js v20+",
+		Found:       nodeOk && err == nil,
+		Version:     nodeVer,
+		Required:    true,
+		InstallHint: "Node.js wird automatisch installiert",
+		AutoFixable: true,
+	}
+	if !nodeResult.Found {
+		allPassed = false
+	}
+	results = append(results, nodeResult)
+	
+	// 2. Check npm
+	npmPath := sl.findNpmPath(nodePath)
+	var npmCmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		npmCmd = exec.Command("cmd", "/C", npmPath, "--version")
+	} else {
+		npmCmd = exec.Command(npmPath, "--version")
+	}
+	npmOutput, npmErr := npmCmd.CombinedOutput()
+	npmVersion := ""
+	if npmErr == nil {
+		npmVersion = strings.TrimSpace(string(npmOutput))
+	}
+	npmResult := PreflightCheckResult{
+		Name:        "npm",
+		Found:       npmErr == nil,
+		Version:     npmVersion,
+		Required:    true,
+		InstallHint: "npm wird mit Node.js mitgeliefert",
+		AutoFixable: true,
+	}
+	if !npmResult.Found {
+		allPassed = false
+	}
+	results = append(results, npmResult)
+	
+	// 3. Check Python 3
+	pythonFound := false
+	pythonVersion := ""
+	for _, pythonCmd := range []string{"python", "python3"} {
+		cmd := exec.Command(pythonCmd, "--version")
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			pythonVersion = strings.TrimSpace(string(output))
+			if strings.Contains(pythonVersion, "Python 3") {
+				pythonFound = true
+				break
+			}
+		}
+	}
+	pythonResult := PreflightCheckResult{
+		Name:        "Python 3.x",
+		Found:       pythonFound,
+		Version:     pythonVersion,
+		Required:    true,
+		InstallHint: "Benötigt für node-gyp (better-sqlite3 Kompilierung)",
+		AutoFixable: false,
+		DownloadURL: "https://www.python.org/downloads/",
+	}
+	if runtime.GOOS == "windows" {
+		pythonResult.InstallHint += "\n  → winget install Python.Python.3.12"
+	}
+	if !pythonResult.Found {
+		allPassed = false
+	}
+	results = append(results, pythonResult)
+	
+	// 4. Check Visual C++ Build Tools (Windows only)
+	if runtime.GOOS == "windows" {
+		vcFound := false
+		vcVersion := ""
+		
+		// Try vswhere.exe
+		vswhere := filepath.Join(os.Getenv("ProgramFiles(x86)"), "Microsoft Visual Studio", "Installer", "vswhere.exe")
+		if _, err := os.Stat(vswhere); err == nil {
+			cmd := exec.Command(vswhere, "-latest", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationVersion")
+			output, err := cmd.CombinedOutput()
+			if err == nil && len(output) > 0 {
+				vcVersion = strings.TrimSpace(string(output))
+				vcFound = true
+			}
+		}
+		
+		// Fallback: Check common installation paths
+		if !vcFound {
+			buildToolsPaths := []string{
+				filepath.Join(os.Getenv("ProgramFiles(x86)"), "Microsoft Visual Studio", "2022", "BuildTools"),
+				filepath.Join(os.Getenv("ProgramFiles(x86)"), "Microsoft Visual Studio", "2019", "BuildTools"),
+				filepath.Join(os.Getenv("ProgramFiles"), "Microsoft Visual Studio", "2022", "BuildTools"),
+			}
+			for _, path := range buildToolsPaths {
+				if _, err := os.Stat(path); err == nil {
+					vcFound = true
+					vcVersion = "Installed"
+					break
+				}
+			}
+		}
+		
+		// Fallback: Check npm config
+		if !vcFound {
+			cmd := exec.Command("cmd", "/C", "npm", "config", "get", "msvs_version")
+			output, err := cmd.CombinedOutput()
+			if err == nil && !strings.Contains(string(output), "undefined") {
+				vcVersion = strings.TrimSpace(string(output))
+				vcFound = true
+			}
+		}
+		
+		vcResult := PreflightCheckResult{
+			Name:        "Visual C++ Build Tools",
+			Found:       vcFound,
+			Version:     vcVersion,
+			Required:    true,
+			InstallHint: "Benötigt für native Node.js Module (better-sqlite3)\n  → winget install Microsoft.VisualStudio.2022.BuildTools --override \"--add Microsoft.VisualStudio.Workload.VCTools\"",
+			AutoFixable: false,
+			DownloadURL: "https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022",
+		}
+		if !vcResult.Found {
+			allPassed = false
+		}
+		results = append(results, vcResult)
+	}
+	
+	// 5. Check Port 3000 availability
+	portAvailable := true
+	conn, err := net.DialTimeout("tcp", "localhost:3000", 2*time.Second)
+	if err == nil {
+		// Port is in use
+		conn.Close()
+		portAvailable = false
+	}
+	portResult := PreflightCheckResult{
+		Name:        "Port 3000 verfügbar",
+		Found:       portAvailable,
+		Version:     "",
+		Required:    false,
+		InstallHint: "Port 3000 ist bereits belegt - LTTH wird möglicherweise nicht starten können",
+		AutoFixable: false,
+	}
+	results = append(results, portResult)
+	
+	// Send results to frontend
+	payload := map[string]interface{}{
+		"type":      "preflight-results",
+		"results":   results,
+		"allPassed": allPassed,
+	}
+	msgBytes, _ := json.Marshal(payload)
+	msg := string(msgBytes)
+	for client := range sl.clients {
+		select {
+		case client <- msg:
+		default:
+		}
+	}
+	
+	// Log results
+	sl.logger.Println("Pre-flight check results:")
+	for _, result := range results {
+		status := "✅"
+		if !result.Found {
+			if result.Required {
+				status = "❌"
+			} else {
+				status = "⚠️"
+			}
+		}
+		sl.logger.Printf("  %s %s: %v (Version: %s)\n", status, result.Name, result.Found, result.Version)
+	}
+	
+	return results, allPassed
+}
+
 // Install dependencies
 func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 	sl.updateProgress(80, "🔄 Installiere Abhängigkeiten...")
+	
+	// Check if better-sqlite3 is already compiled
+	betterSqlitePath := filepath.Join(appDir, "node_modules", "better-sqlite3", "build", "Release", "better_sqlite3.node")
+	if _, err := os.Stat(betterSqlitePath); err == nil {
+		sl.logger.Println("better-sqlite3 already compiled, skipping npm install")
+		sl.updateProgress(90, "✓ Abhängigkeiten bereits installiert!")
+		return nil
+	}
 	
 	// Determine npm path - prefer portable installation
 	npmCmd := "npm"
@@ -1097,9 +1403,9 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 	
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/C", npmCmd, "install", "--omit=dev", "--loglevel=info")
+		cmd = exec.Command("cmd", "/C", npmCmd, "install", "--omit=dev", "--no-optional", "--no-audit", "--no-fund", "--loglevel=info")
 	} else {
-		cmd = exec.Command(npmCmd, "install", "--omit=dev", "--loglevel=info")
+		cmd = exec.Command(npmCmd, "install", "--omit=dev", "--no-optional", "--no-audit", "--no-fund", "--loglevel=info")
 	}
 	cmd.Dir = appDir
 	
@@ -1157,9 +1463,51 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 	
 	packageCount := 0
 	lastUpdate := time.Now()
+	lastOutput := time.Now()
+	stderrBuffer := ""
 	
 	// Channel to signal when goroutines are done
 	done := make(chan bool, 2)
+	
+	// Heartbeat goroutine - monitors npm activity
+	heartbeatDone := make(chan bool)
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-heartbeatDone:
+				return
+			case <-ticker.C:
+				timeSinceOutput := time.Since(lastOutput)
+				if timeSinceOutput > 10*time.Second {
+					sl.updateProgress(sl.progress, fmt.Sprintf("⏳ npm install läuft... (kein Output seit %ds, bitte warten)", int(timeSinceOutput.Seconds())))
+				}
+			}
+		}
+	}()
+	
+	// Timeout watchdog - kills npm after 10 minutes
+	timeoutDone := make(chan bool)
+	go func() {
+		select {
+		case <-timeoutDone:
+			return
+		case <-time.After(10 * time.Minute):
+			sl.logger.Println("⏱️ npm install timeout (10 minutes) - killing process")
+			sl.sendDependencyError(
+				"npm install Timeout",
+				"npm install wurde nach 10 Minuten abgebrochen. Dies deutet auf fehlende Build-Tools oder Netzwerkprobleme hin.",
+				[]string{
+					"Prüfe, ob Python 3 installiert ist: python --version",
+					"Prüfe, ob Visual C++ Build Tools installiert sind (Windows)",
+					"Prüfe deine Internet-Verbindung und Firewall-Einstellungen",
+					"Versuche manuell: npm install --omit=dev --no-optional --verbose",
+				},
+			)
+			cmd.Process.Kill()
+		}
+	}()
 	
 	// Read stdout in goroutine
 	go func() {
@@ -1168,6 +1516,7 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 		for scanner.Scan() {
 			line := scanner.Text()
 			sl.logger.Println(line)
+			lastOutput = time.Now()
 			
 			// Extract package name from npm output
 			matches := npmPackageRegex.FindStringSubmatch(line)
@@ -1199,6 +1548,8 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 		for scanner.Scan() {
 			line := scanner.Text()
 			sl.logger.Println(line)
+			stderrBuffer += line + "\n"
+			lastOutput = time.Now()
 		}
 	}()
 	
@@ -1207,10 +1558,21 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 	<-done
 	<-done
 	
+	// Stop heartbeat and timeout watchdogs
+	close(heartbeatDone)
+	close(timeoutDone)
+	
 	// Wait for command to complete
 	err = cmd.Wait()
 	
 	if err != nil {
+		// Analyze npm error and provide helpful hints
+		hints := sl.analyzeNpmError(stderrBuffer)
+		sl.sendDependencyError(
+			"npm install fehlgeschlagen",
+			fmt.Sprintf("npm install ist mit einem Fehler beendet worden: %v", err),
+			hints,
+		)
 		return fmt.Errorf("npm install fehlgeschlagen: %v", err)
 	}
 	
@@ -1629,8 +1991,28 @@ func (sl *StandaloneLauncher) run() error {
 		return err
 	}
 	
-	// Install dependencies (only if we downloaded new files or first install)
+	// Run pre-flight checks (BEFORE installDependencies)
 	appDir := filepath.Join(sl.baseDir, "app")
+	if !sl.skipUpdate {
+		results, allPassed := sl.runPreflightChecks(nodePath)
+		if !allPassed {
+			sl.logger.Println("⚠️ Pre-flight checks failed - some dependencies are missing")
+			// Log missing dependencies
+			for _, result := range results {
+				if !result.Found && result.Required {
+					sl.logger.Printf("   ❌ Missing: %s - %s\n", result.Name, result.InstallHint)
+				}
+			}
+			
+			// Give user 30 seconds to read the warnings and potentially install missing deps
+			sl.updateProgress(73, "⚠️ Fehlende Abhängigkeiten erkannt - prüfe Details oben. Versuche trotzdem npm install in 30s...")
+			time.Sleep(30 * time.Second)
+		} else {
+			sl.logger.Println("✅ All pre-flight checks passed!")
+		}
+	}
+	
+	// Install dependencies (only if we downloaded new files or first install)
 	if !sl.skipUpdate {
 		if err := sl.installDependencies(appDir); err != nil {
 			sl.sendError(err.Error())
