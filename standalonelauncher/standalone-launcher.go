@@ -44,6 +44,9 @@ const (
 	nodeMacURL   = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-darwin-x64.tar.gz"
 )
 
+// Compiled regex for parsing npm output (compiled once for efficiency)
+var npmPackageRegex = regexp.MustCompile(`npm http (?:fetch|cache) https://registry\.npmjs\.org/([^/\s]+)`)
+
 // GitHub Release API structures
 type GitHubRelease struct {
 	TagName     string                `json:"tag_name"`
@@ -1097,9 +1100,6 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 		return fmt.Errorf("npm install fehlgeschlagen: %v", err)
 	}
 	
-	// Parse npm output for package names
-	packageRegex := regexp.MustCompile(`npm http (?:fetch|cache) https://registry\.npmjs\.org/([^/\s]+)`)
-	
 	packageCount := 0
 	lastUpdate := time.Now()
 	
@@ -1115,7 +1115,7 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 			sl.logger.Println(line)
 			
 			// Extract package name from npm output
-			matches := packageRegex.FindStringSubmatch(line)
+			matches := npmPackageRegex.FindStringSubmatch(line)
 			if len(matches) > 1 {
 				packageName := matches[1]
 				packageCount++
@@ -1147,12 +1147,13 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 		}
 	}()
 	
+	// Wait for both goroutines to finish reading
+	// This must happen before cmd.Wait() to ensure pipes are fully drained
+	<-done
+	<-done
+	
 	// Wait for command to complete
 	err = cmd.Wait()
-	
-	// Wait for both goroutines to finish reading
-	<-done
-	<-done
 	
 	if err != nil {
 		return fmt.Errorf("npm install fehlgeschlagen: %v", err)

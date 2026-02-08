@@ -779,7 +779,8 @@
                 
                 statusMessage.textContent = data.status;
                 
-                // Show spinner for active operations (progress < 100%)
+                // Show spinner for active operations (progress 10-99%)
+                // Hide during initialization (<10%) and completion (100%)
                 if (data.progress !== undefined && data.progress < 100 && data.progress >= 10) {
                     spinner.classList.add('active');
                 } else {
