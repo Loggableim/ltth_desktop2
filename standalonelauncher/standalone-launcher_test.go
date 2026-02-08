@@ -728,10 +728,7 @@ result := sl.findNpmPath(nodePath)
 // On Windows, it should find npm.cmd in the same directory
 // On Linux, it should find npm in the same directory
 // If not found, it should return "npm" as fallback
-if result != "npm" {
-// If it's not the fallback, verify it's a valid path
-if !filepath.IsAbs(result) && result != "npm" {
+if result != "npm" && !filepath.IsAbs(result) {
 t.Errorf("Expected absolute path or 'npm', got '%s'", result)
-}
 }
 }

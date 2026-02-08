@@ -1175,7 +1175,7 @@ func (sl *StandaloneLauncher) analyzeNpmError(stderr string) []string {
 		hints = append(hints, "Versuche manuelle Installation:")
 		hints = append(hints, "  1. Öffne Terminal/Eingabeaufforderung")
 		hints = append(hints, "  2. Navigiere zum app-Verzeichnis")
-		hints = append(hints, "  3. Führe aus: npm install --omit=dev")
+		hints = append(hints, "  3. Führe aus: npm install --omit=dev --no-optional --no-audit --no-fund")
 		hints = append(hints, "  4. Bei Fehlern: npm install --verbose für Details")
 	}
 	
@@ -1495,6 +1495,16 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 			return
 		case <-time.After(10 * time.Minute):
 			sl.logger.Println("⏱️ npm install timeout (10 minutes) - killing process")
+			sl.sendDependencyError(
+				"npm install Timeout",
+				"npm install wurde nach 10 Minuten abgebrochen. Dies deutet auf fehlende Build-Tools oder Netzwerkprobleme hin.",
+				[]string{
+					"Prüfe, ob Python 3 installiert ist: python --version",
+					"Prüfe, ob Visual C++ Build Tools installiert sind (Windows)",
+					"Prüfe deine Internet-Verbindung und Firewall-Einstellungen",
+					"Versuche manuell: npm install --omit=dev --no-optional --verbose",
+				},
+			)
 			cmd.Process.Kill()
 		}
 	}()
