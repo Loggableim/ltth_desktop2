@@ -1108,10 +1108,27 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 		env := os.Environ()
 		pathFound := false
 		for i, e := range env {
-			if strings.HasPrefix(strings.ToUpper(e), "PATH=") {
-				env[i] = e + string(os.PathListSeparator) + nodeDir
-				pathFound = true
-				break
+			// Check for PATH= in a way that works on both Windows (case-insensitive) and Unix (case-sensitive)
+			// On Windows, PATH can be PATH=, Path=, or path=
+			// On Unix, it's always PATH=
+			var pathPrefix string
+			if runtime.GOOS == "windows" {
+				if len(e) >= 5 && strings.ToUpper(e[:5]) == "PATH=" {
+					pathPrefix = e[:5] // Preserve original case (e.g., "PATH=", "Path=", "path=")
+					pathValue := e[5:]
+					// Prepend nodeDir to PATH to ensure it takes precedence
+					env[i] = pathPrefix + nodeDir + string(os.PathListSeparator) + pathValue
+					pathFound = true
+					break
+				}
+			} else {
+				if strings.HasPrefix(e, "PATH=") {
+					pathValue := e[5:]
+					// Prepend nodeDir to PATH to ensure it takes precedence
+					env[i] = "PATH=" + nodeDir + string(os.PathListSeparator) + pathValue
+					pathFound = true
+					break
+				}
 			}
 		}
 		if !pathFound {
