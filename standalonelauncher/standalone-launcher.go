@@ -1113,7 +1113,7 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 			// On Unix, it's always PATH=
 			var pathPrefix string
 			if runtime.GOOS == "windows" {
-				if len(e) >= 5 && strings.ToUpper(e[:5]) == "PATH=" {
+				if len(e) > 4 && strings.ToUpper(e[:5]) == "PATH=" {
 					pathPrefix = e[:5] // Preserve original case (e.g., "PATH=", "Path=", "path=")
 					pathValue := e[5:]
 					// Prepend nodeDir to PATH to ensure it takes precedence
@@ -1122,7 +1122,7 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 					break
 				}
 			} else {
-				if len(e) >= 5 && e[:5] == "PATH=" {
+				if len(e) > 4 && e[:5] == "PATH=" {
 					pathValue := e[5:]
 					// Prepend nodeDir to PATH to ensure it takes precedence
 					env[i] = "PATH=" + nodeDir + string(os.PathListSeparator) + pathValue
