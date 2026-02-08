@@ -1122,7 +1122,7 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 					break
 				}
 			} else {
-				if strings.HasPrefix(e, "PATH=") {
+				if len(e) >= 5 && e[:5] == "PATH=" {
 					pathValue := e[5:]
 					// Prepend nodeDir to PATH to ensure it takes precedence
 					env[i] = "PATH=" + nodeDir + string(os.PathListSeparator) + pathValue
