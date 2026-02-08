@@ -1075,14 +1075,50 @@ func (sl *StandaloneLauncher) extractZip(zipPath, destDir string) error {
 func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 	sl.updateProgress(80, "🔄 Installiere Abhängigkeiten...")
 	
-	var cmd *exec.Cmd
+	// Determine npm path - prefer portable installation
+	npmCmd := "npm"
+	nodeDir := ""
+	
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/C", "npm", "install", "--omit=dev", "--loglevel=info")
+		portableNpm := filepath.Join(sl.baseDir, "runtime", "node", "npm.cmd")
+		if _, err := os.Stat(portableNpm); err == nil {
+			npmCmd = portableNpm
+			nodeDir = filepath.Join(sl.baseDir, "runtime", "node")
+			sl.logger.Printf("Using portable npm: %s\n", npmCmd)
+		}
 	} else {
-		cmd = exec.Command("npm", "install", "--omit=dev", "--loglevel=info")
+		portableNpm := filepath.Join(sl.baseDir, "runtime", "node", "bin", "npm")
+		if _, err := os.Stat(portableNpm); err == nil {
+			npmCmd = portableNpm
+			nodeDir = filepath.Join(sl.baseDir, "runtime", "node", "bin")
+			sl.logger.Printf("Using portable npm: %s\n", npmCmd)
+		}
 	}
 	
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/C", npmCmd, "install", "--omit=dev", "--loglevel=info")
+	} else {
+		cmd = exec.Command(npmCmd, "install", "--omit=dev", "--loglevel=info")
+	}
 	cmd.Dir = appDir
+	
+	// Add portable node to PATH so node-gyp and other tools can find node
+	if nodeDir != "" {
+		env := os.Environ()
+		pathFound := false
+		for i, e := range env {
+			if strings.HasPrefix(strings.ToUpper(e), "PATH=") {
+				env[i] = e + string(os.PathListSeparator) + nodeDir
+				pathFound = true
+				break
+			}
+		}
+		if !pathFound {
+			env = append(env, "PATH="+nodeDir)
+		}
+		cmd.Env = env
+	}
 	
 	// Capture stdout and stderr
 	stdout, err := cmd.StdoutPipe()
