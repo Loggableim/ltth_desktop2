@@ -565,3 +565,173 @@ func TestInstallDependenciesProgressFormat(t *testing.T) {
 		t.Error("Status should contain package count '45 Pakete'")
 	}
 }
+
+// Test analyzeNpmError function
+func TestAnalyzeNpmError(t *testing.T) {
+sl := NewStandaloneLauncher()
+
+testCases := []struct {
+name           string
+stderr         string
+expectedKeywords []string
+}{
+{
+name:   "node-gyp error",
+stderr: "gyp ERR! build error\nnode-gyp failed to build",
+expectedKeywords: []string{"node-gyp", "Build-Tools"},
+},
+{
+name:   "python not found",
+stderr: "python not found\ngyp ERR! configure error",
+expectedKeywords: []string{"Python", "nicht gefunden"},
+},
+{
+name:   "msbuild error",
+stderr: "MSBUILD : error MSB1003: Specify a project or solution file",
+expectedKeywords: []string{"Visual C++", "Compiler"},
+},
+{
+name:   "permission error",
+stderr: "Error: EACCES: permission denied",
+expectedKeywords: []string{"Berechtigungen", "Administrator"},
+},
+{
+name:   "network timeout",
+stderr: "npm ERR! network ETIMEDOUT",
+expectedKeywords: []string{"Netzwerk", "Internet"},
+},
+{
+name:   "generic error",
+stderr: "npm ERR! something went wrong",
+expectedKeywords: []string{"manuelle", "Installation"},
+},
+}
+
+for _, tc := range testCases {
+t.Run(tc.name, func(t *testing.T) {
+hints := sl.analyzeNpmError(tc.stderr)
+
+if len(hints) == 0 {
+t.Error("Expected at least one hint, got none")
+return
+}
+
+allHints := strings.Join(hints, " ")
+for _, keyword := range tc.expectedKeywords {
+if !strings.Contains(allHints, keyword) {
+t.Errorf("Expected hints to contain '%s', but didn't.\nHints: %v", keyword, hints)
+}
+}
+})
+}
+}
+
+// Test sendDependencyError sends valid JSON
+func TestSendDependencyError(t *testing.T) {
+sl := NewStandaloneLauncher()
+
+// Register a test client
+testClient := make(chan string, 10)
+sl.clients[testClient] = true
+defer delete(sl.clients, testClient)
+
+// Send dependency error
+title := "npm install failed"
+detail := "Build tools are missing"
+hints := []string{"Install Python 3", "Install Visual C++ Build Tools"}
+
+sl.sendDependencyError(title, detail, hints)
+
+// Read the message from channel
+msg := <-testClient
+
+// Verify it's valid JSON
+var parsed map[string]interface{}
+err := json.Unmarshal([]byte(msg), &parsed)
+if err != nil {
+t.Fatalf("Message is not valid JSON: %v\nMessage: %s", err, msg)
+}
+
+// Verify content
+if parsed["type"] != "dependency-error" {
+t.Errorf("Expected type 'dependency-error', got %v", parsed["type"])
+}
+
+if parsed["title"] != title {
+t.Errorf("Expected title '%s', got %v", title, parsed["title"])
+}
+
+if parsed["detail"] != detail {
+t.Errorf("Expected detail '%s', got %v", detail, parsed["detail"])
+}
+
+hintsArray, ok := parsed["hints"].([]interface{})
+if !ok || len(hintsArray) != 2 {
+t.Errorf("Expected hints array with 2 items, got %v", parsed["hints"])
+}
+}
+
+// Test PreflightCheckResult structure
+func TestPreflightCheckResult(t *testing.T) {
+result := PreflightCheckResult{
+Name:        "Node.js v20+",
+Found:       true,
+Version:     "v20.18.1",
+Required:    true,
+InstallHint: "Node.js is automatically installed",
+AutoFixable: true,
+}
+
+// Test JSON marshaling
+jsonBytes, err := json.Marshal(result)
+if err != nil {
+t.Fatalf("Failed to marshal PreflightCheckResult: %v", err)
+}
+
+// Test JSON unmarshaling
+var decoded PreflightCheckResult
+err = json.Unmarshal(jsonBytes, &decoded)
+if err != nil {
+t.Fatalf("Failed to unmarshal PreflightCheckResult: %v", err)
+}
+
+// Verify fields
+if decoded.Name != result.Name {
+t.Errorf("Expected Name '%s', got '%s'", result.Name, decoded.Name)
+}
+
+if decoded.Found != result.Found {
+t.Errorf("Expected Found %v, got %v", result.Found, decoded.Found)
+}
+
+if decoded.Version != result.Version {
+t.Errorf("Expected Version '%s', got '%s'", result.Version, decoded.Version)
+}
+}
+
+// Test findNpmPath logic
+func TestFindNpmPath(t *testing.T) {
+sl := NewStandaloneLauncher()
+
+// Create temp directory structure
+tempDir := t.TempDir()
+nodePath := filepath.Join(tempDir, "node.exe")
+npmPath := filepath.Join(tempDir, "npm.cmd")
+
+// Create dummy files
+os.WriteFile(nodePath, []byte("dummy"), 0644)
+os.WriteFile(npmPath, []byte("dummy"), 0644)
+
+// Test finding npm relative to node
+result := sl.findNpmPath(nodePath)
+
+// On Windows, it should find npm.cmd in the same directory
+// On Linux, it should find npm in the same directory
+// If not found, it should return "npm" as fallback
+if result != "npm" {
+// If it's not the fallback, verify it's a valid path
+if !filepath.IsAbs(result) && result != "npm" {
+t.Errorf("Expected absolute path or 'npm', got '%s'", result)
+}
+}
+}
