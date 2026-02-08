@@ -1103,8 +1103,12 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 	packageCount := 0
 	lastUpdate := time.Now()
 	
+	// Channel to signal when goroutines are done
+	done := make(chan bool, 2)
+	
 	// Read stdout in goroutine
 	go func() {
+		defer func() { done <- true }()
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -1119,7 +1123,8 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 				// Update progress every package, but throttle SSE updates to every 500ms
 				if time.Since(lastUpdate) > 500*time.Millisecond {
 					// Progress from 80% to 89% based on package count
-					progressPercent := 80 + (packageCount % 90) / 10
+					// Cap at 89% to ensure we don't reach 90% before completion
+					progressPercent := 80 + (packageCount / 10)
 					if progressPercent > 89 {
 						progressPercent = 89
 					}
@@ -1134,6 +1139,7 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 	
 	// Read stderr
 	go func() {
+		defer func() { done <- true }()
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -1143,6 +1149,11 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 	
 	// Wait for command to complete
 	err = cmd.Wait()
+	
+	// Wait for both goroutines to finish reading
+	<-done
+	<-done
+	
 	if err != nil {
 		return fmt.Errorf("npm install fehlgeschlagen: %v", err)
 	}
