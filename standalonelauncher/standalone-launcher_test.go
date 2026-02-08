@@ -524,3 +524,44 @@ func TestSendInstallPromptJSONEscaping(t *testing.T) {
 		t.Error("systemDir should contain 'Test\"User' (with quote)")
 	}
 }
+
+// Test spinner emoji in progress messages
+func TestInstallDependenciesProgressFormat(t *testing.T) {
+	sl := NewStandaloneLauncher()
+	
+	// Register a test client
+	testClient := make(chan string, 10)
+	sl.clients[testClient] = true
+	defer delete(sl.clients, testClient)
+	
+	// Simulate progress update with spinner emoji
+	sl.updateProgress(85, "🔄 Lade express... (45 Pakete)")
+	
+	// Read the message from channel
+	msg := <-testClient
+	
+	// Verify it's valid JSON
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(msg), &parsed)
+	if err != nil {
+		t.Fatalf("Message is not valid JSON: %v\nMessage: %s", err, msg)
+	}
+	
+	// Verify content
+	if parsed["progress"].(float64) != 85 {
+		t.Errorf("Expected progress 85, got %v", parsed["progress"])
+	}
+	
+	status := parsed["status"].(string)
+	if !strings.Contains(status, "🔄") {
+		t.Error("Status should contain spinner emoji 🔄")
+	}
+	
+	if !strings.Contains(status, "express") {
+		t.Error("Status should contain package name 'express'")
+	}
+	
+	if !strings.Contains(status, "45 Pakete") {
+		t.Error("Status should contain package count '45 Pakete'")
+	}
+}

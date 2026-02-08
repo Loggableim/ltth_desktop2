@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -41,6 +43,9 @@ const (
 	nodeLinuxURL = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz"
 	nodeMacURL   = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-darwin-x64.tar.gz"
 )
+
+// Compiled regex for parsing npm output (compiled once for efficiency)
+var npmPackageRegex = regexp.MustCompile(`npm http (?:fetch|cache) https://registry\.npmjs\.org/([^/\s]+)`)
 
 // GitHub Release API structures
 type GitHubRelease struct {
@@ -1068,26 +1073,93 @@ func (sl *StandaloneLauncher) extractZip(zipPath, destDir string) error {
 
 // Install dependencies
 func (sl *StandaloneLauncher) installDependencies(appDir string) error {
-	sl.updateProgress(80, "Installiere Abhängigkeiten...")
+	sl.updateProgress(80, "🔄 Installiere Abhängigkeiten...")
 	
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/C", "npm", "install", "--omit=dev")
+		cmd = exec.Command("cmd", "/C", "npm", "install", "--omit=dev", "--loglevel=info")
 	} else {
-		cmd = exec.Command("npm", "install", "--omit=dev")
+		cmd = exec.Command("npm", "install", "--omit=dev", "--loglevel=info")
 	}
 	
 	cmd.Dir = appDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	
+	// Capture stdout and stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %v", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %v", err)
+	}
 	
 	sl.logger.Printf("Running npm install in: %s\n", appDir)
-	err := cmd.Run()
+	
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("npm install fehlgeschlagen: %v", err)
+	}
+	
+	packageCount := 0
+	lastUpdate := time.Now()
+	
+	// Channel to signal when goroutines are done
+	done := make(chan bool, 2)
+	
+	// Read stdout in goroutine
+	go func() {
+		defer func() { done <- true }()
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			sl.logger.Println(line)
+			
+			// Extract package name from npm output
+			matches := npmPackageRegex.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				packageName := matches[1]
+				packageCount++
+				
+				// Update progress every package, but throttle SSE updates to every 500ms
+				if time.Since(lastUpdate) > 500*time.Millisecond {
+					// Progress from 80% to 89% based on package count
+					// Cap at 89% to ensure we don't reach 90% before completion
+					progressPercent := 80 + (packageCount / 10)
+					if progressPercent > 89 {
+						progressPercent = 89
+					}
+					
+					status := fmt.Sprintf("🔄 Lade %s... (%d Pakete)", packageName, packageCount)
+					sl.updateProgress(progressPercent, status)
+					lastUpdate = time.Now()
+				}
+			}
+		}
+	}()
+	
+	// Read stderr
+	go func() {
+		defer func() { done <- true }()
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			sl.logger.Println(line)
+		}
+	}()
+	
+	// Wait for both goroutines to finish reading
+	// This must happen before cmd.Wait() to ensure pipes are fully drained
+	<-done
+	<-done
+	
+	// Wait for command to complete
+	err = cmd.Wait()
+	
 	if err != nil {
 		return fmt.Errorf("npm install fehlgeschlagen: %v", err)
 	}
 	
-	sl.updateProgress(90, "Abhängigkeiten installiert!")
+	sl.updateProgress(90, fmt.Sprintf("✓ Abhängigkeiten installiert! (%d Pakete)", packageCount))
 	return nil
 }
 
