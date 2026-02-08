@@ -1087,11 +1087,11 @@ func (sl *StandaloneLauncher) installDependencies(appDir string) error {
 	// Capture stdout and stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("Failed to create stdout pipe: %v", err)
+		return fmt.Errorf("failed to create stdout pipe: %v", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("Failed to create stderr pipe: %v", err)
+		return fmt.Errorf("failed to create stderr pipe: %v", err)
 	}
 	
 	sl.logger.Printf("Running npm install in: %s\n", appDir)
